@@ -1,0 +1,803 @@
+.reg-modal {
+  --accent: var(--c-synapse);
+  --accent-2: var(--c-cortex);
+}
+
+/* Heading */
+.reg__head {
+  display: grid;
+  gap: 0.5rem;
+  margin-bottom: clamp(1.25rem, 3vw, 1.75rem);
+  padding-right: 3rem;
+}
+
+.reg__eyebrow {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: var(--step--1);
+  font-weight: 650;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--c-synapse);
+}
+
+.reg__eyebrow::before {
+  content: '';
+  width: 0.45rem;
+  height: 0.45rem;
+  border-radius: 50%;
+  background: var(--c-synapse);
+  box-shadow: 0 0 10px var(--c-synapse);
+}
+
+.reg__title {
+  font-size: var(--step-3);
+  font-weight: 800;
+  font-stretch: 116%;
+  line-height: 1.08;
+  letter-spacing: -0.015em;
+}
+
+.reg__lead {
+  max-width: 44rem;
+  color: var(--c-text-muted);
+  text-wrap: pretty;
+}
+
+/* Sections */
+.reg {
+  display: grid;
+  gap: 1.25rem;
+}
+
+.reg__section {
+  display: grid;
+  gap: 1.1rem;
+  min-width: 0;
+  margin: 0;
+  padding: clamp(1rem, 2.5vw, 1.4rem);
+  border: 1px solid var(--c-line);
+  border-radius: var(--r-lg);
+  background: rgb(255 255 255 / 0.025);
+}
+
+.reg__legend {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0 0.4rem;
+  font-weight: 700;
+  font-stretch: 110%;
+}
+
+.reg__step {
+  display: grid;
+  place-items: center;
+  width: 1.6rem;
+  height: 1.6rem;
+  border-radius: 50%;
+  font-size: 0.8rem;
+  font-weight: 800;
+  color: var(--c-void);
+  background: var(--g-technical);
+}
+
+.reg__grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1rem 1.1rem;
+}
+
+/* Fields */
+.reg-field {
+  display: grid;
+  align-content: start;
+  gap: 0.4rem;
+  min-width: 0;
+}
+
+.reg-field--wide {
+  grid-column: 1 / -1;
+}
+
+/* Department, with the "Please specify" field directly under it when Other is chosen */
+.reg-field-stack {
+  display: grid;
+  align-content: start;
+  gap: 1rem;
+  min-width: 0;
+}
+
+.reg-field__label {
+  font-size: var(--step--1);
+  font-weight: 600;
+  color: var(--c-text);
+}
+
+.reg-field__req {
+  color: var(--c-flare);
+}
+
+.reg-field input,
+.reg-field select {
+  width: 100%;
+  min-height: 2.9rem;
+  padding: 0.65rem 0.9rem;
+  border: 1px solid var(--c-line-strong);
+  border-radius: var(--r-md);
+  font: inherit;
+  color: var(--c-text);
+  background: rgb(255 255 255 / 0.04);
+  transition:
+    border-color var(--dur-fast) ease,
+    background-color var(--dur-fast) ease,
+    box-shadow var(--dur-fast) ease;
+}
+
+.reg-field input::placeholder {
+  color: var(--c-text-dim);
+}
+
+.reg-field select {
+  appearance: none;
+  padding-right: 2.5rem;
+  background:
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1.5l5 5 5-5' fill='none' stroke='%23a3a8cc' stroke-width='1.6' stroke-linecap='round'/%3E%3C/svg%3E")
+      no-repeat right 1rem center,
+    rgb(255 255 255 / 0.04);
+}
+
+.reg-field select option {
+  color: var(--c-text);
+  background: var(--c-void-2);
+}
+
+.reg-field input:hover,
+.reg-field select:hover {
+  border-color: rgb(200 205 255 / 0.4);
+}
+
+.reg-field input:focus-visible,
+.reg-field select:focus-visible {
+  outline: none;
+  border-color: var(--c-synapse);
+  background-color: rgb(69 227 255 / 0.05);
+  box-shadow: 0 0 0 3px rgb(69 227 255 / 0.18);
+}
+
+.reg-field.has-error input,
+.reg-field.has-error select,
+.reg-field.has-error .reg-upload {
+  border-color: rgb(255 92 200 / 0.75);
+}
+
+.reg-field__hint {
+  font-size: 0.8rem;
+  color: var(--c-text-dim);
+}
+
+.reg-field__error {
+  display: flex;
+  gap: 0.4rem;
+  font-size: 0.82rem;
+  font-weight: 550;
+  color: #ff8ad8;
+}
+
+.reg-field__error::before {
+  content: '!';
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  width: 1.05rem;
+  height: 1.05rem;
+  margin-top: 0.08rem;
+  border-radius: 50%;
+  font-size: 0.7rem;
+  font-weight: 800;
+  color: var(--c-void);
+  background: #ff8ad8;
+}
+
+.reg__hint {
+  margin-top: -0.35rem;
+  color: var(--c-text-muted);
+}
+
+.reg__section.has-error {
+  border-color: rgb(255 92 200 / 0.55);
+}
+
+/* Event selection: the two tracks side by side, each in its own accent */
+.reg-events {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1rem;
+}
+
+.reg-events__group {
+  display: grid;
+  align-content: start;
+  gap: 0.6rem;
+}
+
+.reg-events__title {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  font-size: var(--step--1);
+  font-weight: 750;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--accent);
+}
+
+.reg-events__count {
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0;
+  text-transform: none;
+  color: var(--c-text-dim);
+}
+
+.reg-events__list {
+  display: grid;
+  gap: 0.5rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.reg-event {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  min-height: 3.4rem;
+  padding: 0.6rem 0.85rem;
+  border: 1px solid var(--c-line-strong);
+  border-radius: var(--r-md);
+  background: rgb(255 255 255 / 0.03);
+  cursor: pointer;
+  transition:
+    border-color var(--dur-fast) ease,
+    background-color var(--dur-fast) ease,
+    box-shadow var(--dur-med) var(--ease-out),
+    transform var(--dur-fast) ease;
+}
+
+.reg-event:hover {
+  border-color: color-mix(in oklab, var(--accent) 55%, transparent);
+  background: rgb(255 255 255 / 0.05);
+}
+
+.reg-event:active {
+  transform: scale(0.99);
+}
+
+/* Visually hidden but still the real, focusable checkbox */
+.reg-event__input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.reg-event:has(.reg-event__input:focus-visible) {
+  outline: 2px solid var(--c-synapse);
+  outline-offset: 2px;
+}
+
+.reg-event__box {
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  width: 1.4rem;
+  height: 1.4rem;
+  border: 1.5px solid var(--c-line-strong);
+  border-radius: 0.4rem;
+  color: transparent;
+  background: rgb(255 255 255 / 0.04);
+  transition:
+    background var(--dur-fast) ease,
+    border-color var(--dur-fast) ease,
+    color var(--dur-fast) ease;
+}
+
+.reg-event__text {
+  display: grid;
+  flex: 1;
+  min-width: 0;
+  line-height: 1.25;
+}
+
+.reg-event__name {
+  font-weight: 700;
+  font-stretch: 108%;
+}
+
+.reg-event__sub {
+  font-size: 0.8rem;
+  color: var(--c-text-dim);
+}
+
+.reg-event__fee {
+  flex-shrink: 0;
+  font-size: var(--step--1);
+  font-weight: 650;
+  color: var(--c-text-dim);
+}
+
+/* Selected: the card lights up in its track's accent, like the event cards on hover */
+.reg-event.is-selected {
+  border-color: color-mix(in oklab, var(--accent) 70%, transparent);
+  background:
+    radial-gradient(14rem 6rem at 0% 0%, color-mix(in oklab, var(--accent) 16%, transparent), transparent 70%),
+    rgb(255 255 255 / 0.05);
+  box-shadow: 0 10px 30px -18px color-mix(in oklab, var(--accent) 80%, transparent);
+}
+
+.reg-event.is-selected .reg-event__box {
+  border-color: transparent;
+  color: var(--c-void);
+  background: var(--accent-gradient);
+}
+
+.reg-event.is-selected .reg-event__fee {
+  color: var(--accent);
+}
+
+/* Live fee summary */
+.reg-fees {
+  display: grid;
+  gap: 0.6rem;
+  padding: 1rem 1.1rem;
+  border: 1px solid rgb(69 227 255 / 0.28);
+  border-radius: var(--r-md);
+  background: linear-gradient(135deg, rgb(69 227 255 / 0.07), rgb(140 108 255 / 0.07));
+}
+
+.reg-fees__title {
+  font-size: var(--step--1);
+  font-weight: 750;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--c-synapse);
+}
+
+.reg-fees__rows {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.6rem;
+}
+
+.reg-fees__rows div {
+  padding: 0.55rem 0.75rem;
+  border-radius: var(--r-sm);
+  background: rgb(5 6 26 / 0.45);
+}
+
+.reg-fees__rows dt {
+  font-size: 0.75rem;
+  color: var(--c-text-dim);
+}
+
+.reg-fees__rows dd {
+  font-size: var(--step-1);
+  font-weight: 750;
+  font-variant-numeric: tabular-nums;
+}
+
+.reg-fees__total dd {
+  color: var(--c-synapse);
+}
+
+.reg-fees__grand {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.25rem 1rem;
+  padding-top: 0.6rem;
+  border-top: 1px solid var(--c-line);
+  color: var(--c-text-muted);
+}
+
+.reg-fees__grand strong {
+  font-size: var(--step-2);
+  font-weight: 800;
+  font-stretch: 112%;
+  font-variant-numeric: tabular-nums;
+  color: var(--c-text);
+}
+
+.reg-fees__split {
+  font-size: 0.8rem;
+  color: var(--c-text-dim);
+}
+
+/* The polite request, in the same gold as the Important notice */
+.reg-note {
+  display: grid;
+  gap: 0.5rem;
+  padding: 1rem 1.1rem;
+  border: 1px solid rgb(255 193 90 / 0.4);
+  border-radius: var(--r-md);
+  font-size: var(--step--1);
+  color: var(--c-text-muted);
+  background: linear-gradient(135deg, rgb(255 193 90 / 0.1), rgb(255 92 200 / 0.05));
+}
+
+.reg-note__title {
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--c-solar);
+}
+
+.reg-note__personal {
+  padding-top: 0.5rem;
+  border-top: 1px solid rgb(255 193 90 / 0.2);
+  font-size: var(--step-0);
+  font-weight: 650;
+  color: var(--c-text);
+}
+
+/* Payment information */
+.reg-pay {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 1.1rem;
+  padding: 1rem 1.1rem;
+  border: 1px solid rgb(69 227 255 / 0.28);
+  border-radius: var(--r-md);
+  background: linear-gradient(135deg, rgb(69 227 255 / 0.08), rgb(140 108 255 / 0.08));
+}
+
+.reg-pay__amount {
+  display: grid;
+  align-content: center;
+  justify-items: center;
+  min-width: 7.5rem;
+  padding: 0.6rem 1rem;
+  border-radius: var(--r-md);
+  background: rgb(5 6 26 / 0.5);
+  text-align: center;
+}
+
+.reg-pay__label,
+.reg-pay__per {
+  font-size: 0.78rem;
+  color: var(--c-text-muted);
+}
+
+.reg-pay__value {
+  font-size: var(--step-3);
+  font-weight: 800;
+  font-stretch: 116%;
+  line-height: 1.1;
+  color: var(--c-synapse);
+}
+
+.reg-pay__how {
+  display: grid;
+  align-content: center;
+  gap: 0.55rem;
+  font-size: var(--step--1);
+  color: var(--c-text-muted);
+}
+
+.reg-pay__upi {
+  color: var(--c-text);
+  user-select: all;
+}
+
+.reg-pay__qr {
+  width: 8.25rem;
+  height: auto;
+  border-radius: var(--r-sm);
+  background: #fff;
+}
+
+.reg-pay__note {
+  font-weight: 600;
+  color: var(--c-solar);
+}
+
+/* Screenshot upload */
+.reg-upload {
+  position: relative;
+  border: 1.5px dashed var(--c-line-strong);
+  border-radius: var(--r-md);
+  background: rgb(255 255 255 / 0.03);
+  transition:
+    border-color var(--dur-fast) ease,
+    background-color var(--dur-fast) ease;
+}
+
+.reg-upload[data-dragging] {
+  border-color: var(--c-synapse);
+  background: rgb(69 227 255 / 0.07);
+}
+
+/* Visually hidden, still focusable and announced */
+.reg-upload__input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.reg-upload__input:focus-visible ~ .reg-upload__drop,
+.reg-upload__input:focus-visible ~ .reg-upload__preview .reg-upload__change {
+  outline: 2px solid var(--c-synapse);
+  outline-offset: 3px;
+}
+
+.reg-upload__drop {
+  display: grid;
+  justify-items: center;
+  gap: 0.2rem;
+  padding: 1.5rem 1rem;
+  border-radius: inherit;
+  text-align: center;
+  color: var(--c-text-muted);
+  cursor: pointer;
+}
+
+.reg-upload__drop svg {
+  margin-bottom: 0.35rem;
+  color: var(--c-synapse);
+}
+
+.reg-upload__drop:hover {
+  background: rgb(255 255 255 / 0.03);
+}
+
+.reg-upload__cta {
+  font-weight: 650;
+  color: var(--c-text);
+}
+
+.reg-upload__or {
+  font-size: var(--step--1);
+}
+
+.reg-upload__preview {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: 0.8rem;
+}
+
+.reg-upload__preview img {
+  flex-shrink: 0;
+  width: 6.5rem;
+  height: 8rem;
+  object-fit: cover;
+  object-position: top;
+  border: 1px solid var(--c-line-strong);
+  border-radius: var(--r-sm);
+  background: var(--c-void-2);
+}
+
+.reg-upload__file {
+  display: grid;
+  gap: 0.2rem;
+  min-width: 0;
+}
+
+.reg-upload__name {
+  overflow: hidden;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.reg-upload__size {
+  font-size: var(--step--1);
+  color: var(--c-text-dim);
+}
+
+.reg-upload__buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-top: 0.45rem;
+}
+
+.reg-upload__change,
+.reg-upload__remove {
+  display: inline-flex;
+  align-items: center;
+  min-height: 2.25rem;
+  padding: 0.35rem 0.9rem;
+  border: 1px solid var(--c-line-strong);
+  border-radius: var(--r-pill);
+  font-size: var(--step--1);
+  font-weight: 600;
+  color: var(--c-text);
+  background: rgb(255 255 255 / 0.04);
+  cursor: pointer;
+  transition: background-color var(--dur-fast) ease;
+}
+
+.reg-upload__change:hover,
+.reg-upload__remove:hover {
+  background: rgb(255 255 255 / 0.1);
+}
+
+.reg-upload__remove {
+  color: #ff8ad8;
+}
+
+/* Messages and submit */
+.reg__alert {
+  padding: 0.75rem 1rem;
+  border: 1px solid rgb(255 92 200 / 0.45);
+  border-radius: var(--r-md);
+  font-size: var(--step--1);
+  font-weight: 550;
+  color: #ffc4ea;
+  background: rgb(255 92 200 / 0.08);
+}
+
+.reg__actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.reg__required {
+  font-size: var(--step--1);
+  color: var(--c-text-dim);
+}
+
+.reg__required span {
+  color: var(--c-flare);
+}
+
+/* Success */
+.reg-done {
+  display: grid;
+  justify-items: center;
+  gap: 1rem;
+  padding-block: 0.5rem;
+  text-align: center;
+}
+
+.reg-done__badge {
+  display: grid;
+  place-items: center;
+  width: 4rem;
+  height: 4rem;
+  border-radius: 50%;
+  color: var(--c-void);
+  background: var(--g-technical);
+  box-shadow: 0 0 32px -6px var(--c-synapse);
+}
+
+/* Tiles grow to fit their value, so an email address never breaks mid-word */
+.reg-done__badge--closed {
+  color: var(--c-text);
+  background: linear-gradient(135deg, var(--c-flare), var(--c-cortex));
+  box-shadow: 0 0 32px -6px var(--c-flare);
+}
+
+/* The Registration ID, large enough to note down or screenshot */
+.reg-done__id {
+  display: grid;
+  gap: 0.2rem;
+  padding: 0.8rem 1.6rem;
+  border: 1px solid rgb(69 227 255 / 0.45);
+  border-radius: var(--r-md);
+  background: rgb(69 227 255 / 0.07);
+}
+
+.reg-done__id span {
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--c-text-dim);
+}
+
+.reg-done__id strong {
+  font-size: var(--step-2);
+  letter-spacing: 0.06em;
+  color: var(--c-synapse);
+  user-select: all;
+}
+
+.reg-done__mail {
+  max-width: 36rem;
+  overflow-wrap: anywhere;
+  color: var(--c-text-muted);
+}
+
+.reg-done__summary {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 0.75rem;
+  width: 100%;
+  max-width: 44rem;
+}
+
+.reg-done__summary div {
+  flex: 1 1 9rem;
+  padding: 0.75rem 1rem;
+  border: 1px solid var(--c-line);
+  border-radius: var(--r-md);
+  background: rgb(255 255 255 / 0.03);
+}
+
+.reg-done__summary dt {
+  font-size: 0.78rem;
+  color: var(--c-text-dim);
+}
+
+.reg-done__summary dd {
+  overflow-wrap: break-word;
+  font-weight: 700;
+}
+
+.reg-done__events {
+  max-width: 40rem;
+  font-weight: 650;
+  color: var(--c-text);
+}
+
+.reg-done__next {
+  max-width: 36rem;
+  color: var(--c-text-muted);
+}
+
+/* The participant pass download, under the summary */
+.reg-done__pass {
+  display: grid;
+  justify-items: center;
+  gap: 0.5rem;
+}
+
+.reg-done__pass-error {
+  max-width: 30rem;
+  font-size: var(--step--1);
+  color: #ff8ad8;
+}
+
+.reg-done__actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 0.75rem;
+  margin-top: 0.5rem;
+}
+
+/* Phones and narrow tablets: the two tracks stack, Technical first */
+@media (max-width: 679px) {
+  .reg-events {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+@media (max-width: 599px) {
+  .reg__grid,
+  .reg-fees__rows {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .reg-pay {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .reg__actions > .spec-btn {
+    width: 100%;
+  }
+}

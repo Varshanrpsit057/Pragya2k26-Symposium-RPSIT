@@ -1,0 +1,12 @@
+# One line ending (LF) in the repository and working copy on every computer, so shell
+# scripts such as .githooks/pre-commit run on Windows, macOS and Linux alike.
+* text=auto eol=lf
+
+# Images, fonts and other binary files are stored as they are.
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.webp binary
+*.ico binary
+*.woff2 binary
+*.pdf binary

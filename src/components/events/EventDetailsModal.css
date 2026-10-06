@@ -1,0 +1,229 @@
+.event-details {
+  display: grid;
+  gap: clamp(1.25rem, 3vw, 1.75rem);
+}
+
+/* Poster beside the name, like the event card banner */
+.event-details__head {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: clamp(1rem, 3vw, 1.75rem);
+  padding-right: 3rem;
+}
+
+.event-details__poster {
+  width: clamp(6.5rem, 16vw, 9.5rem);
+  height: auto;
+  aspect-ratio: 3 / 4;
+  object-fit: cover;
+  border-radius: var(--r-md);
+  box-shadow:
+    0 0 0 1px var(--c-line-strong),
+    0 22px 50px -24px color-mix(in oklab, var(--accent) 70%, transparent);
+}
+
+.event-details__intro {
+  display: grid;
+  gap: 0.45rem;
+}
+
+.event-details__category {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  font-size: var(--step--1);
+  font-weight: 650;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--c-text-muted);
+}
+
+.event-details__category::before {
+  content: '';
+  width: 0.45rem;
+  height: 0.45rem;
+  border-radius: 50%;
+  background: var(--accent);
+  box-shadow: 0 0 10px var(--accent);
+}
+
+.event-details__name {
+  font-size: var(--step-3);
+  font-weight: 800;
+  font-stretch: 118%;
+  line-height: 1.05;
+  letter-spacing: -0.012em;
+  overflow-wrap: anywhere;
+}
+
+.event-details__subtitle {
+  font-weight: 650;
+  color: var(--accent);
+}
+
+.event-details__description {
+  max-width: 40rem;
+  color: var(--c-text-muted);
+  text-wrap: pretty;
+}
+
+/* Key facts as tiles */
+.event-details__facts {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(12rem, 1fr));
+  gap: 0.75rem;
+}
+
+.event-details__facts div {
+  padding: 0.8rem 1rem;
+  border: 1px solid var(--c-line);
+  border-radius: var(--r-md);
+  background: rgb(255 255 255 / 0.03);
+}
+
+.event-details__facts dt {
+  font-size: 0.78rem;
+  color: var(--c-text-dim);
+}
+
+.event-details__facts dd {
+  font-weight: 650;
+  line-height: 1.4;
+}
+
+.event-details__block {
+  display: grid;
+  align-content: start;
+  gap: 0.7rem;
+}
+
+.event-details__block h3 {
+  font-size: var(--step-1);
+  font-weight: 750;
+  font-stretch: 112%;
+}
+
+/* Rounds as numbered steps */
+.event-details__rounds {
+  display: grid;
+  gap: 0.6rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  counter-reset: round;
+}
+
+.event-details__rounds li {
+  position: relative;
+  display: grid;
+  gap: 0.2rem;
+  padding: 0.85rem 1rem 0.85rem 3.4rem;
+  border: 1px solid var(--c-line);
+  border-radius: var(--r-md);
+  background: rgb(255 255 255 / 0.025);
+  counter-increment: round;
+}
+
+.event-details__rounds li::before {
+  content: counter(round);
+  position: absolute;
+  top: 0.85rem;
+  left: 1rem;
+  display: grid;
+  place-items: center;
+  width: 1.65rem;
+  height: 1.65rem;
+  border-radius: 50%;
+  font-size: 0.82rem;
+  font-weight: 800;
+  color: var(--c-void);
+  background: var(--accent-gradient);
+}
+
+.event-details__rounds span {
+  color: var(--c-text-muted);
+}
+
+.event-details__columns {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1.5rem 2rem;
+}
+
+.event-details__list {
+  display: grid;
+  gap: 0.45rem;
+  margin: 0;
+  padding-left: 1.15rem;
+  color: var(--c-text-muted);
+}
+
+.event-details__list li::marker {
+  color: var(--accent);
+}
+
+.event-details__list--ordered li::marker {
+  font-weight: 700;
+}
+
+.event-details__people {
+  display: grid;
+  gap: 0.4rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.event-details__people li {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem 0.9rem;
+}
+
+.event-details__people a {
+  color: var(--accent);
+}
+
+.event-details__foot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding-top: 1.25rem;
+  border-top: 1px solid var(--c-line);
+}
+
+.event-details__provisional {
+  font-size: var(--step--1);
+  color: var(--c-text-dim);
+}
+
+.event-details__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+}
+
+@media (max-width: 699px) {
+  .event-details__columns {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+@media (max-width: 479px) {
+  .event-details__head {
+    grid-template-columns: minmax(0, 1fr);
+    padding-right: 0;
+  }
+
+  .event-details__poster {
+    width: 7rem;
+  }
+
+  .event-details__actions,
+  .event-details__actions > * {
+    flex: 1 1 100%;
+  }
+}

@@ -1,0 +1,143 @@
+.neural-map {
+  display: block;
+  width: 100%;
+  height: auto;
+  overflow: visible;
+}
+
+.neural-map__caption {
+  font-size: 15px;
+  font-weight: 650;
+  font-stretch: 112%;
+  fill: var(--accent);
+}
+
+.neural-map__wire {
+  fill: none;
+  stroke: color-mix(in oklab, var(--accent) 38%, transparent);
+  stroke-width: 1.2;
+}
+
+.neural-map__wire--faint {
+  stroke: color-mix(in oklab, var(--accent) 16%, transparent);
+  stroke-dasharray: 2 5;
+}
+
+/* One short dash that travels along each wire */
+.neural-map__pulse {
+  fill: none;
+  stroke: var(--accent);
+  stroke-width: 2.4;
+  stroke-linecap: round;
+  stroke-dasharray: 6 300;
+  stroke-dashoffset: 6;
+  opacity: 0;
+}
+
+.neural-map.is-live .neural-map__pulse {
+  animation: neural-pulse 3.2s var(--ease-in-out) var(--delay, 0s) infinite;
+}
+
+@keyframes neural-pulse {
+  0% {
+    stroke-dashoffset: 6;
+    opacity: 0;
+  }
+  12% {
+    opacity: 1;
+  }
+  70% {
+    stroke-dashoffset: -100;
+    opacity: 1;
+  }
+  71%,
+  100% {
+    stroke-dashoffset: -100;
+    opacity: 0;
+  }
+}
+
+.neural-map__node {
+  cursor: pointer;
+  outline: none;
+}
+
+/* Event node: the event's icon on a track-gradient tile, inside a soft halo */
+.neural-map__node-body {
+  transform-box: fill-box;
+  transform-origin: center;
+  transition: transform var(--dur-med) var(--ease-out);
+}
+
+.neural-map__halo {
+  fill: color-mix(in oklab, var(--accent) 14%, transparent);
+  transform-box: fill-box;
+  transform-origin: center;
+  transition:
+    transform var(--dur-med) var(--ease-out),
+    fill var(--dur-med) ease;
+}
+
+.neural-map__tile {
+  stroke: rgb(255 255 255 / 0.28);
+  stroke-width: 1;
+  transition: stroke var(--dur-fast) ease;
+}
+
+.neural-map__icon {
+  fill: none;
+  stroke: var(--c-void);
+  stroke-width: 1.9;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  pointer-events: none;
+}
+
+.neural-map__node:hover .neural-map__node-body,
+.neural-map__node:focus-visible .neural-map__node-body {
+  transform: scale(1.12);
+}
+
+.neural-map__node:hover .neural-map__halo,
+.neural-map__node:focus-visible .neural-map__halo {
+  transform: scale(1.18);
+  fill: color-mix(in oklab, var(--accent) 30%, transparent);
+}
+
+.neural-map__node:focus-visible .neural-map__tile {
+  stroke: var(--c-text);
+  stroke-width: 2;
+}
+
+.neural-map__hub-ring {
+  fill: none;
+  stroke: rgb(185 168 255 / 0.25);
+  stroke-width: 1;
+}
+
+.neural-map__hub-ring--inner {
+  fill: rgb(140 108 255 / 0.12);
+  stroke: rgb(185 168 255 / 0.45);
+}
+
+/* The map scales down on phones; enlarge the nodes and captions so icons stay legible */
+@media (max-width: 599px) {
+  .neural-map__caption {
+    font-size: 20px;
+  }
+
+  .neural-map__node-body {
+    transform: scale(1.35);
+  }
+
+  .neural-map__node:hover .neural-map__node-body,
+  .neural-map__node:focus-visible .neural-map__node-body {
+    transform: scale(1.45);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .neural-map.is-live .neural-map__pulse {
+    animation: none;
+  }
+}

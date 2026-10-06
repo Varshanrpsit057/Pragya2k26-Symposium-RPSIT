@@ -1,0 +1,78 @@
+.events-section__head {
+  position: relative;
+}
+
+/* A short gradient trace in the track's colours, marking which track this is */
+.events-section__signal {
+  display: block;
+  width: 4.5rem;
+  height: 3px;
+  border-radius: 3px;
+  background: var(--accent-gradient);
+  box-shadow: 0 0 18px color-mix(in oklab, var(--accent) 60%, transparent);
+}
+
+.event-grid {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: clamp(0.9rem, 1.8vw, 1.4rem);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.event-grid > li {
+  grid-column: span 2;
+}
+
+.event-grid--lead-pair > li:nth-child(-n + 2),
+.event-grid--trail-pair > li:nth-last-child(-n + 2) {
+  grid-column: span 3;
+}
+
+/* Wide cards get a larger name and a shorter, wider banner */
+.event-grid--lead-pair > li:nth-child(-n + 2) .event-card__name,
+.event-grid--trail-pair > li:nth-last-child(-n + 2) .event-card__name {
+  font-size: var(--step-3);
+}
+
+.event-grid--lead-pair > li:nth-child(-n + 2) .event-card__media,
+.event-grid--trail-pair > li:nth-last-child(-n + 2) .event-card__media {
+  aspect-ratio: 21 / 9;
+}
+
+@media (max-width: 959px) {
+  .event-grid--lead-pair > li:nth-child(-n + 2) .event-card__media,
+  .event-grid--trail-pair > li:nth-last-child(-n + 2) .event-card__media {
+    aspect-ratio: 16 / 9;
+  }
+}
+
+@media (max-width: 959px) {
+  .event-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .event-grid > li,
+  .event-grid--lead-pair > li:nth-child(-n + 2),
+  .event-grid--trail-pair > li:nth-last-child(-n + 2) {
+    grid-column: span 1;
+  }
+
+  .event-grid--lead-pair > li:first-child,
+  .event-grid--trail-pair > li:last-child {
+    grid-column: span 2;
+  }
+}
+
+@media (max-width: 599px) {
+  .event-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .event-grid > li,
+  .event-grid--lead-pair > li:first-child,
+  .event-grid--trail-pair > li:last-child {
+    grid-column: auto;
+  }
+}
