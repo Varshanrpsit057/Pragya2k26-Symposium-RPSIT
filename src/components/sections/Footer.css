@@ -1,0 +1,321 @@
+.footer {
+  position: relative;
+  overflow: hidden;
+  padding-top: clamp(3rem, 6vw, 4.5rem);
+  background: linear-gradient(180deg, transparent, rgb(9 10 34 / 0.9) 40%);
+}
+
+/* Brand · Contact · Follow · Location */
+.footer__grid {
+  display: grid;
+  grid-template-columns: 1.1fr 1.15fr 0.7fr 1.3fr;
+  gap: clamp(2rem, 4vw, 3.5rem);
+}
+
+.footer__brand {
+  display: grid;
+  align-content: start;
+  gap: 0.75rem;
+}
+
+.footer__logo {
+  display: block;
+  width: auto;
+  height: 3.6rem;
+  filter: drop-shadow(0 2px 10px rgb(140 108 255 / 0.4));
+}
+
+.footer__wordmark {
+  margin-top: 0.5rem;
+  font-size: var(--step-3);
+  font-weight: 900;
+  font-stretch: 125%;
+  line-height: 1;
+  letter-spacing: -0.02em;
+  white-space: nowrap;
+}
+
+.footer__year {
+  color: var(--c-synapse);
+}
+
+.footer__tagline {
+  font-weight: 600;
+}
+
+.footer__institution {
+  max-width: 30ch;
+  margin-top: -0.4rem;
+  color: var(--c-text-muted);
+}
+
+.footer__credentials {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin: 0.25rem 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.footer__credentials li {
+  padding: 0.2rem 0.65rem;
+  border: 1px solid var(--c-line-strong);
+  border-radius: var(--r-pill);
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--c-text-muted);
+  background: rgb(255 255 255 / 0.03);
+}
+
+/* Developer credits under a hairline */
+.footer__credits {
+  margin-top: 1rem;
+  padding-top: 1.25rem;
+  border-top: 1px solid var(--c-line);
+}
+
+/* "Developed by" with the incognito button that opens the Dev Crew */
+.footer__credits-head {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  margin-bottom: 0.75rem;
+}
+
+.footer__credits-title {
+  font-size: var(--step--1);
+  font-weight: 500;
+  color: var(--c-text-dim);
+}
+
+.footer__crew-button {
+  --icon-link-size: 2.1rem;
+
+  padding: 0;
+  cursor: pointer;
+}
+
+/* Name, then role and class in smaller type */
+.footer__credit-person {
+  display: grid;
+  gap: 0.1rem;
+}
+
+.footer__credit-role {
+  font-size: 0.78rem;
+  color: var(--c-text-dim);
+}
+
+.footer__credits ul {
+  display: grid;
+  gap: 0.6rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.footer__credits li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  font-size: var(--step--1);
+}
+
+.footer__credit-links {
+  --icon-link-size: 2.1rem;
+
+  display: flex;
+  gap: 0.45rem;
+}
+
+.footer__heading {
+  margin-bottom: 1.1rem;
+  font-size: var(--step-0);
+  font-weight: 700;
+  font-stretch: 112%;
+}
+
+/* Contact rows: an accent icon beside each detail */
+.footer__info {
+  display: grid;
+  gap: 1rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.footer__info li {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  align-items: start;
+  gap: 0.75rem;
+  line-height: 1.5;
+  color: var(--c-text-muted);
+}
+
+.footer__info-icon {
+  margin-top: 0.15rem;
+  color: var(--c-synapse);
+}
+
+.footer__info address {
+  display: grid;
+  font-style: normal;
+}
+
+.footer__info strong {
+  font-weight: 600;
+  color: var(--c-text);
+}
+
+.footer__status {
+  margin-bottom: 0.3rem;
+  font-size: var(--step--1);
+  color: var(--c-text-dim);
+}
+
+.footer__label {
+  display: block;
+  font-size: var(--step--1);
+  color: var(--c-text-dim);
+}
+
+/* Lines break between numbers, never inside one */
+.footer__info a[href^='tel:'] {
+  white-space: nowrap;
+}
+
+.footer__pending {
+  margin-top: 1.25rem;
+  font-size: var(--step--1);
+  color: var(--c-text-dim);
+}
+
+.footer__people,
+.footer__nav ul {
+  display: grid;
+  gap: 0.7rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.footer__people {
+  margin-top: 1.25rem;
+}
+
+.footer__people li {
+  display: grid;
+  gap: 0.1rem;
+}
+
+.footer__person {
+  font-weight: 600;
+}
+
+.footer__role {
+  font-size: var(--step--1);
+  color: var(--c-text-dim);
+}
+
+.footer__socials {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+  margin: 0 0 2.25rem;
+  padding: 0;
+  list-style: none;
+}
+
+/* Embedded Google map, framed like the cards */
+.footer__map {
+  aspect-ratio: 16 / 10;
+  overflow: hidden;
+  border: 1px solid var(--c-line-strong);
+  border-radius: var(--r-md);
+  background: var(--c-void-2);
+  box-shadow: 0 24px 60px -36px rgb(140 108 255 / 0.6);
+}
+
+.footer__map iframe {
+  display: block;
+  width: 100%;
+  height: 100%;
+  border: 0;
+}
+
+/* Text links only; the round icon links style themselves */
+.footer a:not(.icon-link) {
+  color: var(--c-text-muted);
+  text-decoration: none;
+  transition: color var(--dur-fast) ease;
+}
+
+.footer a:not(.icon-link):hover {
+  color: var(--c-text);
+}
+
+.footer a.footer__map-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin-top: 0.85rem;
+  font-size: var(--step--1);
+  font-weight: 600;
+  color: var(--c-synapse);
+}
+
+.footer__base {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-top: clamp(3rem, 7vw, 5rem);
+  padding-block: 1.5rem;
+  border-top: 1px solid var(--c-line);
+  font-size: var(--step--1);
+  color: var(--c-text-dim);
+}
+
+/* Closing echo of the hero wordmark, cropped by the page edge */
+.footer__echo {
+  margin-bottom: -0.2em;
+  font-size: clamp(4.5rem, 19vw, 17rem);
+  font-weight: 900;
+  font-stretch: 125%;
+  line-height: 0.8;
+  letter-spacing: -0.04em;
+  text-align: center;
+  color: transparent;
+  background: linear-gradient(180deg, rgb(140 108 255 / 0.22), rgb(140 108 255 / 0));
+  -webkit-background-clip: text;
+  background-clip: text;
+  user-select: none;
+  pointer-events: none;
+}
+
+/* Four columns: the wordmark scales with the narrower brand column */
+@media (min-width: 1080px) {
+  .footer__wordmark {
+    font-size: clamp(1.7rem, 2.1vw, 2.35rem);
+  }
+}
+
+/* Tablet: brand + contact, then follow + location */
+@media (max-width: 1079px) {
+  .footer__grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 639px) {
+  .footer__grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .footer__socials {
+    margin-bottom: 1.75rem;
+  }
+}

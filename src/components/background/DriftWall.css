@@ -1,0 +1,110 @@
+.drift-wall {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  perspective: 1300px;
+  perspective-origin: 50% 30%;
+}
+
+.drift-wall__plane {
+  position: absolute;
+  top: -40%;
+  left: -15%;
+  right: -15%;
+  bottom: -40%;
+  display: grid;
+  grid-template-columns: repeat(7, minmax(9.5rem, 1fr));
+  gap: 1rem;
+  transform: rotateX(52deg) rotateZ(-16deg) translateZ(-60px);
+  transform-style: preserve-3d;
+}
+
+.drift-wall__column {
+  overflow: visible;
+  transform-style: preserve-3d;
+}
+
+.drift-wall__track {
+  display: grid;
+  gap: 1rem;
+  transform-style: preserve-3d;
+  animation: drift-wall-scroll var(--duration, 50s) linear infinite var(--direction, normal);
+  animation-play-state: paused;
+}
+
+.drift-wall.is-running .drift-wall__track {
+  animation-play-state: running;
+}
+
+@keyframes drift-wall-scroll {
+  from {
+    transform: translate3d(0, 0, 0);
+  }
+  to {
+    transform: translate3d(0, calc(-50% - 0.5rem), 0);
+  }
+}
+
+.drift-tile {
+  display: grid;
+  gap: 0.8rem;
+  align-content: space-between;
+  aspect-ratio: 4 / 3;
+  padding: 0.95rem;
+  border: 1px solid color-mix(in oklab, var(--accent) 22%, transparent);
+  border-radius: var(--r-md);
+  font-size: 0.78rem;
+  font-weight: 700;
+  font-stretch: 112%;
+  line-height: 1.15;
+  color: color-mix(in oklab, var(--c-text) 75%, transparent);
+  background:
+    radial-gradient(8rem 6rem at 0% 0%, color-mix(in oklab, var(--accent) 16%, transparent), transparent 70%),
+    rgb(14 16 50 / 0.85);
+  transition:
+    transform 0.5s var(--ease-out),
+    border-color var(--dur-med) ease,
+    box-shadow var(--dur-med) ease;
+}
+
+.drift-tile svg {
+  color: var(--accent);
+}
+
+/* Poster tiles: the event poster fills a 3:4 tile */
+.drift-tile--poster {
+  aspect-ratio: 3 / 4;
+  padding: 0;
+  overflow: hidden;
+  background: var(--c-void-2);
+}
+
+.drift-tile--poster img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  user-select: none;
+  -webkit-user-drag: none;
+}
+
+@media (hover: hover) {
+  .drift-tile:hover {
+    transform: translateZ(28px);
+    border-color: var(--accent);
+    box-shadow: 0 0 30px -6px color-mix(in oklab, var(--accent) 70%, transparent);
+  }
+}
+
+@media (max-width: 699px) {
+  .drift-wall__plane {
+    left: -60%;
+    right: -60%;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .drift-wall__track {
+    animation: none;
+  }
+}

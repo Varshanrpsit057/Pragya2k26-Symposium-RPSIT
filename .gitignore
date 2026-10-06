@@ -1,0 +1,48 @@
+# Dependencies
+node_modules
+
+# Build output
+dist
+dist-ssr
+dist-server
+
+# Registration server state (Registration ID counter, email outbox)
+.data
+*.local
+
+# Logs
+*.log
+npm-debug.log*
+
+# Environment and secrets (npm run check:secrets also blocks them; see scripts/check-secrets.mjs)
+.env
+.env.*
+!.env.example
+.dev.vars
+.dev.vars.*
+/google client/
+client_secret_*.json
+*.pem
+*.key
+*.p12
+*.pfx
+service-account*.json
+
+# Personal photos: the full-size originals stay local; the site uses the small processed
+# copies in src/assets/crew/ (npm run images makes them)
+/dev_crew/
+# Reference images not used by the site
+/rpsit/
+
+# Cloudflare Wrangler
+.wrangler
+
+# Python (start.py)
+__pycache__/
+
+# Editor / OS
+.vscode/*
+!.vscode/extensions.json
+.idea
+.DS_Store
+Thumbs.db

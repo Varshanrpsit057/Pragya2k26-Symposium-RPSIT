@@ -1,0 +1,4 @@
+#!/bin/sh
+# Blocks a commit that would include secrets or private data (.env, Google keys and
+# tokens, student details). Turned on with: git config core.hooksPath .githooks
+exec node scripts/check-secrets.mjs --staged

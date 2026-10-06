@@ -1,0 +1,96 @@
+.orbit-section {
+  overflow: hidden;
+}
+
+.orbit-section__head {
+  /* Room for the long title to balance over two lines */
+  max-width: 56rem;
+  margin-bottom: clamp(0.5rem, 2vw, 1.5rem);
+}
+
+/* The carousel fills this box and scales its ring to fit */
+.orbit-showcase {
+  position: relative;
+  height: clamp(24rem, 30vw, 26rem);
+}
+
+.orbit-showcase[data-layout='panorama'] {
+  height: clamp(22rem, 95vw, 26rem);
+}
+
+/* Controls */
+.orbit__controls {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: clamp(1rem, 3vw, 2rem);
+  margin-top: 0.5rem;
+}
+
+.orbit__arrow {
+  display: grid;
+  place-items: center;
+  width: 3rem;
+  height: 3rem;
+  border: 1px solid var(--c-line-strong);
+  border-radius: 50%;
+  background: rgb(255 255 255 / 0.03);
+  cursor: pointer;
+  transition:
+    background-color var(--dur-fast) ease,
+    border-color var(--dur-fast) ease,
+    transform var(--dur-fast) ease;
+}
+
+.orbit__arrow:hover {
+  background: rgb(255 255 255 / 0.08);
+  border-color: rgb(200 205 255 / 0.45);
+}
+
+.orbit__arrow:active {
+  transform: scale(0.94);
+}
+
+.orbit__status {
+  display: grid;
+  justify-items: center;
+  gap: 0.15rem;
+  min-width: 14rem;
+  text-align: center;
+}
+
+.orbit__position {
+  font-size: var(--step--1);
+  font-variant-numeric: tabular-nums;
+  color: var(--c-text-dim);
+}
+
+.orbit__current {
+  font-weight: 700;
+  font-stretch: 112%;
+}
+
+.orbit__details {
+  margin-top: 0.5rem;
+  padding: 0.45rem 1rem;
+  border-radius: var(--r-pill);
+  font-size: var(--step--1);
+  font-weight: 650;
+  text-decoration: none;
+  color: var(--c-void);
+  background: var(--accent);
+  transition:
+    background-color var(--dur-med) ease,
+    box-shadow var(--dur-med) ease;
+}
+
+.orbit__details:hover {
+  box-shadow: 0 0 22px -4px var(--accent);
+}
+
+@media (max-width: 599px) {
+  .orbit__status {
+    min-width: 0;
+    flex: 1;
+  }
+}

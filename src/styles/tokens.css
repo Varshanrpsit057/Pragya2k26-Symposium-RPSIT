@@ -1,0 +1,84 @@
+/*
+ * Design tokens for PRAGYA 2026.
+ * Cool hues (synapse → cortex) mark the technical track; warm hues (flare → solar)
+ * mark the non-technical track. The full spectrum belongs to the symposium itself.
+ */
+
+@property --spec-angle {
+  syntax: '<angle>';
+  inherits: true;
+  initial-value: 135deg;
+}
+
+@property --mag-x {
+  syntax: '<length>';
+  inherits: true;
+  initial-value: 0px;
+}
+
+@property --mag-y {
+  syntax: '<length>';
+  inherits: true;
+  initial-value: 0px;
+}
+
+:root {
+  color-scheme: dark;
+
+  /* Colour */
+  --c-void: #05061a;
+  --c-void-2: #0b0d2b;
+  --c-void-3: #12153d;
+  --c-line: rgb(160 170 255 / 0.14);
+  --c-line-strong: rgb(160 170 255 / 0.28);
+  --c-text: #edefff;
+  --c-text-muted: #a3a8cc;
+  --c-text-dim: #7d83ad;
+
+  --c-synapse: #45e3ff;
+  --c-cortex: #8c6cff;
+  --c-flare: #ff5cc8;
+  --c-solar: #ffc15a;
+
+  --g-spectrum: linear-gradient(100deg, var(--c-synapse), var(--c-cortex) 48%, var(--c-flare));
+  --g-technical: linear-gradient(135deg, var(--c-synapse), var(--c-cortex));
+  --g-creative: linear-gradient(135deg, var(--c-flare), var(--c-solar));
+
+  /* Type: one variable family; width and weight carry the hierarchy */
+  --font: 'Mona Sans', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  --step--1: clamp(0.83rem, 0.8rem + 0.15vw, 0.9rem);
+  --step-0: clamp(1rem, 0.96rem + 0.2vw, 1.0625rem);
+  --step-1: clamp(1.13rem, 1.06rem + 0.35vw, 1.3rem);
+  --step-2: clamp(1.35rem, 1.2rem + 0.7vw, 1.7rem);
+  --step-3: clamp(1.7rem, 1.45rem + 1.2vw, 2.35rem);
+  --step-4: clamp(2.15rem, 1.6rem + 2.6vw, 3.6rem);
+
+  /* Space & shape */
+  --gutter: clamp(1rem, 4vw, 2.5rem);
+  --content-max: 75rem;
+  --r-sm: 0.625rem;
+  --r-md: 1rem;
+  --r-lg: 1.5rem;
+  --r-pill: 999px;
+  --nav-offset: 6rem;
+
+  /* Motion */
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-in-out: cubic-bezier(0.65, 0, 0.35, 1);
+  --dur-fast: 180ms;
+  --dur-med: 420ms;
+  --dur-slow: 900ms;
+}
+
+/* Track accents, consumed by cards, tiles and nodes */
+[data-category='technical'] {
+  --accent: var(--c-synapse);
+  --accent-2: var(--c-cortex);
+  --accent-gradient: var(--g-technical);
+}
+
+[data-category='non-technical'] {
+  --accent: var(--c-flare);
+  --accent-2: var(--c-solar);
+  --accent-gradient: var(--g-creative);
+}

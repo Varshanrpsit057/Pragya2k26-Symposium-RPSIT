@@ -1,0 +1,357 @@
+.nav-shell {
+  position: fixed;
+  top: max(0.75rem, env(safe-area-inset-top));
+  left: 50%;
+  z-index: 50;
+  /* Edge to edge, with the same breathing room at the sides as at the top */
+  width: calc(100% - 1.5rem);
+  transform: translateX(-50%);
+  animation: nav-drop-in 0.9s var(--ease-out) 0.25s both;
+}
+
+@keyframes nav-drop-in {
+  from {
+    opacity: 0;
+    transform: translate(-50%, -1rem);
+  }
+  to {
+    opacity: 1;
+    transform: translate(-50%, 0);
+  }
+}
+
+.pill-nav {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.4rem;
+  border: 1px solid var(--c-line);
+  border-radius: var(--r-pill);
+  /* Solid, not frosted glass: a blur would be redone every frame over the moving background */
+  background: rgb(10 12 38 / 0.88);
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 0.06),
+    0 12px 40px -18px rgb(0 0 0 / 0.8);
+}
+
+/* College lockup: crest beside a two-line name, the second line set wide to match the first */
+.pill-nav__brand {
+  --college-size: 1.32rem;
+
+  display: inline-flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.15rem 0.9rem 0.15rem 0.45rem;
+  border-radius: var(--r-pill);
+  text-decoration: none;
+  flex-shrink: 0;
+}
+
+.pill-nav__logo {
+  display: block;
+  width: auto;
+  height: calc(var(--college-size) * 2.3);
+  filter: drop-shadow(0 2px 8px rgb(140 108 255 / 0.45));
+}
+
+.pill-nav__college {
+  display: grid;
+  line-height: 1;
+  text-transform: uppercase;
+  white-space: nowrap;
+  color: #fff;
+}
+
+.pill-nav__college-name {
+  font-size: var(--college-size);
+  font-weight: 900;
+  font-stretch: 125%;
+  letter-spacing: 0.035em;
+}
+
+.pill-nav__college-type {
+  margin-top: 0.22em;
+  font-size: calc(var(--college-size) * 0.5);
+  font-weight: 800;
+  font-stretch: 112%;
+  letter-spacing: 0.1em;
+  color: var(--c-synapse);
+}
+
+/* Desktop items */
+.pill-nav__track {
+  position: relative;
+  margin: 0 auto;
+}
+
+.pill-nav__items {
+  display: flex;
+  align-items: center;
+  gap: 0.15rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.pill-nav__indicator {
+  position: absolute;
+  top: 0;
+  left: 0;
+  height: 100%;
+  width: 0;
+  border-radius: var(--r-pill);
+  background: rgb(255 255 255 / 0.09);
+  box-shadow:
+    inset 0 0 0 1px rgb(255 255 255 / 0.08),
+    0 0 18px -6px rgb(140 108 255 / 0.6);
+  opacity: 0;
+  pointer-events: none;
+  transition:
+    transform 0.55s var(--ease-out),
+    width 0.55s var(--ease-out),
+    opacity 0.3s ease;
+}
+
+.pill {
+  position: relative;
+  isolation: isolate;
+  display: block;
+  overflow: hidden;
+  padding: 0.55rem 0.95rem;
+  border-radius: var(--r-pill);
+  font-size: 0.92rem;
+  font-weight: 550;
+  line-height: 1.2;
+  text-decoration: none;
+  color: var(--c-text-muted);
+  transition: color var(--dur-fast) ease;
+}
+
+/* Dome that rises from below on hover */
+.pill::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  border-radius: 50% 50% 0 0 / 100% 100% 0 0;
+  background: var(--c-text);
+  transform: translateY(102%);
+  transition:
+    transform 0.45s var(--ease-out),
+    border-radius 0.45s var(--ease-out);
+}
+
+.pill__stack {
+  position: relative;
+  display: block;
+  overflow: hidden;
+}
+
+.pill__label {
+  display: block;
+  transition: transform 0.45s var(--ease-out);
+}
+
+.pill__label--hover {
+  position: absolute;
+  inset: 0;
+  color: var(--c-void);
+  transform: translateY(105%);
+}
+
+.pill[aria-current='true'] {
+  color: var(--c-text);
+}
+
+@media (hover: hover) {
+  .pill:hover::before {
+    transform: translateY(0);
+    border-radius: var(--r-pill);
+  }
+
+  .pill:hover .pill__label {
+    transform: translateY(-105%);
+  }
+
+  .pill:hover .pill__label--hover {
+    transform: translateY(0);
+  }
+}
+
+.pill-nav__cta {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.6rem 1.15rem;
+  border-radius: var(--r-pill);
+  font-size: 0.92rem;
+  font-weight: 650;
+  font-stretch: 108%;
+  text-decoration: none;
+  color: var(--c-void);
+  background: var(--c-text);
+  box-shadow: 0 0 0 0 rgb(140 108 255 / 0);
+  transition:
+    background-color var(--dur-fast) ease,
+    box-shadow var(--dur-med) var(--ease-out);
+}
+
+.pill-nav__cta:hover,
+.pill-nav__cta[aria-current='true'] {
+  background: #fff;
+  box-shadow: 0 0 24px -4px rgb(140 108 255 / 0.85);
+}
+
+/* Mobile toggle and menu */
+.pill-nav__toggle {
+  display: none;
+  position: relative;
+  width: 2.75rem;
+  height: 2.75rem;
+  border: 1px solid var(--c-line);
+  border-radius: 50%;
+  background: rgb(255 255 255 / 0.04);
+  cursor: pointer;
+}
+
+.pill-nav__toggle-line {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 1.1rem;
+  height: 1.5px;
+  border-radius: 2px;
+  background: currentColor;
+  transition: transform 0.35s var(--ease-out);
+}
+
+.pill-nav__toggle-line:first-child {
+  transform: translate(-50%, calc(-50% - 3.5px));
+}
+
+.pill-nav__toggle-line:last-child {
+  transform: translate(-50%, calc(-50% + 3.5px));
+}
+
+.pill-nav__toggle[aria-expanded='true'] .pill-nav__toggle-line:first-child {
+  transform: translate(-50%, -50%) rotate(45deg);
+}
+
+.pill-nav__toggle[aria-expanded='true'] .pill-nav__toggle-line:last-child {
+  transform: translate(-50%, -50%) rotate(-45deg);
+}
+
+.pill-nav__menu {
+  position: absolute;
+  top: calc(100% + 0.5rem);
+  left: 0;
+  right: 0;
+  padding: 0.5rem;
+  border: 1px solid var(--c-line);
+  border-radius: var(--r-lg);
+  background: rgb(10 12 38 / 0.97);
+  box-shadow: 0 24px 60px -20px rgb(0 0 0 / 0.9);
+  opacity: 0;
+  visibility: hidden;
+  transform: translateY(-0.5rem) scale(0.98);
+  transform-origin: top center;
+  transition:
+    opacity 0.3s var(--ease-out),
+    transform 0.4s var(--ease-out),
+    visibility 0s linear 0.4s;
+}
+
+.pill-nav__menu[data-open='true'] {
+  opacity: 1;
+  visibility: visible;
+  transform: none;
+  transition:
+    opacity 0.3s var(--ease-out),
+    transform 0.4s var(--ease-out),
+    visibility 0s;
+}
+
+.pill-nav__menu ul {
+  display: grid;
+  gap: 0.15rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.pill-nav__menu a {
+  display: block;
+  padding: 0.85rem 1rem;
+  border-radius: var(--r-md);
+  font-size: var(--step-1);
+  font-weight: 600;
+  font-stretch: 110%;
+  text-decoration: none;
+  color: var(--c-text-muted);
+}
+
+.pill-nav__menu a[aria-current='true'] {
+  color: var(--c-text);
+  background: rgb(255 255 255 / 0.06);
+}
+
+/* Below 960px the brand, five links and CTA no longer fit in one row */
+@media (max-width: 959px) {
+  .pill-nav__track {
+    display: none;
+  }
+
+  .pill-nav__cta {
+    margin-left: auto;
+  }
+
+  .pill-nav__toggle {
+    display: inline-block;
+  }
+}
+
+@media (min-width: 960px) {
+  .pill-nav__menu {
+    display: none;
+  }
+}
+
+/* Wide screens: the links sit at the true centre of the bar, not just between brand and CTA */
+@media (min-width: 1240px) {
+  .pill-nav {
+    display: grid;
+    grid-template-columns: minmax(max-content, 1fr) auto minmax(max-content, 1fr);
+  }
+
+  .pill-nav__brand {
+    justify-self: start;
+  }
+
+  .pill-nav__track {
+    margin: 0;
+  }
+
+  .pill-nav__cta {
+    justify-self: end;
+  }
+}
+
+/* Phones: the lockup scales with the screen so the CTA and menu button keep their size */
+@media (max-width: 599px) {
+  .pill-nav__brand {
+    --college-size: clamp(0.7rem, 3.5vw, 1rem);
+
+    gap: 0.45rem;
+    padding-right: 0.4rem;
+  }
+
+  .pill-nav__cta,
+  .pill-nav__toggle {
+    flex-shrink: 0;
+  }
+}
+
+@media (max-width: 380px) {
+  .pill-nav__cta {
+    padding-inline: 0.9rem;
+  }
+}

@@ -1,0 +1,164 @@
+/* The Dev Crew window: wide enough for the three cards side by side */
+.modal.dev-crew-modal {
+  width: min(100% - 2rem, 72rem);
+}
+
+.dev-crew {
+  display: grid;
+  gap: clamp(1.5rem, 3vw, 2.25rem);
+}
+
+.dev-crew__head {
+  display: grid;
+  justify-items: center;
+  gap: 0.6rem;
+  text-align: center;
+}
+
+.dev-crew__mark {
+  display: grid;
+  place-items: center;
+  width: 3.25rem;
+  height: 3.25rem;
+  border: 1px solid var(--c-line-strong);
+  border-radius: 50%;
+  color: var(--c-text);
+  background: rgb(255 255 255 / 0.05);
+  box-shadow: 0 0 28px -8px rgb(140 108 255 / 0.8);
+}
+
+@media (max-width: 599px) {
+  .modal.dev-crew-modal {
+    width: calc(100% - 1rem);
+  }
+}
+
+.crew-grid {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: clamp(1.5rem, 3vw, 2.5rem);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+/* Three across on desktop, two plus one on tablets, one per row on phones */
+.crew-grid > li {
+  width: min(100%, 340px);
+}
+
+/* The card takes its size from its column rather than the viewport height */
+.crew-grid .pc-card {
+  width: 100%;
+  height: auto;
+  max-height: none;
+}
+
+/* Name and role in the site's type */
+.crew-grid .pc-details {
+  top: 1.6rem;
+}
+
+.crew-grid .pc-details h3 {
+  font-size: clamp(1.55rem, 1.3rem + 0.9vw, 1.95rem);
+  font-weight: 800;
+  font-stretch: 112%;
+  line-height: 1.1;
+  letter-spacing: -0.01em;
+}
+
+.crew-grid .pc-details p {
+  top: 0.35rem;
+  font-size: 0.78rem;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+}
+
+/*
+ * The photo as taken, background and all, in a window between the name and the links.
+ * It sits above the shine and glare in its natural colours.
+ */
+.crew-grid .pc-avatar-content {
+  z-index: 4;
+  mix-blend-mode: normal;
+}
+
+/* A square window the whole (square) photo fits into exactly. An image does not stretch
+   between left and right offsets like a box does, so its size is set explicitly. */
+.crew-grid .pc-avatar-content .avatar,
+.crew-member__initials {
+  position: absolute;
+  top: 5.6rem;
+  left: 1.5rem;
+  width: calc(100% - 3rem);
+  height: auto;
+  aspect-ratio: 1;
+  border-radius: 1.25rem;
+  box-shadow:
+    0 0 0 1px rgb(255 255 255 / 0.14),
+    0 18px 40px -18px rgb(0 0 0 / 0.9);
+}
+
+.crew-grid .pc-avatar-content .avatar {
+  object-fit: cover;
+  /* Toned down so the white backgrounds sit quietly on the dark page */
+  filter: brightness(0.74) saturate(0.95);
+  /* Fixed in place: the card does not follow the pointer */
+  transform: none;
+}
+
+.crew-member__initials {
+  place-items: center;
+  font-size: 4.5rem;
+  font-weight: 900;
+  font-stretch: 125%;
+  color: var(--c-text);
+  background: rgb(255 255 255 / 0.06);
+}
+
+/* Info bar: the handle beside the profile links; the photo above makes a mini avatar redundant */
+.crew-grid .pc-mini-avatar {
+  display: none;
+}
+
+.crew-grid .pc-user-info {
+  gap: 0.6rem;
+}
+
+.crew-grid .pc-user-details,
+.crew-grid .pc-user-text {
+  min-width: 0;
+}
+
+.crew-grid .pc-handle {
+  display: block;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.crew-grid .pc-status {
+  font-size: 12px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.crew-grid .pc-actions {
+  --icon-link-size: 2.25rem;
+}
+
+.crew-grid .pc-actions .icon-link {
+  border-radius: 50%;
+  border-color: rgb(255 255 255 / 0.2);
+  color: rgb(255 255 255 / 0.88);
+  background: rgb(255 255 255 / 0.08);
+}
+
+.crew-grid .pc-actions .icon-link:hover,
+.crew-grid .pc-actions .icon-link:focus-visible {
+  border-color: transparent;
+  color: var(--c-void);
+  background: var(--c-text);
+}

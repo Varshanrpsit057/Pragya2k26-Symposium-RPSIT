@@ -1,0 +1,70 @@
+/*
+ * Fixed background behind the whole page. Sized to the large viewport (lvh) so mobile
+ * address bars showing and hiding never resize the WebGL canvas mid-scroll.
+ */
+.sky-backdrop {
+  position: fixed;
+  top: 0;
+  left: 0;
+  z-index: -3;
+  width: 100%;
+  height: 100vh;
+  height: 100lvh;
+  overflow: hidden;
+  background: var(--c-void);
+  pointer-events: none;
+}
+
+.sky-backdrop__layers {
+  position: absolute;
+  inset: 0;
+}
+
+/* Still glow in the fibres' colours: shown at once, and kept where WebGL is not used */
+.sky-backdrop__glow {
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(60% 55% at 50% 50%, rgb(52 55 160 / 0.32), transparent 72%),
+    radial-gradient(90% 80% at 50% 50%, rgb(20 14 53 / 0.9), transparent 100%);
+}
+
+.sky-backdrop__fibers {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  transition: opacity 1.6s var(--ease-out);
+}
+
+.sky-backdrop[data-fibers='ready'] .sky-backdrop__fibers {
+  opacity: 1;
+}
+
+/* The canvas is opaque once drawn: nothing under it needs compositing */
+.sky-backdrop[data-fibers='ready'] .sky-backdrop__glow {
+  visibility: hidden;
+  transition: visibility 0s 1.6s;
+}
+
+/*
+ * Full brightness behind the hero, a calmer background behind the reading sections.
+ * Scroll-linked opacity runs on the compositor; browsers without it keep full brightness.
+ */
+@supports (animation-timeline: scroll()) {
+  @media (prefers-reduced-motion: no-preference) {
+    .sky-backdrop__layers {
+      animation: sky-settle linear both;
+      animation-timeline: scroll(root block);
+      animation-range: 0 100vh;
+    }
+  }
+}
+
+@keyframes sky-settle {
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 0.6;
+  }
+}
