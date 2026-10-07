@@ -24,16 +24,20 @@ import { SheetsStore } from '../../../server/sheets';
 const log = (message: string, details: Record<string, unknown> = {}) => console.log(JSON.stringify({ message, ...details }));
 
 let service: Service | null | undefined;
+/** Names (never values) of the settings that were missing, for /api/health to report. */
+let missingSettings: string[] = [];
 
 /** Built once per Lambda instance; null while required settings are missing. */
 function getService(): Service | null {
   if (service !== undefined) return service;
   const { config, missing } = readConfig(process.env);
   if (!config) {
+    missingSettings = [...missing];
     log('Registration API is not configured: set these Amplify secrets / variables', { missing });
     service = null;
     return service;
   }
+  missingSettings = [];
   const google = new GoogleClient(config.google);
   service = new Service({
     store: new DynamoStore(config.tables),
@@ -59,6 +63,15 @@ export const handler = async (
   event: APIGatewayProxyEventV2 | ScheduledEvent,
 ): Promise<APIGatewayProxyStructuredResultV2 | void> => {
   if (isHttp(event)) {
+    // /api/health names the settings still missing, so the deployment can be checked from
+    // outside without reading CloudWatch. Names only: never a secret's value.
+    if (event.rawPath === '/api/health' && !getService()) {
+      return {
+        statusCode: 503,
+        headers: { 'content-type': 'application/json', 'cache-control': 'no-store' },
+        body: JSON.stringify({ success: false, code: 'NOT_CONFIGURED', missing: missingSettings }),
+      };
+    }
     const headers = Object.fromEntries(Object.entries(event.headers ?? {}).map(([name, value]) => [name.toLowerCase(), value]));
     const body = event.body == null ? null : event.isBase64Encoded ? Buffer.from(event.body, 'base64').toString('utf8') : event.body;
     const response = await route(
