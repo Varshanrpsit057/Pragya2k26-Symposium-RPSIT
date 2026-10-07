@@ -149,7 +149,7 @@ From `amplify.yml` (nothing to type in the console):
 
 | Phase | Commands |
 | --- | --- |
-| Backend | `nvm install 22` · `npm ci --cache .npm --prefer-offline` · `npx ampx pipeline-deploy --branch $AWS_BRANCH --app-id $AWS_APP_ID` |
+| Backend | `nvm install 22` · `npm install --no-audit --no-fund --cache .npm --prefer-offline` (from `package-lock.json`) · `npx ampx pipeline-deploy --branch $AWS_BRANCH --app-id $AWS_APP_ID` |
 | Frontend | `nvm install 22` · `npm run build` (type-check, Vite build, prerender) |
 | Output | `dist` (website at `/`, dashboard at `/landing/admin/`) |
 
