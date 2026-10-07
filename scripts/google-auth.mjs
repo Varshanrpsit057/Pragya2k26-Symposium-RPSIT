@@ -1,6 +1,8 @@
 // Connects the registration system to your Google account (Sheets, Drive and Gmail).
 //
 //   npm run google:auth     sign in once; saves the refresh token to .env, then checks access
+//   npm run google:auth -- --no-check
+//                           sign in and save only: nothing is read from or sent to Sheets, Drive or Gmail
 //   npm run google:check    checks the saved token can reach the Sheet and the Drive folder
 //   npm run google:check -- --send-test-email
 //                           also sends one test email to the signed-in Gmail address
@@ -39,6 +41,7 @@ const REQUESTED_SCOPES = ['openid', 'email', ...Object.values(SCOPES)];
 const args = new Set(process.argv.slice(2));
 const checkOnly = args.has('--check');
 const sendTestEmail = args.has('--send-test-email');
+const skipCheck = args.has('--no-check');
 
 const ok = (message) => console.log(`  ✓ ${message}`);
 const bad = (message) => console.log(`  ✗ ${message}`);
@@ -405,7 +408,8 @@ try {
     await check(accessToken, env, null);
   } else {
     const accessToken = await signIn(client, account);
-    await check(accessToken, readEnv(), readEnv().GMAIL_SENDER);
+    if (skipCheck) console.log('Skipped the access check (--no-check). Run npm run google:check whenever you want one.\n');
+    else await check(accessToken, readEnv(), readEnv().GMAIL_SENDER);
   }
 } catch (error) {
   fail(error.message);
