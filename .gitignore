@@ -1,39 +1,47 @@
 # Dependencies
-node_modules
+node_modules/
 
 # Build output
-dist
-dist-ssr
+dist/
+dist-ssr/
 
 # Amplify: generated for each environment on every deploy / sandbox run
-.amplify
+.amplify/
 amplify_outputs*
 amplifyconfiguration*
 *.local
+
+# Caches and build metadata, never committed
+# .npm is the npm cache amplify.yml builds into; tsc -b and vitest write the others.
+.npm/
+coverage/
+*.tsbuildinfo
 
 # Logs
 *.log
 npm-debug.log*
 
 # Environment and secrets (npm run check:secrets also blocks them; see scripts/check-secrets.mjs)
+# The folder rules below have no leading slash on purpose: they must match at any depth,
+# as check-secrets.mjs does, so a copy in a subfolder is ignored too.
 .env
 .env.*
 !.env.example
-/google client/
+google client/
 client_secret_*.json
+service-account*.json
 *.pem
 *.key
 *.p12
 *.pfx
-service-account*.json
 # Google Cloud service-account keys keep their downloaded name: <project>-<12 hex>.json
 *-[0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f].json
 
 # Personal photos, reference images and poster originals, kept on your computer only
 # (the site uses the WebP copies in src/assets/)
-/dev_crew/
-/rpsit/
+dev_crew/
 /image/
+/rpsit/
 
 # Editor / OS / local tooling
 .claude/
@@ -42,3 +50,7 @@ service-account*.json
 .idea
 .DS_Store
 Thumbs.db
+ehthumbs.db
+desktop.ini
+*~
+*.swp
