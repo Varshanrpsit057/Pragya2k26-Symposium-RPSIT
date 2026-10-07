@@ -1,6 +1,7 @@
-import { useMemo, useRef, useState, type CSSProperties } from 'react';
+import { useMemo, useRef, useState, type CSSProperties, type MouseEvent } from 'react';
 import { eventAnchor, events } from '../../content/events';
 import { useMediaQuery } from '../../hooks/useMediaQuery';
+import { focusEvent } from '../../lib/eventFocus';
 import CircularCarousel, {
   type CarouselItem,
   type CircularCarouselHandle,
@@ -13,7 +14,7 @@ import './EventOrbit.css';
  * Event showcase: the event posters on React Bits' Circular Carousel. It turns on its own
  * in one smooth, continuous motion (no stop at each poster), and keeps going with the mouse
  * over it; only a finger, keyboard focus or a drag holds it. Selecting the front poster,
- * or the View details button, jumps to that event's card.
+ * or View details, opens that event's panel in its section below (lib/eventFocus.ts).
  *
  * Phones get a panorama (camera inside the ring) with flat cards, so posters stay
  * large and the GPU has far fewer layers to composite; larger screens get the
@@ -45,7 +46,7 @@ export function EventOrbit() {
 
   const openDetails = (index: number) => {
     const event = SHOWCASE_EVENTS[index];
-    if (event) window.location.hash = eventAnchor(event);
+    if (event) focusEvent(event.id);
   };
 
   const layout = useMemo(
@@ -117,7 +118,14 @@ export function EventOrbit() {
             {active + 1} / {SHOWCASE_EVENTS.length}
           </span>
           <span className="orbit__current">{activeEvent.name}</span>
-          <a className="orbit__details" href={`#${eventAnchor(activeEvent)}`}>
+          <a
+            className="orbit__details"
+            href={`#${eventAnchor(activeEvent)}`}
+            onClick={(event: MouseEvent) => {
+              event.preventDefault();
+              focusEvent(activeEvent.id);
+            }}
+          >
             View details
           </a>
         </div>

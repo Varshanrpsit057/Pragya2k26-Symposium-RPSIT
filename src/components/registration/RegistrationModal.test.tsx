@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { events } from '../../content/events';
 import { site } from '../../content/site';
 import { DEPARTMENTS } from '../../lib/registration';
-import { EventCard } from '../events/EventCard';
+import { EventsSection } from '../events/EventsSection';
 import { SiteModalsProvider } from '../modal/SiteModals';
 import { RegisterButton } from '../ui/RegisterButton';
 
@@ -229,13 +229,14 @@ describe('RegistrationModal', () => {
   });
 
   it('pre-selects the event whose Register Now button opened it', () => {
-    const shortFilm = events.find((event) => event.id === 'short-film')!;
-    render(
+    const { container } = render(
       <SiteModalsProvider>
-        <EventCard event={shortFilm} />
+        <EventsSection category="non-technical" title="Non-technical events" lead="" />
       </SiteModalsProvider>,
     );
 
+    // Open the SHORT FILM panel, then its Register Now.
+    fireEvent.click(container.querySelector('#event-short-film')!);
     fireEvent.click(screen.getByRole('button', { name: 'Register Now for SHORT FILM' }));
     const dialog = screen.getByRole('dialog', { name: 'PRAGYA 2026 Registration' });
     expect(eventBox(dialog, 'SHORT FILM')).toBeChecked();

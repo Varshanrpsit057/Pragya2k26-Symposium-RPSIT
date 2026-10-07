@@ -24,9 +24,11 @@ describe('App', () => {
     expect(within(hero).queryByText('When')).toBeNull();
   });
 
-  it('renders one detailed card per event', () => {
-    const { container } = render(<App />);
-    expect(container.querySelectorAll('.event-card')).toHaveLength(10);
+  it('shows every event as a panel in its track, two galleries of five', () => {
+    render(<App />);
+    for (const title of ['Technical events', 'Non-technical events']) {
+      expect(within(screen.getByRole('list', { name: title })).getAllByRole('listitem')).toHaveLength(5);
+    }
   });
 
   it('has every section the navigation points to', () => {

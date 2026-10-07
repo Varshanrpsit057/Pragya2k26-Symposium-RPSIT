@@ -28,11 +28,12 @@ export interface SymposiumEvent {
   description: string;
   icon: EventIconName;
   /**
-   * Poster image URL (3:4 portrait), imported from src/assets/events.
-   * Shown as the showcase card, the event card banner and a drift-wall tile.
-   * Without one, those places fall back to the event's icon.
+   * Poster image URL (3:4 portrait, src/assets/events/<id>.webp): the circular carousel,
+   * the See More window and the poster wall. Without one, those places use the event's icon.
    */
   poster?: string;
+  /** The whole artwork, larger (src/assets/events/<id>-large.webp): the event's panel. */
+  posterLarge?: string;
 
   // Optional details. Leave undefined until confirmed; each renders only when set.
   teamSize?: string;

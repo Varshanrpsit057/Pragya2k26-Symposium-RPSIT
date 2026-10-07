@@ -12,67 +12,85 @@
   box-shadow: 0 0 18px color-mix(in oklab, var(--accent) 60%, transparent);
 }
 
-.event-grid {
+/* Arriving from a #event-… link: the panels sit below the fixed navigation */
+.events-section .ag-panel {
+  scroll-margin-top: calc(var(--nav-offset) + 1.5rem);
+}
+
+/* The open panel's caption: the event, over the bottom of its artwork */
+.event-panel {
   display: grid;
-  grid-template-columns: repeat(6, minmax(0, 1fr));
-  gap: clamp(0.9rem, 1.8vw, 1.4rem);
-  margin: 0;
-  padding: 0;
-  list-style: none;
+  justify-items: start;
+  gap: 0.55rem;
+  max-width: 34rem;
+  color: var(--c-text);
+  text-shadow: 0 2px 14px rgb(0 0 0 / 0.55);
 }
 
-.event-grid > li {
-  grid-column: span 2;
+.event-panel__top {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
 }
 
-.event-grid--lead-pair > li:nth-child(-n + 2),
-.event-grid--trail-pair > li:nth-last-child(-n + 2) {
-  grid-column: span 3;
+.event-panel__icon {
+  display: grid;
+  place-items: center;
+  width: 2.4rem;
+  height: 2.4rem;
+  border-radius: var(--r-sm);
+  color: var(--c-void);
+  background: var(--accent-gradient);
+  box-shadow: 0 0 22px -6px var(--accent);
 }
 
-/* Wide cards get a larger name and a shorter, wider banner */
-.event-grid--lead-pair > li:nth-child(-n + 2) .event-card__name,
-.event-grid--trail-pair > li:nth-last-child(-n + 2) .event-card__name {
-  font-size: var(--step-3);
+.event-panel__category {
+  font-size: var(--step--1);
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--accent);
 }
 
-.event-grid--lead-pair > li:nth-child(-n + 2) .event-card__media,
-.event-grid--trail-pair > li:nth-last-child(-n + 2) .event-card__media {
-  aspect-ratio: 21 / 9;
+.event-panel__name {
+  font-size: clamp(1.45rem, 1.1rem + 1.3vw, 2.2rem);
+  font-weight: 850;
+  font-stretch: 115%;
+  line-height: 1.05;
+  letter-spacing: 0;
 }
 
-@media (max-width: 959px) {
-  .event-grid--lead-pair > li:nth-child(-n + 2) .event-card__media,
-  .event-grid--trail-pair > li:nth-last-child(-n + 2) .event-card__media {
-    aspect-ratio: 16 / 9;
+.event-panel__subtitle {
+  margin-top: -0.2rem;
+  font-weight: 650;
+  color: var(--accent);
+}
+
+.event-panel__description {
+  max-width: 44ch;
+  color: rgb(237 239 255 / 0.88);
+  text-wrap: pretty;
+}
+
+.event-panel__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+  margin-top: 0.35rem;
+  text-shadow: none;
+}
+
+@media (max-width: 640px) {
+  .event-panel {
+    gap: 0.4rem;
   }
-}
 
-@media (max-width: 959px) {
-  .event-grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+  .event-panel__icon {
+    width: 2rem;
+    height: 2rem;
   }
 
-  .event-grid > li,
-  .event-grid--lead-pair > li:nth-child(-n + 2),
-  .event-grid--trail-pair > li:nth-last-child(-n + 2) {
-    grid-column: span 1;
-  }
-
-  .event-grid--lead-pair > li:first-child,
-  .event-grid--trail-pair > li:last-child {
-    grid-column: span 2;
-  }
-}
-
-@media (max-width: 599px) {
-  .event-grid {
-    grid-template-columns: 1fr;
-  }
-
-  .event-grid > li,
-  .event-grid--lead-pair > li:first-child,
-  .event-grid--trail-pair > li:last-child {
-    grid-column: auto;
+  .event-panel__description {
+    font-size: var(--step--1);
   }
 }

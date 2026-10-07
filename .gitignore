@@ -27,9 +27,11 @@ client_secret_*.json
 *.pfx
 service-account*.json
 
-# Personal photos and reference images, kept on your computer only
+# Personal photos, reference images and poster originals, kept on your computer only
+# (the site uses the WebP copies in src/assets/)
 /dev_crew/
 /rpsit/
+/image/
 
 # Editor / OS / local tooling
 .claude/

@@ -1,0 +1,208 @@
+/* React Bits' Accordion Gallery. Site additions are marked "site:". */
+.accordion-gallery {
+  --ag-accent: #ffffff;
+  --ag-overlay: #060010;
+  --ag-text: #ffffff;
+  --ag-gap: 10px;
+  --ag-radius: 16px;
+  /* site: close to the measured size, so the first paint (before JS) has no gaps */
+  --ag-media-size: min(64vw, 46rem);
+
+  display: flex;
+  flex-direction: row;
+  gap: var(--ag-gap);
+  width: 100%;
+  max-width: 100%;
+  perspective: 1400px;
+  perspective-origin: 50% 50%;
+}
+
+.accordion-gallery--vertical {
+  --ag-media-size: 30rem;
+  flex-direction: column;
+}
+
+.ag-panel {
+  position: relative;
+  flex: 1 1 0;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+  border-radius: var(--ag-radius);
+  cursor: pointer;
+  display: block;
+  text-decoration: none;
+  outline: none;
+  transform-style: preserve-3d;
+  transform-origin: center center;
+  background: #0a0713;
+  box-shadow: 0 10px 30px -18px rgba(0, 0, 0, 0.8);
+  will-change: flex-grow, transform;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.ag-panel:focus-visible {
+  box-shadow:
+    0 0 0 2px var(--ag-accent),
+    0 10px 30px -18px rgba(0, 0, 0, 0.8);
+}
+
+/* site: the open panel is not a button to press again */
+.ag-panel--active {
+  cursor: default;
+}
+
+.ag-panel__frame {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  border-radius: inherit;
+}
+
+.ag-panel__media {
+  --ag-gray: 1;
+  --ag-dim: 0.35;
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: var(--ag-media-size);
+  height: 100%;
+  /* site: centred before GSAP takes over the transform */
+  transform: translate(-50%, -50%);
+  filter: grayscale(var(--ag-gray));
+  will-change: transform, filter;
+}
+
+/* site: the open panel in full colour from the first paint */
+.ag-panel--active .ag-panel__media {
+  --ag-gray: 0;
+  --ag-dim: 0;
+}
+
+.accordion-gallery--vertical .ag-panel__media {
+  width: 100%;
+  height: var(--ag-media-size);
+}
+
+.ag-panel__media img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+  user-select: none;
+  -webkit-user-drag: none;
+}
+
+.ag-panel__overlay {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background:
+    linear-gradient(180deg, transparent 45%, color-mix(in srgb, var(--ag-overlay) 78%, transparent) 100%),
+    color-mix(in srgb, var(--ag-overlay) calc(var(--ag-dim, 0.35) * 100%), transparent);
+}
+
+.ag-panel__label {
+  position: absolute;
+  left: 20px;
+  bottom: 20px;
+  right: 20px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  pointer-events: none;
+  z-index: 2;
+}
+
+.ag-panel__bar {
+  flex: 0 0 auto;
+  width: 3px;
+  height: 26px;
+  border-radius: 3px;
+  background: var(--ag-accent);
+  opacity: 0;
+  box-shadow: 0 0 12px color-mix(in srgb, var(--ag-accent) 60%, transparent);
+}
+
+.ag-panel__text {
+  color: var(--ag-text);
+  font-family: inherit;
+  font-weight: 600;
+  font-size: clamp(1rem, 1.4vw, 1.4rem);
+  letter-spacing: 0.01em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  opacity: 0;
+  text-shadow: 0 2px 14px rgba(0, 0, 0, 0.55);
+}
+
+/* site: the open panel's caption shows from the first paint */
+.ag-panel--active .ag-panel__bar,
+.ag-panel--active .ag-panel__text {
+  opacity: 1;
+}
+
+/* site: a rich caption (several lines and buttons) on the open panel */
+.ag-panel__label--rich {
+  align-items: stretch;
+}
+
+.ag-panel__label--rich .ag-panel__bar {
+  height: auto;
+}
+
+.ag-panel__label--rich .ag-panel__text {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-weight: inherit;
+  font-size: inherit;
+  letter-spacing: normal;
+  white-space: normal;
+  overflow: visible;
+}
+
+.ag-panel--active .ag-panel__label--rich {
+  pointer-events: auto;
+}
+
+/* site: the name on a folded panel, read bottom to top on a narrow strip */
+.ag-panel__peek {
+  position: absolute;
+  z-index: 1;
+  left: 50%;
+  bottom: 18px;
+  max-height: calc(100% - 36px);
+  overflow: hidden;
+  writing-mode: vertical-rl;
+  transform: translateX(-50%) rotate(180deg);
+  font-size: 0.82rem;
+  font-weight: 750;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  color: var(--ag-text);
+  text-shadow: 0 1px 10px rgba(0, 0, 0, 0.8);
+  pointer-events: none;
+}
+
+.accordion-gallery--vertical .ag-panel__peek {
+  left: 18px;
+  right: 18px;
+  bottom: 50%;
+  max-height: none;
+  writing-mode: horizontal-tb;
+  transform: translateY(50%);
+}
+
+.ag-panel--active .ag-panel__peek {
+  opacity: 0;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ag-panel,
+  .ag-panel__media {
+    will-change: auto;
+  }
+}
