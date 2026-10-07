@@ -1,5 +1,6 @@
 import { render, screen, within } from '@testing-library/react';
 import { afterEach, describe, expect, it } from 'vitest';
+import { crew } from '../../content/crew';
 import { site } from '../../content/site';
 import { CONTACT_PENDING_MESSAGE, Footer } from './Footer';
 
@@ -14,14 +15,17 @@ afterEach(() => {
 });
 
 describe('Footer', () => {
-  it('credits only Mohan Prabu K under "Developed by", with his role and class', () => {
+  it('credits the whole dev crew under "Developed by", each with their role and class', () => {
     render(<Footer links={[]} />);
 
     const credits = screen.getByRole('heading', { name: 'Developed by' }).closest('.footer__credits') as HTMLElement;
-    expect(within(credits).getAllByRole('listitem')).toHaveLength(1);
-    expect(within(credits).getByText('Mohan Prabu K')).toBeInTheDocument();
-    expect(within(credits).getByText('Senior Developer · III Year – AI&DS')).toBeInTheDocument();
-    expect(within(credits).queryByText(/Varshan|Barath/)).toBeNull();
+    const credited = crew.filter((member) => member.credited);
+    expect(credited.map((member) => member.name)).toEqual(['Mohan Prabu K', 'Varshan C', 'Barath S']);
+    expect(within(credits).getAllByRole('listitem')).toHaveLength(credited.length);
+    for (const member of credited) {
+      expect(within(credits).getByText(member.name)).toBeInTheDocument();
+      expect(within(credits).getByText(`${member.role} · ${member.study}`)).toBeInTheDocument();
+    }
   });
 
   it('leaves the Dev Crew button to the navigation', () => {

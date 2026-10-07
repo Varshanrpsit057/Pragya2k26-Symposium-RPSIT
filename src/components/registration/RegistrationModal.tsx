@@ -115,7 +115,7 @@ export function RegistrationModal({ open, event, request = 0, closed = false, on
     latest.current = { values, checked };
   });
 
-  const { gatePassFee, eventFee, payment } = site.registration;
+  const { gatePassFee, eventFee, payment, fallbackFormUrl } = site.registration;
   const fees = { gatePass: gatePassFee, perEvent: eventFee };
   const summary = feeSummary(values.events, fees);
 
@@ -448,7 +448,7 @@ export function RegistrationModal({ open, event, request = 0, closed = false, on
                         {payment.payee && <> ({payment.payee})</>}, then upload the screenshot and transaction ID below.
                       </p>
                       {payment.qrImage && (
-                        <img className="reg-pay__qr" src={payment.qrImage} alt={`UPI QR code for ${payment.upiId}`} width="132" height="132" />
+                        <img className="reg-pay__qr" src={payment.qrImage} alt={`UPI QR code for ${payment.upiId}`} width="720" height="1139" />
                       )}
                     </>
                   ) : (
@@ -581,6 +581,16 @@ export function RegistrationModal({ open, event, request = 0, closed = false, on
                 {status === 'submitting' ? 'Submitting…' : 'Submit Registration'}
               </SpecularButton>
             </div>
+
+            {fallbackFormUrl && (
+              <p className="reg__fallback">
+                If the website gives you any trouble, you can register on this{' '}
+                <a className="reg__fallback-link" href={fallbackFormUrl} target="_blank" rel="noopener noreferrer">
+                  Google Form
+                </a>{' '}
+                instead.
+              </p>
+            )}
           </form>
         </>
       )}

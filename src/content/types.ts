@@ -88,6 +88,8 @@ export interface RegistrationSettings {
     /** URL of a UPI QR code image, e.g. '/images/upi-qr.png' in public/. */
     qrImage: string | null;
   };
+  /** Google Form to fall back to if this site's own form ever fails. Null hides the offer. */
+  fallbackFormUrl: string | null;
 }
 
 export type CrewLinkKind = 'linkedin' | 'github' | 'portfolio';
