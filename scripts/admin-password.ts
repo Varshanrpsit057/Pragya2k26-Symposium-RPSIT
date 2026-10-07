@@ -3,8 +3,12 @@
 //   npm run admin:password
 //
 // Type the new password twice (it is not shown). The password itself is never stored
-// anywhere: only this scrypt hash goes into the Amplify secret ADMIN_PASSWORD_HASH.
+// anywhere: only this scrypt hash, saved to .env and copied into the Amplify secret
+// ADMIN_PASSWORD_HASH.
+import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { hashPassword, passwordProblem } from '../server/auth';
+
+const ENV_FILE = '.env';
 
 function askHidden(prompt: string): Promise<string> {
   const { stdin, stdout } = process;
@@ -53,7 +57,18 @@ if (process.stdin.isTTY && (await askHidden('Type it again:      ')) !== passwor
   process.exit(1);
 }
 
-console.log(`\nADMIN_PASSWORD_HASH=${await hashPassword(password)}\n`);
+const hash = await hashPassword(password);
+console.log(`\nADMIN_PASSWORD_HASH=${hash}\n`);
+// Also kept in .env (git ignores it), next to the other values to copy into Amplify.
+if (existsSync(ENV_FILE)) {
+  const text = readFileSync(ENV_FILE, 'utf8');
+  const line = `ADMIN_PASSWORD_HASH=${hash}`;
+  const next = /^ADMIN_PASSWORD_HASH=.*$/m.test(text)
+    ? text.replace(/^ADMIN_PASSWORD_HASH=.*$/m, line)
+    : `${text.replace(/\s*$/, '\n')}${line}\n`;
+  writeFileSync(ENV_FILE, next);
+  console.log('Saved in .env as ADMIN_PASSWORD_HASH.');
+}
 console.log('Put this value (everything after the "=") in the Amplify secret ADMIN_PASSWORD_HASH:');
 console.log('  Amplify console → your app → Hosting → Secrets → Manage secrets');
 console.log('  or, for a sandbox: npx ampx sandbox secret set ADMIN_PASSWORD_HASH\n');
