@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { buildMime, encodeHeader } from './gmail';
 import { GoogleApiError, GoogleClient } from './google';
 import { COLUMNS, SheetsStore, columnLetter } from './sheets';
-import { sniffImage, validatePayload } from './validate';
+import { checkScreenshot, sniffImage, validatePayload } from './validate';
 
 const json = (body: unknown, status = 200) =>
   new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } });
@@ -84,7 +84,7 @@ describe('SheetsStore', () => {
       json({ updates: { updatedRows: 2 } }),
     ]);
     const sheets = new SheetsStore(client, 'sheet', 'Registrations', { minWriteIntervalMs: 0 });
-    await sheets.load();
+    await sheets.ready();
 
     await Promise.all([sheets.append({ id: 'PRG26-0001' }), sheets.append({ id: 'PRG26-0002' }), sheets.append({ id: 'PRG26-0003' })]);
 
@@ -101,7 +101,7 @@ describe('SheetsStore', () => {
       json({ values: [['PRG26-0001']] }), // yes, it did
     ]);
     const sheets = new SheetsStore(client, 'sheet', 'Registrations', { minWriteIntervalMs: 0 });
-    await sheets.load();
+    await sheets.ready();
 
     await expect(sheets.append({ id: 'PRG26-0001' })).resolves.toBeUndefined();
     expect(calls.filter((call) => call.url.includes(':append'))).toHaveLength(1);
@@ -114,32 +114,40 @@ describe('SheetsStore', () => {
       json({ error: { message: 'Bad range' } }, 400), // and the look-up fails, so nobody knows
     ]);
     const sheets = new SheetsStore(client, 'sheet', 'Registrations', { minWriteIntervalMs: 0 });
-    await sheets.load();
+    await sheets.ready();
 
     await expect(sheets.append({ id: 'PRG26-0001' })).rejects.toMatchObject({ ambiguous: true });
   });
 
-  it('adds missing columns to the header and finds rows by Registration ID for updates', async () => {
+  it('reads only the header, adds missing columns, and finds rows by Registration ID for updates', async () => {
     const { client, calls } = clientWith([
-      json({ values: [['Registration ID', 'Student Name'], ['PRG26-0001', 'Varshan C'], ['PRG26-0002', 'Barath S']] }),
+      json({ values: [['Registration ID', 'Student Name']] }),
       json({}), // header write
       json({ values: [['PRG26-0001'], ['PRG26-0002']] }),
       json({}), // batch update
     ]);
     const sheets = new SheetsStore(client, 'sheet', 'Registrations', { minWriteIntervalMs: 0 });
 
-    const rows = await sheets.load();
-    expect(rows.map((row) => row.name)).toEqual(['Varshan C', 'Barath S']);
-    expect(JSON.parse(String(calls[1].init.body)).values[0]).toEqual(
-      expect.arrayContaining(['Registration ID', 'Student Name', 'Email Status', 'Pass PDF Link']),
-    );
+    await sheets.ready();
+    expect(decodeURIComponent(calls[0].url)).toContain("'Registrations'!A1:ZZ1");
+    const written = JSON.parse(String(calls[1].init.body)).values[0];
+    expect(written).toEqual(expect.arrayContaining(['Registration ID', 'Student Name', 'Registration Status', 'Reviewed At (IST)', 'Email Status', 'Pass PDF Link']));
+    // The participant's private key is never written to the sheet.
+    expect(written).not.toContain('Submission ID');
 
-    await sheets.update('PRG26-0002', { emailStatus: 'SENT' });
+    await sheets.update('PRG26-0002', { status: 'APPROVED', emailStatus: 'SENT' });
     const update = JSON.parse(String(calls[3].init.body));
-    const emailColumn = columnLetter(header[0].indexOf('Email Status') >= 0 ? 2 + Object.keys(COLUMNS).indexOf('emailStatus') - 2 : 0);
-    expect(update.data).toHaveLength(1);
-    expect(update.data[0].range).toMatch(/!\w+3$/);
-    expect(emailColumn).toBeTruthy();
+    expect(update.valueInputOption).toBe('RAW');
+    expect(update.data).toHaveLength(2);
+    const statusColumn = columnLetter(written.indexOf(COLUMNS.status));
+    expect(update.data).toContainEqual({ range: `'Registrations'!${statusColumn}3`, values: [['APPROVED']] });
+  });
+
+  it('refuses to update a row that is not in the sheet', async () => {
+    const { client } = clientWith([json({ values: header }), json({ values: [['PRG26-0001']] })]);
+    const sheets = new SheetsStore(client, 'sheet', 'Registrations', { minWriteIntervalMs: 0 });
+    await sheets.ready();
+    await expect(sheets.update('PRG26-0009', { status: 'REJECTED' })).rejects.toThrow(/not found/);
   });
 });
 
@@ -155,30 +163,38 @@ describe('screenshot checks', () => {
     expect(sniffImage(new TextEncoder().encode('<script>alert(1)</script>'.padEnd(300)))).toBeNull();
   });
 
-  it('refuses a file whose content does not match its type, or that is not an image', () => {
+  it('accepts only real images of a sensible size, whatever the browser claims', () => {
+    expect(checkScreenshot(png)).toMatchObject({ type: 'image/png', width: 256, height: 512 });
+    expect(checkScreenshot(jpeg)).toMatchObject({ type: 'image/jpeg', extension: 'jpg' });
+    expect(checkScreenshot(new TextEncoder().encode('<html><script>alert(1)</script></html>'.padEnd(400)))).toMatch(/PNG or JPG/);
+    expect(checkScreenshot(png.slice(0, 100))).toMatch(/could not be read/);
+    expect(checkScreenshot(new Uint8Array(6 * 1024 * 1024))).toMatch(/5 MB/);
+  });
+
+  it('checks every field again on the server and needs the screenshot upload', () => {
     const base = {
-      submissionId: 'abcdefghijklmnop1234',
-      participant: { name: 'Varshan C', department: 'Civil Engineering', college: 'RPSIT', year: '2nd Year', phone: '9344972274', email: 'v@example.com' },
+      submissionId: 'abcdefghijklmnop1234abcdefghijklmnop',
+      participant: { name: 'Varshan C', department: 'Civil Engineering', college: 'RPSIT', year: '2nd Year', phone: '9344972274', email: 'V@Example.com' },
       events: ['cognix'],
       transactionId: 'UTR123456',
+      upload: { id: '0f8fad5b-d9cb-469f-a165-70867728950e' },
     };
     const fees = { gatePass: 100, perEvent: 50 };
-    const dataUrl = (type: string, bytes: Uint8Array) => `data:${type};base64,${Buffer.from(bytes).toString('base64')}`;
 
-    const ok = validatePayload({ ...base, screenshot: { name: 'pay.png', type: 'image/png', data: dataUrl('image/png', png) } }, fees);
-    expect(ok.ok).toBe(true);
+    const ok = validatePayload(base, fees);
+    expect(ok).toMatchObject({ ok: true, value: { emailKey: 'v@example.com', transactionKey: 'UTR123456', uploadId: base.upload.id } });
 
-    const disguised = validatePayload({ ...base, screenshot: { name: 'pay.png', type: 'image/png', data: dataUrl('image/png', jpeg) } }, fees);
-    expect(disguised).toMatchObject({ ok: false, fieldErrors: { screenshot: expect.stringMatching(/PNG or JPG/) } });
-
-    const script = validatePayload(
-      { ...base, screenshot: { name: 'pay.html', type: 'image/png', data: dataUrl('image/png', png) } },
-      fees,
-    );
-    expect(script).toMatchObject({ ok: false, fieldErrors: { screenshot: expect.any(String) } });
-
-    const unknownEvent = validatePayload({ ...base, events: ['not-an-event'], screenshot: { name: 'pay.png', type: 'image/png', data: dataUrl('image/png', png) } }, fees);
-    expect(unknownEvent).toMatchObject({ ok: false, fieldErrors: { events: expect.any(String) } });
+    expect(validatePayload({ ...base, upload: { id: '../payments/PRG26-0001.png' } }, fees)).toMatchObject({
+      ok: false,
+      fieldErrors: { screenshot: expect.any(String) },
+    });
+    expect(validatePayload({ ...base, upload: undefined }, fees)).toMatchObject({ ok: false, fieldErrors: { screenshot: expect.any(String) } });
+    expect(validatePayload({ ...base, submissionId: 'short' }, fees)).toMatchObject({ ok: false });
+    expect(validatePayload({ ...base, events: ['not-an-event'] }, fees)).toMatchObject({ ok: false, fieldErrors: { events: expect.any(String) } });
+    expect(validatePayload({ ...base, participant: { ...base.participant, college: '=HYPERLINK("x")' } }, fees)).toMatchObject({
+      ok: false,
+      fieldErrors: { college: expect.any(String) },
+    });
   });
 });
 

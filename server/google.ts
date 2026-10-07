@@ -112,7 +112,7 @@ export class GoogleClient {
       }
       if (body.error === 'invalid_grant' || body.error === 'invalid_client' || body.error === 'unauthorized_client') {
         throw new GoogleApiError(
-          `Google sign-in no longer works (${body.error}): run npm run google:auth and push the new token`,
+          `Google sign-in no longer works (${body.error}): run npm run google:auth and put the new token in the GOOGLE_REFRESH_TOKEN secret`,
           401,
           body.error,
           false,

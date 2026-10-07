@@ -3,12 +3,14 @@ import { describe, expect, it } from 'vitest';
 import { App } from './App';
 
 describe('App', () => {
-  it('opens with the symposium name and the institution', () => {
+  it('opens with the department, the PRAGYA 2K26 emblem and the symposium name', () => {
     render(<App />);
 
-    expect(screen.getByRole('heading', { level: 1, name: /PRAGYA 2026/ })).toBeInTheDocument();
+    const heading = screen.getByRole('heading', { level: 1, name: /PRAGYA 2026/ });
+    // The emblem is decorative: the heading text is what is read out.
+    expect(heading.querySelector('img.hero__logo')).toHaveAttribute('alt', '');
     const hero = document.getElementById('home') as HTMLElement;
-    expect(within(hero).getByText('R P Sarathy Institute of Technology, Salem')).toBeInTheDocument();
+    expect(within(hero).getByText('Artificial Intelligence and Data Science')).toBeInTheDocument();
   });
 
   it('shows the symposium date large, right under the PRAGYA 2026 heading, and only once', () => {
@@ -17,7 +19,7 @@ describe('App', () => {
 
     const date = within(hero).getByText('17 October 2026');
     expect(date).toHaveClass('hero__date');
-    // Part of the heading lockup (department, wordmark, year), not the small facts below.
+    // Part of the heading lockup (department, emblem, date), not the small facts below.
     expect(date.closest('.hero__lockup')).not.toBeNull();
     expect(within(hero).queryByText('When')).toBeNull();
   });

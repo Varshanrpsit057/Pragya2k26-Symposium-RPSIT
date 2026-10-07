@@ -1,209 +1,243 @@
 # PRAGYA 2026
 
-Website for **PRAGYA 2026**, the AI & technology symposium at **R P Sarathy Institute of Technology, Salem**.
+Website, registration and admin approval for **PRAGYA 2026**, the AI & technology symposium of the
+Department of Artificial Intelligence and Data Science, **R P Sarathy Institute of Technology, Salem**.
 
-A single static page built with React, TypeScript and Vite. It is prerendered at build time, so the
-text appears before any JavaScript runs, and it can be hosted on any static host.
+It is deployed straight from GitHub to **AWS Amplify**: no servers to run, no SSH, no manual uploads.
 
-## Run it
+## 1. Project overview
 
-```bash
-py start.py        # everything: registration API :8787, dev server :5173, preview :4173
+- **Public website** (React + TypeScript + Vite, prerendered): hero with the PRAGYA 2K26 emblem and the
+  registration countdown, the ten events, the registration form, and the footer.
+- **Registration form**: participant details, event selection, the ₹100 gate-pass payment details,
+  the payment screenshot and the transaction ID.
+- **Admin dashboard** at `/landing/admin/`: sign in, check each payment screenshot, then approve or
+  reject. It is not linked anywhere on the public site.
+- **Registration workflow**:
+
+  ```
+  student submits ─▶ PENDING ─▶ admin checks the payment ─┬─▶ APPROVED ─▶ participant pass (PDF)
+                                                           │                ─▶ confirmation email with the PDF
+                                                           └─▶ REJECTED  (no pass, no confirmation email)
+  ```
+
+  Submitting the form never confirms a registration: only an admin's approval does. The participant
+  pass is made, stored and handed out by the server only after approval.
+
+## 2. Architecture
+
+```
+GitHub ──push──▶ AWS Amplify Hosting (build: amplify.yml)
+                   ├─ website: dist/ (React/Vite) on Amplify's CDN
+                   └─ backend: amplify/ (Amplify Gen 2, AWS CDK)
+                        HTTP API (API Gateway) /api/*  ──▶  Lambda "pragya-api" (Node.js 22)
+                        EventBridge, every 10 min      ──▶  same Lambda: retries
+                        DynamoDB  Registrations, Control   (workflow state, IDs, sessions)
+                        S3 (private)  payment screenshots, participant passes
+                        SSM (Amplify secrets)              Google + admin credentials
+                        CloudWatch Logs
+                   Lambda ──▶ Google Sheets (one row per registration), Google Drive (screenshots,
+                              passes), Gmail API (confirmation email)
 ```
 
-`start.py` installs packages on the first run, builds, starts the registration API first, checks it
-reached Google, then starts the two website servers (which forward `/api` to it). A server that stops
-unexpectedly is restarted; Ctrl+C stops everything. Add `--host` to open the site from phones on the
-same Wi-Fi, or `--no-build` to reuse the last build.
+- **DynamoDB is the source of truth** for the workflow. Its conditional writes make approval safe
+  against double clicks, retries and parallel requests: one Registration ID per person, one pass,
+  one email. **Google Sheets** keeps a row per registration (status, pass, email) for the organisers,
+  updated on every change and retried automatically if Google is unavailable, never duplicated.
+- **Payment screenshots** go from the browser straight to a private S3 bucket through a short-lived
+  presigned upload (one key, PNG/JPEG/WebP, at most 5 MB). The API checks the uploaded bytes are a
+  real image before the registration is stored, then copies the screenshot to Google Drive.
+- **Participant passes** (`pdf-lib`, pure JavaScript) are generated in Lambda on approval, stored
+  in private S3, attached to the Gmail confirmation, and copied to Drive.
+- **Participants** get a private status link after submitting (`/#status=<ID>.<key>`). The key is
+  their form's random submission id, stored only as a SHA-256 hash. Through it they see their status
+  and, **only once approved**, get a one-minute download link for their own pass. A pending or
+  rejected registration, another student's ID or a guessed key gets nothing.
+- **Admin sign-in**: one username and a scrypt password hash, both Amplify secrets. Sign-in gives a
+  random session token (8 hours, stored only as a hash, with sign-in attempts rate limited). Every
+  `/api/admin/*` route checks it on the server. Changing the password signs every session out.
 
-The pieces one at a time:
+```
+amplify/            backend.ts (DynamoDB, S3, HTTP API, CORS, throttling), functions/api (Lambda)
+server/             the API: http.ts (routes), service.ts (workflow), auth.ts, dynamoStore.ts,
+                    files.ts (S3), sheets.ts, drive.ts, gmail.ts, google.ts, pass.ts (PDF), validate.ts
+src/                the website (content in src/content/), src/admin/ (dashboard)
+landing/admin/      the dashboard's page (built to dist/landing/admin/index.html)
+scripts/            google-auth.mjs, admin-password.ts, check-secrets.mjs, prerender.mjs
+amplify.yml         Amplify build;  customHttp.yml  security headers
+```
+
+## 3. Settings
+
+All values live in AWS, never in git. `.env.example` lists every name.
+
+**Amplify secrets** (required):
+
+| Name | What |
+| --- | --- |
+| `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` | Google OAuth client |
+| `GOOGLE_REFRESH_TOKEN` | from `npm run google:auth` |
+| `GOOGLE_SHEET_ID` | the ID in `docs.google.com/spreadsheets/d/<ID>/edit` |
+| `GOOGLE_DRIVE_PAYMENT_FOLDER_ID` | the ID in `drive.google.com/drive/folders/<ID>` |
+| `ADMIN_USERNAME` | the dashboard's username |
+| `ADMIN_PASSWORD_HASH` | from `npm run admin:password` (the password itself is never stored) |
+
+**Amplify environment variables** (optional, not secret):
+
+| Name | Default | What |
+| --- | --- | --- |
+| `GMAIL_SENDER` | the signed-in account | address emails are sent from (filled in `.env` by `google:auth`) |
+| `MAIL_FROM_NAME` / `MAIL_REPLY_TO` | `PRAGYA 2026` / none | sender name, reply-to address |
+| `GOOGLE_SHEET_TAB` | `Registrations` | sheet tab (created if missing) |
+| `GOOGLE_DRIVE_PASS_FOLDER_ID` | auto | folder for passes; empty: "Participant Passes" next to the payment folder |
+| `ALLOWED_ORIGINS` | none | extra site addresses allowed to call the API, e.g. a custom domain `https://pragya.rpsit.ac.in` |
+| `RATE_LIMIT_MAX` / `RATE_LIMIT_WINDOW_MINUTES` | `300` / `10` | registration requests per IP address per window |
+
+Set automatically (do not set them): `REGISTRATIONS_TABLE`, `CONTROL_TABLE`, `FILES_BUCKET` and the
+website's API address (`VITE_API_URL`, read from `amplify_outputs.json` at build time). Nothing in a
+`VITE_*` variable is secret: it is visible in the browser.
+
+## 4. Google API setup (once)
+
+1. In [Google Cloud Console](https://console.cloud.google.com/), create a project and enable the
+   **Google Sheets API**, **Google Drive API** and **Gmail API**.
+2. **OAuth consent screen**: add the scopes for Sheets, Drive and `gmail.send`, then set the
+   publishing status to **In production**. While it says *Testing*, Google expires the refresh token
+   after 7 days and registration stops.
+3. **Credentials → Create credentials → OAuth client ID → Web application**, with the authorized
+   redirect URI `http://localhost:3000/oauth2callback`. Download its JSON into a folder named
+   `google client/` in this project (git ignores it).
+4. Create the **Google Sheet** and a **Drive folder** for payment screenshots, with the Google
+   account that will send the emails.
+5. On your computer, with Node.js 22+:
+
+   ```bash
+   npm install
+   cp .env.example .env        # then fill in GOOGLE_SHEET_ID and GOOGLE_DRIVE_PAYMENT_FOLDER_ID
+   npm run google:auth         # sign in, tick every box: saves the client, refresh token and sender to .env
+   npm run google:check        # checks the Sheet, the Drive folder and Gmail
+   npm run google:setup        # formats the sheet and creates the "Participant Passes" folder
+   ```
+
+6. Copy the values from `.env` into the Amplify secrets and variables (section 9). Keep `.env` on
+   your computer only.
+
+## 5. AWS Amplify setup
+
+1. Sign in to the AWS console and choose a region near the participants, e.g. **Asia Pacific (Mumbai)
+   ap-south-1**. Open **AWS Amplify**.
+2. **Create new app → GitHub**, authorize AWS Amplify, and pick the repository
+   `Varshanrpsit057/Pragya2k26-Symposium-RPSIT`, branch **main**.
+3. Amplify detects `amplify.yml` and the Gen 2 backend in `amplify/`. Keep the defaults: no monorepo
+   root directory, the default Amazon Linux 2023 build image, and **create and use a new service role**
+   (the backend deployment needs it).
+4. **Save and deploy.** The first build can fail with a missing-secret error: that is expected until
+   the secrets are set (step 9), after which you **Redeploy this version**.
+
+## 6. GitHub connection
+
+The branch you connect deploys on every push: backend first, then the website. Each branch gets its
+own backend (its own tables, bucket and API) and its own secrets. To deploy, push to `main`:
+
+```bash
+git push origin main
+```
+
+## 7. Build settings
+
+From `amplify.yml` (nothing to type in the console):
+
+| Phase | Commands |
+| --- | --- |
+| Backend | `nvm install 22` · `npm ci --cache .npm --prefer-offline` · `npx ampx pipeline-deploy --branch $AWS_BRANCH --app-id $AWS_APP_ID` |
+| Frontend | `nvm install 22` · `npm run build` (type-check, Vite build, prerender) |
+| Output | `dist` (website at `/`, dashboard at `/landing/admin/`) |
+
+Security headers (HSTS, nosniff, frame and referrer rules, and a strict Content-Security-Policy plus
+no-store/noindex for the dashboard) come from `customHttp.yml`.
+
+## 8. Backend deployment
+
+`npx ampx pipeline-deploy` (run by Amplify) creates or updates the Lambda function, the HTTP API, the
+DynamoDB tables, the private S3 bucket, the 10-minute schedule and the IAM permissions, then writes
+the API address to `amplify_outputs.json` for the website build. CORS allows only the branch's own
+`https://<branch>.<app-id>.amplifyapp.com` address and `ALLOWED_ORIGINS`.
+
+The tables and the bucket are **kept** if the backend is ever deleted, so registrations are never lost
+by accident (DynamoDB point-in-time recovery is on). Delete them by hand only when they are no longer
+needed. Lambda logs are in **CloudWatch → Log groups → `/aws/lambda/…pragya-api…`**.
+
+A personal test backend, with your own AWS credentials:
+
+```bash
+npx ampx sandbox secret set GOOGLE_CLIENT_ID     # …and each of the other secrets
+npx ampx sandbox                                 # deploys it and writes amplify_outputs.json
+npm run dev                                      # the site on http://localhost:5173 uses that API
+```
+
+## 9. Secret configuration
+
+1. Make the admin password hash (choose a long, strong password; it is typed hidden and never saved):
+
+   ```bash
+   npm run admin:password
+   ```
+
+2. Amplify console → your app → **Hosting → Secrets → Manage secrets**, for the `main` branch, add the
+   seven secrets from section 3 (copy the Google ones from `.env`, the hash from step 1).
+3. Optional: **Hosting → Environment variables** for `GMAIL_SENDER` (from `.env`),
+   `GOOGLE_DRIVE_PASS_FOLDER_ID` (from `google:setup`), `ALLOWED_ORIGINS` (custom domain) and the others.
+4. **Redeploy** the branch. Secrets are read by the Lambda function when it starts; they never reach the
+   website, the repository or the sheet. To rotate one, change it and redeploy.
+
+## 10. Production testing
+
+After a deploy, on `https://main.<app-id>.amplifyapp.com`:
+
+1. Register as a student (use your own email). The form shows **Registration Submitted · Pending
+   verification** and a private status link; no pass and no email yet. The sheet gains a row with
+   status `PENDING`; the screenshot is in the Drive payment folder.
+2. Open the status link: **Pending verification**, no download.
+3. Open `/landing/admin/`, sign in, select the registration, check the screenshot, tick the
+   verification box, **Approve**. The pass and email show as done; the email arrives with the PDF; the
+   sheet row says `APPROVED`, `GENERATED`, `SENT`.
+4. The status link now offers **Download participant pass**.
+5. Approve again: nothing new is sent. Reject another test registration: no pass, no email, the
+   status link says it was not approved.
+6. Remove your test rows from the sheet afterwards (new Registration IDs always continue after the
+   highest ID already in the sheet).
+
+`npm run check` runs lint, all tests (including the whole workflow against in-memory DynamoDB/S3/Google),
+the build and the secret check.
+
+## 11. Troubleshooting
+
+| Symptom | Cause and fix |
+| --- | --- |
+| Build fails: secret not found | Add all seven secrets for that branch (section 9), then redeploy. |
+| Form says registration "isn't open yet" | The API is missing a setting: CloudWatch logs list them under *not configured*. |
+| Browser console: CORS error | The site's address is not allowed: add it to `ALLOWED_ORIGINS` and redeploy. |
+| `invalid_grant` in the logs | The Google sign-in expired or was revoked: run `npm run google:auth` again, update `GOOGLE_REFRESH_TOKEN`, redeploy. Make sure the consent screen is *In production*. |
+| Sheet shows "Waiting to sync" in the dashboard | Google was unreachable; the schedule retries every 10 minutes, without duplicates. |
+| Email status **FAILED** | Gmail refused it (see the error). Use **Retry failed steps**; it is also retried automatically. |
+| Email status **UNKNOWN** | Gmail did not confirm. Check the sender's Sent folder, then **Resend email** only if it is not there. |
+| "Too many sign-in attempts" | 10 wrong attempts from one address: wait 15 minutes. |
+| `/landing/admin` shows the main page | Use `/landing/admin/`, or add a rewrite in **Hosting → Rewrites and redirects**: source `/landing/admin`, target `/landing/admin/index.html`, type `200`. |
+| First registration right after the very first deploy says "temporarily unavailable" | The ID counter starts from the sheet's highest ID; the schedule sets it up within 10 minutes of the first deploy, or check the Google settings. |
+
+## Local development
 
 ```bash
 npm install
-npm run server     # registration API + built site at http://localhost:8787 (needed for the form)
-npm run dev        # development server at http://localhost:5173
-npm run build      # production build into dist/ (type-check, bundle, prerender)
-npm run preview    # serve the production build at http://localhost:4173
-npm run check      # lint + tests + build, the full pre-deploy check
+npm run dev          # http://localhost:5173 (the form needs an API: a sandbox, see section 8)
+npm test             # all tests
+npm run check        # lint + tests + build + secret check
 ```
 
-The form only works while the registration API is running. Without it the dev server and preview
-cannot save registrations, and the form says it cannot reach the registration server.
+Turn on the pre-commit secret check once per clone: `git config core.hooksPath .githooks`.
+If a real secret is ever committed or pushed, rotate it: deleting it from git is not enough.
 
-## Adding details later
-
-All content lives in the files under `src/content/`. You never need to touch layout code to add information.
-
-| What | Where | Effect on the page |
-| --- | --- | --- |
-| Registration form | `src/content/site.ts` → `registration.endpoint` | `/api/register`, the registration server (see [Registration](#registration)). Every Register Now button opens the same form in a window. Set `VITE_REGISTRATION_API_URL` at build time only if the server lives on another address. |
-| Payment details | `registration.payment.upiId`, `.payee`, `.qrImage` | Shown in the form's Payment step. Until set, the form says the UPI details will be shared soon. |
-| Fees | `registration.gatePassFee`, `registration.eventFee` | ₹100 gate pass (paid online) and ₹50 per event (paid on-site): shown in the form and the Important notice. |
-| Registration closing time | `registration.closesAt` (e.g. `'2026-10-16T17:00:00'`, read as IST) | The hero counts down to it (days, hours, minutes, seconds). Once it passes, the countdown, the Register section and the form all say registration is closed. |
-| Registration deadline / note | `registration.deadline`, `registration.note` | Shown in the Register section. |
-| Dates, venue | `site.dates`, `site.venue` | Shown in the hero. |
-| Department | `site.department` | Shown above the PRAGYA wordmark in the hero ("Department of …"). |
-| College details | `site.college` | Footer: address, website, accreditation tags and the embedded Google map (`map.embedUrl`, with `map.url` for "Open in Google Maps"). Phone numbers are listed only if `phones` is filled in (empty for now). |
-| Contacts | `site.contacts`, `site.email` | Symposium coordinators, listed in the footer under the college details. Until then it says "Symposium coordinators will be announced soon." |
-| Social links | `site.socials` | Round icon buttons under "Follow Us" in the footer (`icon`: `instagram`, `website`, `linkedin`, `github`). |
-| See More details | `src/content/eventInfo.ts` | Type, eligibility, team, rounds, procedure, rules, judging and instructions in each event's See More window. **These are placeholders**: replace them with the confirmed rules. |
-| Event details | `src/content/events.ts` → `teamSize`, `venue`, `schedule`, `rules`, `coordinators` | Appear on that event's card and in its See More window (they override the placeholders). |
-| Dev Crew names, links | `src/content/crew.ts` | One profile card per member in the Dev Crew section, the last block of the page. |
-| Dev Crew photos | `dev_crew/<Name>.jpg` (e.g. `Varshan.png`), then `npm run images` | Matched to the member by name, framed as a 600px square from just above the head (background kept) and shown on their card. Until then the card shows their initials. |
-| College logo | `image/rpsit-logo.webp`, then `node scripts/process-logo.mjs` | Cut out along its gold rim and saved as the header and footer crest (`public/images/rpsit-logo-sm.webp`), the browser-tab icon (`public/favicon-32.png`) and the home-screen icon (`public/apple-touch-icon.png`). |
-
-Example:
-
-```ts
-// src/content/site.ts
-registration: {
-  endpoint: 'https://script.google.com/macros/s/…/exec',
-  deadline: 'DD Month 2026',
-  note: null,
-  gatePassFee: 100,
-  eventFee: 50,
-  payment: { upiId: 'pragya@okaxis', payee: 'RPSIT AI & DS', qrImage: '/images/upi-qr.png' },
-},
-```
-
-```ts
-// src/content/events.ts
-{
-  id: 'code-flex',
-  name: 'CODE FLEX',
-  // ...
-  teamSize: 'Individual',
-  rules: ['Bring your own laptop', 'Languages: C, Java, Python'],
-  coordinators: [{ name: 'Coordinator Name', phone: '+91 ...' }],
-},
-```
-
-There are exactly ten events. A test (`src/content/events.test.ts`) checks the names and order, so an
-accidental edit is caught by `npm run check`.
-
-## Registration
-
-Every Register Now button (header, hero, the Join PRAGYA 2026 section and each event card) opens one
-registration form in a window on the page: name with initial, department, college, year, phone, email,
-transaction ID and the payment screenshot (with a preview). Each field is checked before the form can
-be sent, and the screenshot is shrunk to at most 1600px before upload so it is quick on mobile data.
-
-The form posts to the registration server (`server/`, `npm run server`), which uses your Google
-account through the Google APIs:
-
-- **Google Drive**: the payment screenshot, stored privately in your payment folder.
-- **Google Sheets**: one row per registration (the sheet is the database). Columns are found by their
-  header, so organisers may reorder them or add their own.
-- **Gmail**: a confirmation email with the participant pass (PDF) attached, also saved to Drive.
-
-A registration counts only once Google has confirmed both the screenshot and the row. The participant
-then gets a Registration ID (PRG26-0001, …). The email follows in the background and is retried
-for up to a day (1 min, 5 min, 30 min, 2 h, 6 h, 12 h) if Gmail fails. A transaction ID or email that
-is already registered is refused, and pressing Submit twice never registers anyone twice.
-
-Built for a rush: registrations queue and are saved 3 at a time (`REGISTRATION_WORKERS`), sheet writes
-are batched to stay inside Google's limits, and each IP address may send 300 registrations per
-10 minutes (`RATE_LIMIT_MAX`), because a whole college can share one address.
-
-One-time setup:
-
-1. Copy `.env.example` to `.env` and fill in `GOOGLE_SHEET_ID` and `GOOGLE_DRIVE_PAYMENT_FOLDER_ID`.
-2. Put the OAuth client JSON from Google Cloud Console in `google client/`, then run
-   `npm run google:auth` and tick every box. This saves the refresh token to `.env`.
-   In Google Cloud Console, set the OAuth consent screen's publishing status to **In production**.
-   While it says *Testing*, Google expires the token after 7 days and registration stops.
-3. `npm run google:check` checks the Sheet, the Drive folder and Gmail
-   (add `-- --send-test-email` to send yourself a test).
-4. `npm run google:setup` formats the sheet and creates the "Participant Passes" folder.
-5. Add the UPI details under `registration.payment` in `src/content/site.ts`.
-
-`GET /api/health` answers `ready` (connected to Google), `starting`, or `unavailable` (could not reach
-Google; check the server log and run `npm run google:check`). The server keeps a small state file in
-`.data/desk.json` (the ID counter and the email outbox). It holds participant details, so keep it
-private.
-
-## Secrets and private data
-
-`.env` (Google secret and refresh token), `google client/` (the OAuth client JSON), `.data/` (student
-details waiting for their email) and `dev_crew/` (full-size photos) never go into git: `.gitignore`
-leaves them out, and `npm run check:secrets` fails if any of them, or a secret value in any file
-(Google client secrets, refresh and access tokens, API keys, private keys), would be committed or
-built into the public site. It reports file and line only, never the secret.
-
-After cloning, turn on the pre-commit check once, so every commit is checked:
-
-```bash
-git config core.hooksPath .githooks
-```
-
-If a real secret was ever committed or pushed, rotate it in Google Cloud Console: deleting it from
-git is not enough.
-
-## Structure
-
-```
-src/
-  content/      site.ts, events.ts, eventInfo.ts, crew.ts, types.ts   ← the only files content editors touch
-  styles/       tokens.css (colours, type, motion), base.css
-  hooks/        in-view, media query, scroll spy, scroll reveal, tab visibility
-  lib/          registration form (validation, submission), device capability rules, angle maths
-  components/
-    nav/        PillNav (floating pill navigation)
-    text/       TextType
-    events/     EventOrbit (3D carousel), EventsSection, EventCard
-    sections/   NeuralMap, RegisterCTA, Footer, DevCrew
-    hero/       Hero, Countdown
-    profile/    ProfileCard (React Bits, used by DevCrew)
-    background/ SkyBackdrop + GhostFibers (page-wide background), DriftWall (register section)
-    ui/         SpecularButton, RegisterButton (opens the registration window)
-    modal/      Modal (native <dialog>), SiteModals (the shared registration and event windows)
-    registration/ RegistrationModal (the form)
-server/
-  node.ts       the registration server (API + built site), npm run server
-  desk.ts       the registration queue: IDs, duplicates, Drive → Sheets, the email outbox
-  sheets.ts, drive.ts, gmail.ts, google.ts   Google APIs, with retries and backoff
-  validate.ts   server-side checks of every registration
-  config.ts     settings from .env (see .env.example)
-  cloudflare.ts optional Cloudflare Workers version (not used yet)
-scripts/prerender.mjs  ← writes the rendered page into dist/index.html
-scripts/google-auth.mjs ← npm run google:auth / google:check
-start.py               ← starts every server (py start.py)
-```
-
-## Visual references
-
-The design adapts these React Bits components, rebuilt for low CPU and GPU use:
-
-- **Ghost Fibers** (`background/GhostFibers.tsx`, uses `ogl`): a fixed, slowly moving background behind
-  the whole page, dimmed slightly below the hero so text stays readable. It plays on its own (no mouse
-  interaction) at half resolution and 30fps (24fps on phones), with 3 fibre layers and no film grain, and
-  rests while the tab is hidden or the registration, event or Dev Crew window is open. Devices with reduced
-  motion, data saver, low memory, few cores or no WebGL 2 keep a still CSS glow instead. Nothing on top of it
-  uses `backdrop-filter`, so the GPU never has to re-blur the page as it moves.
-- **Profile Card** (`profile/ProfileCard.tsx`): the Dev Crew cards, with tilt and holographic shine. The
-  tilt loop stops once a card settles, and the shine pauses while the section is off screen.
-- **TextType**: GSAP removed. The cursor blinks with CSS, and typing pauses off screen.
-- **Pill Nav**: rebuilt with CSS transitions. No GSAP or router needed for a one-page site.
-- **Specular Button**: rebuilt in CSS (conic-gradient rim that follows the cursor) instead of one WebGL
-  canvas per button.
-- **Circular Carousel**: CSS 3D ring with drag momentum and snapping. It turns continuously, with no
-  stop at each poster, at 10° a second (`DRIFT_DEG_PER_S` in `EventOrbit.tsx`: a new poster about
-  every 3.6s), with the mouse over it too; it holds while a finger is on it (resuming 4s after
-  lifting), during keyboard focus, and its animation loop sleeps when off screen or in a hidden tab.
-  Cards turned away from the viewer are not drawn (no backfaces), so only about half the tiles are
-  composited at any moment.
-- **Drift Wall**: CSS keyframes on transforms, paused when off screen.
-
-Every animation respects `prefers-reduced-motion`.
-
-## Deploying
-
-`npm run build` and upload the `dist/` folder to any static host (Netlify, Vercel, GitHub Pages,
-Cloudflare Pages, or the college web server). If the site lives under a sub-path such as
-`/pragya/`, set `base: '/pragya/'` in `vite.config.ts`. Vite rewrites the font, favicon and asset URLs
-to match.
-
-## Fonts
-
-Mona Sans (variable, SIL Open Font License, see `public/fonts/OFL.txt`) is self-hosted. One file covers every
-weight and width the design uses.
+Content (dates, venue, fees, UPI details, contacts, events, rules) lives in `src/content/`:
+`site.ts` (dates, registration closing time, fees, payment details, college, socials), `events.ts`
+and `eventCatalog.ts` (the ten events), `eventInfo.ts` (See More details), `crew.ts` (Dev Crew).
+The fonts (Mona Sans, SIL Open Font License) are self-hosted in `public/fonts/`.

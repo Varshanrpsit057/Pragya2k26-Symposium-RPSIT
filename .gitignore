@@ -4,10 +4,11 @@ node_modules
 # Build output
 dist
 dist-ssr
-dist-server
 
-# Registration server state (Registration ID counter, email outbox)
-.data
+# Amplify: generated for each environment on every deploy / sandbox run
+.amplify
+amplify_outputs*
+amplifyconfiguration*
 *.local
 
 # Logs
@@ -18,8 +19,6 @@ npm-debug.log*
 .env
 .env.*
 !.env.example
-.dev.vars
-.dev.vars.*
 /google client/
 client_secret_*.json
 *.pem
@@ -28,19 +27,12 @@ client_secret_*.json
 *.pfx
 service-account*.json
 
-# Personal photos: the full-size originals stay local; the site uses the small processed
-# copies in src/assets/crew/ (npm run images makes them)
+# Personal photos and reference images, kept on your computer only
 /dev_crew/
-# Reference images not used by the site
 /rpsit/
 
-# Cloudflare Wrangler
-.wrangler
-
-# Python (start.py)
-__pycache__/
-
-# Editor / OS
+# Editor / OS / local tooling
+.claude/
 .vscode/*
 !.vscode/extensions.json
 .idea

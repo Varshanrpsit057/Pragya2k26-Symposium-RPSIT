@@ -1,13 +1,14 @@
 /**
- * The Google Sheet is the registration database: one row per registration.
+ * The Google Sheet: one row per registration, for the organisers' records and reports.
+ * (The approval workflow itself is kept in DynamoDB; each row mirrors it.)
  *
  * Columns are found by their header, so organisers may reorder them or add their own
  * (e.g. "Checked in"); missing ones are added at the end. Values are written RAW, so
- * nothing a participant types can ever run as a formula.
+ * nothing a participant types can ever run as a formula. Rows are found by their
+ * Registration ID, so a row is never added twice.
  *
- * Writes are batched: while one write is on its way to Google, new rows wait and go
- * together in the next one. A rush of 50 registrations becomes a handful of API calls,
- * well inside Google's 60 writes a minute per account.
+ * Writes are batched: while one write is on its way to Google, others wait and go
+ * together in the next one, well inside Google's 60 writes a minute per account.
  */
 import { GoogleApiError, type GoogleClient } from './google';
 
@@ -31,6 +32,8 @@ export const COLUMNS = {
   paymentFileName: 'Payment File Name',
   paymentLink: 'Payment Screenshot Link',
   status: 'Registration Status',
+  reviewedAt: 'Reviewed At (IST)',
+  reviewedBy: 'Reviewed By',
   passStatus: 'Pass Status',
   passFileId: 'Pass File ID',
   passFileName: 'Pass File Name',
@@ -38,20 +41,19 @@ export const COLUMNS = {
   emailStatus: 'Email Status',
   emailSentAt: 'Email Sent At (IST)',
   emailAttempts: 'Email Attempts',
-  submissionId: 'Submission ID',
   notes: 'Notes',
 } as const;
 
 export type ColumnKey = keyof typeof COLUMNS;
 export type SheetRow = Partial<Record<ColumnKey, string | number>>;
-/** A row as read back: every known column, as text. */
-export type StoredRow = Record<ColumnKey, string>;
 
 const COLUMN_KEYS = Object.keys(COLUMNS) as ColumnKey[];
 
 /** The row to update is not in the sheet (e.g. an organiser deleted it). */
 export class RowNotFoundError extends Error {}
 const MAX_ROWS_PER_APPEND = 100;
+/** Organisers may move or add columns: the header is read again after this long. */
+const HEADER_FRESH_MS = 5 * 60_000;
 
 /** 0 → A, 25 → Z, 26 → AA */
 export function columnLetter(index: number): string {
@@ -83,6 +85,8 @@ const defaultSleep = (ms: number) => new Promise<void>((resolve) => setTimeout(r
 export class SheetsStore {
   private header: string[] = [];
   private positions = new Map<ColumnKey, number>();
+  private headerReadAt = 0;
+  private reading: Promise<void> | null = null;
   private readonly appends: PendingAppend[] = [];
   private readonly updates = new Map<string, { fields: SheetRow; waiters: Deferred[] }>();
   private draining: Promise<void> | null = null;
@@ -116,13 +120,21 @@ export class SheetsStore {
   }
 
   /**
-   * Makes sure the tab and its header exist, then returns every registration row.
-   * Called once when the registration desk starts (and again after it wakes up).
+   * Makes sure the tab and its header exist and learns where each column is. Reads only
+   * the header row; called before writing, at most every few minutes.
    */
-  async load(): Promise<StoredRow[]> {
+  async ready(): Promise<void> {
+    if (this.positions.size && this.now() - this.headerReadAt < HEADER_FRESH_MS) return;
+    this.reading ??= this.readHeader().finally(() => {
+      this.reading = null;
+    });
+    return this.reading;
+  }
+
+  private async readHeader(): Promise<void> {
     let values: string[][];
     try {
-      values = await this.readValues(this.range('A1:ZZ'));
+      values = await this.readValues(this.range('A1:ZZ1'));
     } catch (error) {
       // The tab does not exist yet: create it with the header frozen.
       if (!(error instanceof GoogleApiError) || error.status !== 400) throw error;
@@ -140,24 +152,20 @@ export class SheetsStore {
       values = [];
     }
 
-    this.header = (values[0] ?? []).map((cell) => String(cell ?? '').trim());
-    const missing = COLUMN_KEYS.filter((key) => !this.header.includes(COLUMNS[key]));
+    let header = (values[0] ?? []).map((cell) => String(cell ?? '').trim());
+    const missing = COLUMN_KEYS.filter((key) => !header.includes(COLUMNS[key]));
     if (missing.length) {
-      this.header = [...this.header, ...missing.map((key) => COLUMNS[key])];
+      header = [...header, ...missing.map((key) => COLUMNS[key])];
       await this.google.request(
         this.valuesUrl(this.range('A1'), '?valueInputOption=RAW'),
-        { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ values: [this.header] }) },
+        { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ values: [header] }) },
         { label: 'Sheets: write header', idempotent: true },
       );
       this.lastWriteAt = this.now();
     }
-    this.positions = new Map(COLUMN_KEYS.map((key) => [key, this.header.indexOf(COLUMNS[key])]));
-
-    return values.slice(1).map((cells) => {
-      const row = {} as StoredRow;
-      for (const key of COLUMN_KEYS) row[key] = String(cells[this.positions.get(key)!] ?? '').trim();
-      return row;
-    });
+    this.header = header;
+    this.positions = new Map(COLUMN_KEYS.map((key) => [key, header.indexOf(COLUMNS[key])]));
+    this.headerReadAt = this.now();
   }
 
   /**
@@ -192,7 +200,8 @@ export class SheetsStore {
       }
     }
 
-    await this.load();
+    this.headerReadAt = 0;
+    await this.ready();
     ({ sheets } = await readMeta());
     const sheet = sheets.find((item) => item.properties.title === this.tab)!;
     const sheetId = sheet.properties.sheetId;
@@ -207,19 +216,19 @@ export class SheetsStore {
     const widths: Partial<Record<ColumnKey, number>> = {
       id: 110, registeredAt: 165, name: 180, college: 280, department: 280, year: 85, email: 240, phone: 115,
       technicalEvents: 230, nonTechnicalEvents: 230, eventCount: 90, feePerEvent: 105, eventFee: 120, amountPaid: 120,
-      transactionId: 160, paymentFileId: 150, paymentFileName: 190, paymentLink: 260, status: 125, passStatus: 100,
-      passFileId: 150, passFileName: 215, passLink: 260, emailStatus: 100, emailSentAt: 165, emailAttempts: 90,
-      submissionId: 120, notes: 360,
+      transactionId: 160, paymentFileId: 150, paymentFileName: 190, paymentLink: 260, status: 125, reviewedAt: 165,
+      reviewedBy: 110, passStatus: 100, passFileId: 150, passFileName: 215, passLink: 260, emailStatus: 100,
+      emailSentAt: 165, emailAttempts: 90, notes: 360,
     };
     const statusColours: [ColumnKey, string, string][] = [
-      ['status', 'SUCCESS', '#d9f2e3'],
-      ['status', 'FAILED', '#fbd9d9'],
-      ['passStatus', 'SAVED', '#d9f2e3'],
+      ['status', 'APPROVED', '#d9f2e3'],
+      ['status', 'REJECTED', '#fbd9d9'],
+      ['status', 'PENDING', '#fff1cc'],
+      ['passStatus', 'GENERATED', '#d9f2e3'],
       ['passStatus', 'FAILED', '#fbd9d9'],
-      ['passStatus', 'PENDING', '#fff1cc'],
       ['emailStatus', 'SENT', '#d9f2e3'],
       ['emailStatus', 'FAILED', '#fbd9d9'],
-      ['emailStatus', 'PENDING', '#fff1cc'],
+      ['emailStatus', 'UNKNOWN', '#fff1cc'],
     ];
 
     await batch([
@@ -255,14 +264,14 @@ export class SheetsStore {
         },
       })),
       // Phone numbers and transaction IDs stay exactly as typed (no 9.34E+09, no lost zeros).
-      ...(['phone', 'transactionId', 'submissionId'] as ColumnKey[]).map((key) => ({
+      ...(['phone', 'transactionId'] as ColumnKey[]).map((key) => ({
         repeatCell: {
           range: { ...columns(key), startRowIndex: 1 },
           cell: { userEnteredFormat: { numberFormat: { type: 'TEXT' } } },
           fields: 'userEnteredFormat.numberFormat',
         },
       })),
-      // The Registration ID stands out, and the internal submission id is tucked away.
+      // The Registration ID stands out.
       {
         repeatCell: {
           range: { ...columns('id'), startRowIndex: 1 },
@@ -270,7 +279,6 @@ export class SheetsStore {
           fields: 'userEnteredFormat.textFormat',
         },
       },
-      { updateDimensionProperties: { range: { sheetId, dimension: 'COLUMNS', startIndex: at('submissionId'), endIndex: at('submissionId') + 1 }, properties: { hiddenByUser: true }, fields: 'hiddenByUser' } },
       // A filter on the header: organisers can sort and filter without moving rows around.
       { setBasicFilter: { filter: { range: { sheetId, startRowIndex: 0, startColumnIndex: 0, endColumnIndex: this.header.length } } } },
       ...statusColours.map(([key, value, colour]) => ({
@@ -309,7 +317,7 @@ export class SheetsStore {
 
   /** Resolves once Google confirms the row is in the sheet. */
   append(row: SheetRow): Promise<void> {
-    if (!this.positions.size) return Promise.reject(new Error('Sheets store used before load()'));
+    if (!this.positions.size) return Promise.reject(new Error('Sheets store used before ready()'));
     return new Promise((resolve, reject) => {
       this.appends.push({ row, resolve, reject });
       this.drain();
@@ -394,6 +402,12 @@ export class SheetsStore {
     if (stored !== rows.length) {
       throw new GoogleApiError(`Sheets: stored ${stored} of ${rows.length} rows`, 500, 'partial', true, true);
     }
+  }
+
+  /** Every Registration ID in the sheet, in row order. */
+  async ids(): Promise<string[]> {
+    await this.ready();
+    return this.readIds();
   }
 
   private async readIds(): Promise<string[]> {

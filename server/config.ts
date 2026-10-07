@@ -1,14 +1,15 @@
 /**
- * Settings for the registration server, by name (see .env.example).
+ * Settings for the registration API, by name (see .env.example).
  *
- * Locally they come from .env. The Google client, refresh token, Sheet and Drive IDs are
- * secrets: they stay on the server and are never sent to the browser.
+ * On AWS they are the Lambda function's environment: secrets (Google OAuth client and
+ * refresh token, Sheet and Drive IDs, the admin login) come from Amplify secrets, the
+ * table and bucket names from the Amplify backend. None of them ever reaches the browser.
  */
 
-/** Setting values by name: process.env for the local server, bindings on Cloudflare. */
-export type Settings = Readonly<Record<string, unknown>>;
+/** Setting values by name (process.env on Lambda, a plain object in tests). */
+export type Settings = Readonly<Record<string, string | undefined>>;
 
-export interface DeskConfig {
+export interface AppConfig {
   google: { clientId: string; clientSecret: string; refreshToken: string };
   sheetId: string;
   sheetTab: string;
@@ -16,8 +17,10 @@ export interface DeskConfig {
   /** Where participant passes go; null: a "Participant Passes" folder next to the payment folder. */
   passFolderId: string | null;
   mail: { fromName: string; sender: string | null; replyTo: string | null };
-  workers: number;
+  admin: { username: string; passwordHash: string };
   rateLimit: { max: number; windowMs: number };
+  tables: { registrations: string; control: string };
+  bucket: string;
 }
 
 const REQUIRED = [
@@ -26,66 +29,55 @@ const REQUIRED = [
   'GOOGLE_REFRESH_TOKEN',
   'GOOGLE_SHEET_ID',
   'GOOGLE_DRIVE_PAYMENT_FOLDER_ID',
+  'ADMIN_USERNAME',
+  'ADMIN_PASSWORD_HASH',
+  'REGISTRATIONS_TABLE',
+  'CONTROL_TABLE',
+  'FILES_BUCKET',
 ] as const;
 
-const text = (value: unknown) => (typeof value === 'string' && value.trim()) || null;
+/** A set value, or null. Amplify's placeholder for a secret it could not read counts as unset. */
+const text = (value: unknown) => {
+  const trimmed = typeof value === 'string' ? value.trim() : '';
+  return trimmed && !trimmed.startsWith('<value will be resolved') ? trimmed : null;
+};
 
 function integer(value: unknown, fallback: number, min: number, max: number): number {
   const parsed = Number.parseInt(String(value ?? ''), 10);
   return Number.isFinite(parsed) ? Math.min(max, Math.max(min, parsed)) : fallback;
 }
 
-/** The settings, or the names of the missing ones (registration stays off until they are set). */
-export function readConfig(env: Settings): { config: DeskConfig | null; missing: string[] } {
+/** The settings, or the names of the missing ones (the API answers 503 until they are set). */
+export function readConfig(env: Settings): { config: AppConfig | null; missing: string[] } {
   const missing = REQUIRED.filter((name) => !text(env[name]));
   if (missing.length) return { config: null, missing };
+  const required = (name: (typeof REQUIRED)[number]) => text(env[name])!;
   return {
     missing: [],
     config: {
       google: {
-        clientId: text(env.GOOGLE_CLIENT_ID)!,
-        clientSecret: text(env.GOOGLE_CLIENT_SECRET)!,
-        refreshToken: text(env.GOOGLE_REFRESH_TOKEN)!,
+        clientId: required('GOOGLE_CLIENT_ID'),
+        clientSecret: required('GOOGLE_CLIENT_SECRET'),
+        refreshToken: required('GOOGLE_REFRESH_TOKEN'),
       },
-      sheetId: text(env.GOOGLE_SHEET_ID)!,
+      sheetId: required('GOOGLE_SHEET_ID'),
       sheetTab: text(env.GOOGLE_SHEET_TAB) ?? 'Registrations',
-      paymentFolderId: text(env.GOOGLE_DRIVE_PAYMENT_FOLDER_ID)!,
+      paymentFolderId: required('GOOGLE_DRIVE_PAYMENT_FOLDER_ID'),
       passFolderId: text(env.GOOGLE_DRIVE_PASS_FOLDER_ID),
       mail: {
         fromName: text(env.MAIL_FROM_NAME) ?? 'PRAGYA 2026',
         sender: text(env.GMAIL_SENDER),
         replyTo: text(env.MAIL_REPLY_TO),
       },
-      // Google Drive takes about 3 uploads a second from one account; 3 at a time keeps
-      // well inside that while each registration still finishes in a second or two.
-      workers: integer(env.REGISTRATION_WORKERS, 3, 1, 8),
+      admin: { username: required('ADMIN_USERNAME'), passwordHash: required('ADMIN_PASSWORD_HASH') },
       rateLimit: {
         // Generous, because a whole college can share one IP address: 100 students, each
-        // with up to 3 tries (the browser retries twice when the server is busy).
+        // with a few tries (upload, submit, a retry when the network drops).
         max: integer(env.RATE_LIMIT_MAX, 300, 5, 10_000),
         windowMs: integer(env.RATE_LIMIT_WINDOW_MINUTES, 10, 1, 1440) * 60_000,
       },
+      tables: { registrations: required('REGISTRATIONS_TABLE'), control: required('CONTROL_TABLE') },
+      bucket: required('FILES_BUCKET'),
     },
   };
-}
-
-const LOOPBACK = new Set(['127.0.0.1', '::1', '::ffff:127.0.0.1']);
-
-/**
- * The visitor's address, for rate limits. X-Forwarded-For counts only when it comes from a
- * proxy we trust: one on this computer (the Vite dev server and preview, which pass the phone's
- * address along), or any proxy when TRUST_PROXY is set. Anyone else could make it up.
- */
-export function clientIp(env: Settings, forwardedFor: string | undefined, remoteAddress: string | undefined): string {
-  const trusted = LOOPBACK.has(remoteAddress ?? '') || ['1', 'true', 'yes'].includes(String(env.TRUST_PROXY ?? '').toLowerCase());
-  const forwarded = trusted ? String(forwardedFor ?? '').split(',')[0].trim() : '';
-  return forwarded || remoteAddress || 'unknown';
-}
-
-/** Other websites allowed to call the API (the site itself always may), comma separated. */
-export function allowedOrigins(env: Settings): string[] {
-  return String(env.ALLOWED_ORIGINS ?? '')
-    .split(',')
-    .map((origin) => origin.trim().replace(/\/+$/, ''))
-    .filter(Boolean);
 }

@@ -61,8 +61,8 @@ export interface EventInfo {
 
 export interface RegistrationSettings {
   /**
-   * Where the registration form is sent: the registration server's /api/register.
-   * Null turns online registration off (the form says it is not connected yet).
+   * The registration API's route, /api/register (on the API address from the Amplify
+   * build). Null turns online registration off (the form says it is not connected yet).
    */
   endpoint: string | null;
   /**

@@ -1,6 +1,7 @@
 /**
- * The one confirmation email a participant receives: a short plain-text letter (fixed
- * template) with the details that are personal to them, and the participant pass attached.
+ * The one confirmation email a participant receives, sent only after an organiser approves
+ * their registration: a short plain-text letter (fixed template) with the details that are
+ * personal to them, and the participant pass attached.
  *
  * Kept out of spam folders by what it leaves out: no payment wording (an unknown sender, a
  * payment and a PDF is what invoice scams look like), no amounts, phone numbers or
@@ -8,10 +9,10 @@
  * wrote and invites a reply.
  */
 import { site } from '../src/content/site';
-import type { PassData } from '../src/lib/pass';
+import type { PassData } from './pass';
 
 export function confirmationSubject(registrationId: string): string {
-  return `Your ${site.name} ${site.year} registration (${registrationId})`;
+  return `Your ${site.name} ${site.year} registration is confirmed (${registrationId})`;
 }
 
 /** 'PRO-PITCH' → 'Pro-Pitch', 'EAGLE EYE CHALLENGE' → 'Eagle Eye Challenge' */
@@ -30,7 +31,7 @@ export function confirmationEmail(pass: PassData): { subject: string; text: stri
   const text = [
     `Dear ${pass.participant.name},`,
     '',
-    `Thank you for registering for ${event}, the ${site.tagline.replace(/^An? /i, '')} of the Department of ${site.department}, ${college}.`,
+    `Your registration for ${event}, the ${site.tagline.replace(/^An? /i, '')} of the Department of ${site.department}, ${college}, is confirmed. Thank you for registering.`,
     '',
     ...details,
     '',

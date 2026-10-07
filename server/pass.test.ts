@@ -1,12 +1,13 @@
-import { readFileSync, writeFileSync } from 'node:fs';
+import { writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { PDFDocument } from 'pdf-lib';
 import { describe, expect, it } from 'vitest';
 import { eventCatalog } from '../src/content/eventCatalog';
 import { buildRegistrationRecord } from '../src/lib/registration';
-import { buildPassPdf, formatIstDateTime, passData, passFileName } from '../src/lib/pass';
+import { buildPassPdf, formatIstDateTime, passData, passFileName } from './pass';
+import { passLogo } from './passLogo';
 
-const logo = readFileSync(join(import.meta.dirname, '..', 'public', 'images', 'rpsit-logo-pass.jpg'));
+const logo = passLogo();
 const fees = { gatePass: 100, perEvent: 50 };
 
 const record = (events: string[]) =>
