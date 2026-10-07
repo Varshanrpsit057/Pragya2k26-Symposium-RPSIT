@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
+import { DriveStore } from './drive';
 import { buildMime, encodeHeader } from './gmail';
 import { GoogleApiError, GoogleClient } from './google';
 import { COLUMNS, SheetsStore, columnLetter } from './sheets';
@@ -148,6 +149,32 @@ describe('SheetsStore', () => {
     const sheets = new SheetsStore(client, 'sheet', 'Registrations', { minWriteIntervalMs: 0 });
     await sheets.ready();
     await expect(sheets.update('PRG26-0009', { status: 'REJECTED' })).rejects.toThrow(/not found/);
+  });
+});
+
+describe('DriveStore (setup for a new Google account)', () => {
+  it('makes the sheet in the given folder, and finds it again instead of making a second one', async () => {
+    const { client, calls } = clientWith([json({ files: [] }), json({ id: 'sheet-1' }), json({ files: [{ id: 'sheet-1' }] })]);
+    const drive = new DriveStore(client);
+
+    await expect(drive.ensureSpreadsheet('PRAGYA 2026 Registrations', 'home')).resolves.toBe('sheet-1');
+    expect(decodeURIComponent(calls[0].url)).toContain("mimeType = 'application/vnd.google-apps.spreadsheet'");
+    expect(JSON.parse(String(calls[1].init.body))).toEqual({
+      name: 'PRAGYA 2026 Registrations',
+      mimeType: 'application/vnd.google-apps.spreadsheet',
+      parents: ['home'],
+    });
+
+    await expect(drive.ensureSpreadsheet('PRAGYA 2026 Registrations', 'home')).resolves.toBe('sheet-1');
+    expect(calls).toHaveLength(3);
+  });
+
+  it('makes folders at the top of My Drive', async () => {
+    const { client, calls } = clientWith([json({ files: [] }), json({ id: 'folder-1' })]);
+
+    await expect(new DriveStore(client).ensureFolder('PRAGYA 2026', 'root')).resolves.toBe('folder-1');
+    expect(decodeURIComponent(calls[0].url)).toContain("'root' in parents");
+    expect(JSON.parse(String(calls[1].init.body))).toMatchObject({ mimeType: 'application/vnd.google-apps.folder', parents: ['root'] });
   });
 });
 

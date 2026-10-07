@@ -26,6 +26,8 @@ client_secret_*.json
 *.p12
 *.pfx
 service-account*.json
+# Google Cloud service-account keys keep their downloaded name: <project>-<12 hex>.json
+*-[0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f].json
 
 # Personal photos, reference images and poster originals, kept on your computer only
 # (the site uses the WebP copies in src/assets/)
