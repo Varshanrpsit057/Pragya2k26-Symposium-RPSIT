@@ -5,9 +5,13 @@
 //   npm run google:check -- --send-test-email
 //                           also sends one test email to the signed-in Gmail address
 //
-// Reads the OAuth client from .env (GOOGLE_CLIENT_ID / GOOGLE_CLIENT_SECRET) or, if those
-// are empty, from the client JSON in "google client/". Secrets are written to .env only;
-// they are never printed.
+// Reads the OAuth client from the newest OAuth client JSON in "google client/" (copied into
+// .env) or else from .env (GOOGLE_CLIENT_ID / GOOGLE_CLIENT_SECRET). When GMAIL_SENDER is set
+// in .env, Google is asked for that account, and a sign-in with any other account is refused
+// without saving anything. Secrets are written to .env only; they are never printed.
+//
+// A service-account key (a JSON with a private key) cannot be used: a gmail.com account
+// cannot send email or keep Drive files through a service account. It is skipped.
 //
 // The OAuth client must list this redirect URI (Google Cloud Console → APIs & Services →
 // Credentials → your OAuth client → Authorized redirect URIs):
@@ -87,13 +91,26 @@ function oauthClient(env) {
         .map((name) => join(CLIENT_DIR, name))
         .sort((a, b) => statSync(b).mtimeMs - statSync(a).mtimeMs)
     : [];
-  if (files.length) {
-    const json = JSON.parse(readFileSync(files[0], 'utf8'));
+  for (const file of files) {
+    let json;
+    try {
+      json = JSON.parse(readFileSync(file, 'utf8'));
+    } catch {
+      continue;
+    }
+    if (json.type === 'service_account') {
+      console.log(
+        `Skipping ${file}: it is a service-account key (it holds a private key). It is not used, ` +
+          'because a gmail.com account cannot send email or keep Drive files through one. Keep it out of ' +
+          'this project, and delete the key in Google Cloud Console if nothing else needs it.',
+      );
+      continue;
+    }
     const client = json.web ?? json.installed;
     if (client?.client_id && client.client_secret) {
       if (env.GOOGLE_CLIENT_ID !== client.client_id || env.GOOGLE_CLIENT_SECRET !== client.client_secret) {
         writeEnv({ GOOGLE_CLIENT_ID: client.client_id, GOOGLE_CLIENT_SECRET: client.client_secret });
-        console.log(`Copied the OAuth client from ${files[0]} into .env.`);
+        console.log(`Copied the OAuth client from ${file} into .env.`);
       }
       return { clientId: client.client_id, clientSecret: client.client_secret };
     }
@@ -101,7 +118,10 @@ function oauthClient(env) {
   if (env.GOOGLE_CLIENT_ID && env.GOOGLE_CLIENT_SECRET) {
     return { clientId: env.GOOGLE_CLIENT_ID, clientSecret: env.GOOGLE_CLIENT_SECRET };
   }
-  fail(`No OAuth client found: put the client JSON in "${CLIENT_DIR}/" or set GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET in .env.`);
+  fail(
+    `No OAuth client found: create an OAuth client ID (type "Web application", redirect URI ${REDIRECT_URI}) in ` +
+      `Google Cloud Console, download its JSON into "${CLIENT_DIR}/", or set GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET in .env.`,
+  );
 }
 
 // ---------------------------------------------------------------------------------------
@@ -169,7 +189,7 @@ function openBrowser(url) {
   }
 }
 
-async function signIn({ clientId, clientSecret }) {
+async function signIn({ clientId, clientSecret }, account) {
   const state = randomBytes(16).toString('hex');
   const verifier = randomBytes(48).toString('base64url');
   const challenge = createHash('sha256').update(verifier).digest('base64url');
@@ -185,6 +205,8 @@ async function signIn({ clientId, clientSecret }) {
     state,
     code_challenge: challenge,
     code_challenge_method: 'S256',
+    // Opens the sign-in on the intended account (GMAIL_SENDER).
+    ...(account ? { login_hint: account } : {}),
   }).toString();
 
   const code = await new Promise((resolve, reject) => {
@@ -229,7 +251,11 @@ async function signIn({ clientId, clientSecret }) {
       reject(error.code === 'EADDRINUSE' ? new Error(`Port ${PORT} is busy; close whatever uses it and try again.`) : error),
     );
     server.listen(PORT, '127.0.0.1', () => {
-      console.log('\nSign in with the Google account that owns the registration Sheet and Drive folder.');
+      console.log(
+        account
+          ? `\nSign in as ${account} (GMAIL_SENDER in .env).`
+          : '\nSign in with the Google account that owns the registration Sheet and Drive folder.',
+      );
       console.log('Your browser should open; if it does not, open this link:\n');
       console.log(`  ${authUrl}\n`);
       console.log('Waiting for the sign-in (up to 10 minutes)...');
@@ -247,7 +273,7 @@ async function signIn({ clientId, clientSecret }) {
   });
   if (!tokens.refresh_token) {
     fail(
-      'Google did not return a refresh token. Remove "pragya2026" at https://myaccount.google.com/permissions ' +
+      'Google did not return a refresh token. Remove this app\'s access at https://myaccount.google.com/permissions ' +
         'and run npm run google:auth again.',
     );
   }
@@ -255,6 +281,12 @@ async function signIn({ clientId, clientSecret }) {
   const granted = new Set((tokens.scope ?? '').split(' '));
   const missing = Object.entries(SCOPES).filter(([, scope]) => !granted.has(scope));
   const email = tokens.id_token ? emailFromIdToken(tokens.id_token) : null;
+  if (account && email?.toLowerCase() !== account.toLowerCase()) {
+    fail(
+      `You signed in as ${email ?? 'an unknown account'}, but .env expects ${account} (GMAIL_SENDER). Nothing was saved. ` +
+        `Run npm run google:auth again and choose ${account}, or change GMAIL_SENDER in .env first.`,
+    );
+  }
 
   writeEnv({ GOOGLE_REFRESH_TOKEN: tokens.refresh_token, ...(email ? { GMAIL_SENDER: email } : {}) });
   console.log(`\nSaved the refresh token to .env${email ? ` (signed in as ${email})` : ''}.`);
@@ -271,10 +303,9 @@ async function signIn({ clientId, clientSecret }) {
 // ---------------------------------------------------------------------------------------
 // Checks
 
-async function check(accessToken, env, signedInAs) {
-  console.log('\nChecking access:');
+/** The Sheet and the payment folder in .env: reachable and writable by this account. */
+async function checkStorage(accessToken, env) {
   let passed = true;
-
   try {
     const sheet = await google(
       accessToken,
@@ -304,6 +335,19 @@ async function check(accessToken, env, signedInAs) {
   } catch (error) {
     passed = false;
     bad(`Google Drive folder: ${explain(error)}`);
+  }
+  return passed;
+}
+
+async function check(accessToken, env, signedInAs) {
+  console.log('\nChecking access:');
+  let passed = true;
+
+  // A new account has no Sheet or folder yet: npm run google:setup makes them.
+  if (!env.GOOGLE_SHEET_ID || !env.GOOGLE_DRIVE_PAYMENT_FOLDER_ID) {
+    console.log('  • No Sheet or Drive folder in .env yet: run npm run google:setup to create them, then npm run google:check');
+  } else {
+    passed = await checkStorage(accessToken, env);
   }
 
   const sender = signedInAs || env.GMAIL_SENDER;
@@ -335,7 +379,7 @@ async function check(accessToken, env, signedInAs) {
 
   console.log(
     passed
-      ? '\nAll set. The registration server reads these settings from .env (and from Cloudflare secrets once deployed).\n'
+      ? '\nAll set. The local server reads these settings from .env; copy them to the Amplify secrets and variables (README, section 9).\n'
       : '\nFix the items marked ✗, then run npm run google:check.\n',
   );
   if (!passed) process.exitCode = 1;
@@ -345,9 +389,7 @@ async function check(accessToken, env, signedInAs) {
 
 const env = readEnv();
 const client = oauthClient(env);
-for (const key of ['GOOGLE_SHEET_ID', 'GOOGLE_DRIVE_PAYMENT_FOLDER_ID']) {
-  if (!env[key]) fail(`${key} is empty in .env.`);
-}
+const account = env.GMAIL_SENDER?.trim() || null;
 
 try {
   if (checkOnly) {
@@ -362,7 +404,7 @@ try {
     });
     await check(accessToken, env, null);
   } else {
-    const accessToken = await signIn(client);
+    const accessToken = await signIn(client, account);
     await check(accessToken, readEnv(), readEnv().GMAIL_SENDER);
   }
 } catch (error) {

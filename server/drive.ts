@@ -2,6 +2,7 @@
 import { GoogleApiError, type GoogleClient } from './google';
 
 const FOLDER_TYPE = 'application/vnd.google-apps.folder';
+const SPREADSHEET_TYPE = 'application/vnd.google-apps.spreadsheet';
 const encoder = new TextEncoder();
 
 export interface StoredFile {
@@ -86,14 +87,23 @@ export class DriveStore {
     );
   }
 
-  /** The folder named `name` inside `parentId`, created if it does not exist yet. */
+  /** The folder named `name` inside `parentId` ('root' for My Drive), created if it does not exist yet. */
   async ensureFolder(name: string, parentId: string): Promise<string> {
-    const query = `name = ${quote(name)} and ${quote(parentId)} in parents and mimeType = '${FOLDER_TYPE}' and trashed = false`;
+    return this.ensure(name, parentId, FOLDER_TYPE, 'folder');
+  }
+
+  /** The Google Sheet named `name` inside `parentId`, created empty if it does not exist yet. */
+  async ensureSpreadsheet(name: string, parentId: string): Promise<string> {
+    return this.ensure(name, parentId, SPREADSHEET_TYPE, 'sheet');
+  }
+
+  private async ensure(name: string, parentId: string, mimeType: string, kind: string): Promise<string> {
+    const query = `name = ${quote(name)} and ${quote(parentId)} in parents and mimeType = '${mimeType}' and trashed = false`;
     const found = await this.google.request<{ files?: { id: string }[] }>(
       `https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(query)}&fields=files(id)&pageSize=1` +
         '&supportsAllDrives=true&includeItemsFromAllDrives=true',
       { method: 'GET' },
-      { label: 'Drive: find folder', idempotent: true },
+      { label: `Drive: find ${kind}`, idempotent: true },
     );
     if (found.files?.[0]) return found.files[0].id;
 
@@ -102,9 +112,9 @@ export class DriveStore {
       {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name, mimeType: FOLDER_TYPE, parents: [parentId] }),
+        body: JSON.stringify({ name, mimeType, parents: [parentId] }),
       },
-      { label: 'Drive: create folder', idempotent: false },
+      { label: `Drive: create ${kind}`, idempotent: false },
     );
     return created.id;
   }

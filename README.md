@@ -135,20 +135,33 @@ website's API address (`VITE_API_URL`, read from `amplify_outputs.json` at build
 3. **Credentials → Create credentials → OAuth client ID → Web application**, with the authorized
    redirect URI `http://localhost:3000/oauth2callback`. Download its JSON into a folder named
    `google client/` in this project (git ignores it).
-4. Create the **Google Sheet** and a **Drive folder** for payment screenshots, with the Google
-   account that will send the emails.
-5. On your computer, with Node.js 22+:
+
+   Use an **OAuth client**, not a service account: a gmail.com account cannot send email or keep
+   Drive files through a service account. A service-account key (a JSON with a `private_key`) is not
+   needed; keep it out of this project and delete the key in the console if nothing else uses it.
+4. On your computer, with Node.js 22+:
 
    ```bash
    npm install
-   cp .env.example .env        # then fill in GOOGLE_SHEET_ID and GOOGLE_DRIVE_PAYMENT_FOLDER_ID
-   npm run google:auth         # sign in, tick every box: saves the client, refresh token and sender to .env
-   npm run google:check        # checks the Sheet, the Drive folder and Gmail
-   npm run google:setup        # formats the sheet and creates the "Participant Passes" folder
+   cp .env.example .env        # then set GMAIL_SENDER to the Google account to use
+   npm run google:auth         # sign in as GMAIL_SENDER, tick every box: saves the client and refresh token
+   npm run google:setup        # makes the "PRAGYA 2026" Drive folder, the sheet and the passes folder
+   npm run google:check -- --send-test-email   # checks the Sheet, the Drive folder and Gmail
    ```
 
-6. Copy the values from `.env` into the Amplify secrets and variables (section 9). Keep `.env` on
+   `google:auth` refuses a sign-in with any account other than `GMAIL_SENDER`. To use an existing
+   sheet or folder instead, put their IDs in `GOOGLE_SHEET_ID` / `GOOGLE_DRIVE_PAYMENT_FOLDER_ID`
+   before `google:setup`.
+5. Copy the values from `.env` into the Amplify secrets and variables (section 9). Keep `.env` on
    your computer only.
+
+**Moving to another Google account** (all new settings): keep the old `.env` aside (e.g.
+`.env.old-account`, which git ignores), start a new `.env` from `.env.example` with the new
+`GMAIL_SENDER`, follow steps 1 to 5 signed in to the new account, update every Google secret and
+variable in Amplify, and redeploy. Then remove the app's access from the old account
+(myaccount.google.com → Security → Third-party apps). Registrations already received keep their
+IDs (the counter lives in DynamoDB) and their rows stay in the old sheet; copy those rows into the
+new sheet if you want everything in one place.
 
 ## 5. AWS Amplify setup
 

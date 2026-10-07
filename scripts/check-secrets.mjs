@@ -4,8 +4,8 @@
 //   node scripts/check-secrets.mjs --staged
 //                                  only what is about to be committed (the pre-commit hook)
 //
-// Fails on files that must stay private (.env, the Google client JSON, private keys, personal
-// photos) and on secret values inside any file (Google client secrets, refresh and access
+// Fails on files that must stay private (.env, the Google client JSON, service-account keys,
+// private keys, personal photos) and on secret values inside any file (Google client secrets, refresh and access
 // tokens, API keys, private keys, GitHub and AWS keys, the admin password hash). Matches are
 // reported by file and line only: a secret is never printed.
 import { execFileSync } from 'node:child_process';
@@ -20,6 +20,8 @@ const PRIVATE_PATHS = [
   [/(^|\/)google client\//, 'Google OAuth client folder'],
   [/(^|\/)client_secret[^/]*\.json$/, 'Google OAuth client secret'],
   [/(^|\/)service-account[^/]*\.json$/, 'Google service account key'],
+  // Google Cloud names a downloaded key after the project and the key id: pragya2k26-87dd6c75fd61.json
+  [/(^|\/)[a-z][a-z0-9-]*-[0-9a-f]{12}\.json$/, 'Google service account key'],
   [/(^|\/)amplify_outputs[^/]*\.json$/, 'Amplify outputs (generated per deploy)'],
   [/\.(pem|key|p12|pfx)$/, 'private key'],
   [/(^|\/)dev_crew\//, 'full-size personal photos'],
@@ -32,6 +34,8 @@ const SECRET_VALUES = [
   [/\bya29\.[A-Za-z0-9_-]{20,}/, 'Google access token'],
   [/\bAIza[0-9A-Za-z_-]{35}\b/, 'Google API key'],
   [/-----BEGIN [A-Z ]*PRIVATE KEY-----/, 'private key'],
+  [/"type"\s*:\s*"service_account"/, 'Google service account key'],
+  [/"private_key"\s*:\s*"/, 'private key in a JSON file'],
   [/\bgh[pousr]_[A-Za-z0-9]{36,}\b/, 'GitHub token'],
   [/\bAKIA[0-9A-Z]{16}\b/, 'AWS access key'],
   [/\baws_secret_access_key\s*=\s*\S+/i, 'AWS secret access key'],
