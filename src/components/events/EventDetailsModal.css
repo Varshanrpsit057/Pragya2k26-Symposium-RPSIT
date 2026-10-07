@@ -3,24 +3,17 @@
   gap: clamp(1.25rem, 3vw, 1.75rem);
 }
 
-/* Poster beside the name, like the event card banner */
-.event-details__head {
-  display: grid;
-  grid-template-columns: auto minmax(0, 1fr);
-  align-items: center;
-  gap: clamp(1rem, 3vw, 1.75rem);
-  padding-right: 3rem;
+/*
+ * The floating close button takes no height here, so the details use the window's full
+ * width; only the top lines (category and name) leave room for it.
+ */
+.event-modal .modal__close {
+  margin-bottom: calc(0.5rem - var(--icon-link-size, 2.75rem));
 }
 
-.event-details__poster {
-  width: clamp(6.5rem, 16vw, 9.5rem);
-  height: auto;
-  aspect-ratio: 3 / 4;
-  object-fit: cover;
-  border-radius: var(--r-md);
-  box-shadow:
-    0 0 0 1px var(--c-line-strong),
-    0 22px 50px -24px color-mix(in oklab, var(--accent) 70%, transparent);
+.event-details__category,
+.event-details__name {
+  padding-right: 3rem;
 }
 
 .event-details__intro {
@@ -90,6 +83,30 @@
 .event-details__facts dd {
   font-weight: 650;
   line-height: 1.4;
+}
+
+/* Prizes run across the whole row */
+.event-details__facts .event-details__fact--wide {
+  grid-column: 1 / -1;
+}
+
+/* The chief guest, set apart as a highlight */
+.event-details__guest {
+  display: grid;
+  gap: 0.15rem;
+  padding: 0.85rem 1.1rem;
+  border: 1px solid color-mix(in oklab, var(--accent) 35%, transparent);
+  border-radius: var(--r-md);
+  font-weight: 650;
+  background: color-mix(in oklab, var(--accent) 7%, transparent);
+}
+
+.event-details__guest span {
+  font-size: 0.78rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--accent);
 }
 
 .event-details__block {
@@ -185,6 +202,23 @@
   color: var(--accent);
 }
 
+.event-details__person {
+  font-weight: 650;
+}
+
+.event-details__role {
+  color: var(--c-text-dim);
+}
+
+.event-details__queries {
+  display: grid;
+  gap: 0.4rem;
+  margin-top: 0.4rem;
+  padding-top: 0.75rem;
+  border-top: 1px dashed var(--c-line);
+  color: var(--c-text-muted);
+}
+
 .event-details__foot {
   display: flex;
   flex-wrap: wrap;
@@ -202,6 +236,7 @@
 
 .event-details__actions {
   display: flex;
+  margin-left: auto;
   flex-wrap: wrap;
   gap: 0.75rem;
 }
@@ -213,13 +248,14 @@
 }
 
 @media (max-width: 479px) {
-  .event-details__head {
-    grid-template-columns: minmax(0, 1fr);
-    padding-right: 0;
+  .event-details__category,
+  .event-details__name {
+    padding-right: 2.5rem;
   }
 
-  .event-details__poster {
-    width: 7rem;
+  /* Two facts to a row on a phone */
+  .event-details__facts {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   .event-details__actions,

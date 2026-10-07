@@ -34,8 +34,8 @@ export const site: SiteInfo = {
     // the README). Set to null to switch online registration off.
     endpoint: '/api/register',
     // The hero countdown runs to this moment (IST); after it, registration shows as closed.
-    closesAt: '2026-10-16T17:00:00',
-    deadline: '16 October 2026, 5:00 PM IST',
+    closesAt: '2026-10-16T23:59:00',
+    deadline: '16 October 2026, 11:59 PM IST',
     note: null,
     gatePassFee: 100,
     eventFee: 50,
@@ -45,7 +45,7 @@ export const site: SiteInfo = {
       qrImage: null,
     },
   },
-  contacts: [],
+  contacts: [{ name: 'Balajimanikandhaan S.S', role: 'Overall Student Coordinator · III Year AI&DS', phone: '+91 73582 13736' }],
   email: null,
   socials: [
     { label: 'Instagram', url: 'https://www.instagram.com/_rpsit_/', icon: 'instagram' },

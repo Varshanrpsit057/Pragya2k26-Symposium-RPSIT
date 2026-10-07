@@ -47,7 +47,11 @@ async function request<T>(path: `/api/${string}`, { method = 'GET', body, token 
     saveToken(null);
     throw new SignedOut(data?.error ?? 'Please sign in again.');
   }
-  if (!response.ok || !data?.success) throw new Error(data?.error ?? `The server answered ${response.status}.`);
+  if (!response.ok || !data?.success) {
+    // The gateway's own throttle answers without our JSON.
+    if (response.status === 429 && !data?.error) throw new Error('The server is busy. Please wait a moment and try again.');
+    throw new Error(data?.error ?? `The server answered ${response.status}.`);
+  }
   return data;
 }
 

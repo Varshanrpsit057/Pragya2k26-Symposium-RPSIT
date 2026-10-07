@@ -5,11 +5,33 @@
   background: linear-gradient(180deg, transparent, rgb(9 10 34 / 0.9) 40%);
 }
 
-/* Brand · Contact · Follow · Location */
+/* Brand · Contact on top; the credits (with follow and explore) beside the map below */
 .footer__grid {
   display: grid;
-  grid-template-columns: 1.1fr 1.15fr 0.7fr 1.3fr;
-  gap: clamp(2rem, 4vw, 3.5rem);
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.15fr);
+  grid-template-areas:
+    'brand contact'
+    'more location';
+  gap: clamp(2.25rem, 4vw, 3.5rem) clamp(2rem, 5vw, 4.5rem);
+}
+
+.footer__brand {
+  grid-area: brand;
+}
+
+.footer__contact {
+  grid-area: contact;
+}
+
+.footer__more {
+  grid-area: more;
+  display: grid;
+  align-content: start;
+  gap: 2rem;
+}
+
+.footer__location {
+  grid-area: location;
 }
 
 .footer__brand {
@@ -68,34 +90,6 @@
   background: rgb(255 255 255 / 0.03);
 }
 
-/* Developer credits under a hairline */
-.footer__credits {
-  margin-top: 1rem;
-  padding-top: 1.25rem;
-  border-top: 1px solid var(--c-line);
-}
-
-/* "Developed by" with the incognito button that opens the Dev Crew */
-.footer__credits-head {
-  display: flex;
-  align-items: center;
-  gap: 0.6rem;
-  margin-bottom: 0.75rem;
-}
-
-.footer__credits-title {
-  font-size: var(--step--1);
-  font-weight: 500;
-  color: var(--c-text-dim);
-}
-
-.footer__crew-button {
-  --icon-link-size: 2.1rem;
-
-  padding: 0;
-  cursor: pointer;
-}
-
 /* Name, then role and class in smaller type */
 .footer__credit-person {
   display: grid;
@@ -107,12 +101,16 @@
   color: var(--c-text-dim);
 }
 
+/* Developer credit: its heading level with "Location", its card level with the map */
 .footer__credits ul {
   display: grid;
   gap: 0.6rem;
   margin: 0;
-  padding: 0;
+  padding: 1.1rem 1.35rem;
+  border: 1px solid var(--c-line-strong);
+  border-radius: var(--r-md);
   list-style: none;
+  background: rgb(255 255 255 / 0.03);
 }
 
 .footer__credits li {
@@ -120,7 +118,11 @@
   align-items: center;
   justify-content: space-between;
   gap: 1rem;
-  font-size: var(--step--1);
+  font-size: var(--step-0);
+}
+
+.footer__credit-name {
+  font-weight: 600;
 }
 
 .footer__credit-links {
@@ -187,6 +189,30 @@
   white-space: nowrap;
 }
 
+/* The symposium coordinator, under a hairline */
+.footer__coordinators {
+  margin-top: 1.5rem;
+  padding-top: 1.25rem;
+  border-top: 1px solid var(--c-line);
+}
+
+.footer__subheading {
+  font-size: var(--step--1);
+  font-weight: 500;
+  color: var(--c-text-dim);
+}
+
+.footer a.footer__person-phone {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  width: fit-content;
+  margin-top: 0.2rem;
+  font-weight: 600;
+  white-space: nowrap;
+  color: var(--c-synapse);
+}
+
 .footer__pending {
   margin-top: 1.25rem;
   font-size: var(--step--1);
@@ -203,7 +229,7 @@
 }
 
 .footer__people {
-  margin-top: 1.25rem;
+  margin-top: 0.75rem;
 }
 
 .footer__people li {
@@ -224,9 +250,16 @@
   display: flex;
   flex-wrap: wrap;
   gap: 0.6rem;
-  margin: 0 0 2.25rem;
+  margin: 0;
   padding: 0;
   list-style: none;
+}
+
+/* Follow and Explore side by side under the credit */
+.footer__columns {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 2rem;
 }
 
 /* Embedded Google map, framed like the cards */
@@ -296,26 +329,14 @@
   pointer-events: none;
 }
 
-/* Four columns: the wordmark scales with the narrower brand column */
-@media (min-width: 1080px) {
-  .footer__wordmark {
-    font-size: clamp(1.7rem, 2.1vw, 2.35rem);
-  }
-}
-
-/* Tablet: brand + contact, then follow + location */
-@media (max-width: 1079px) {
-  .footer__grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-}
-
-@media (max-width: 639px) {
+/* Phones: one column, the map last */
+@media (max-width: 719px) {
   .footer__grid {
     grid-template-columns: minmax(0, 1fr);
-  }
-
-  .footer__socials {
-    margin-bottom: 1.75rem;
+    grid-template-areas:
+      'brand'
+      'contact'
+      'more'
+      'location';
   }
 }

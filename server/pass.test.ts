@@ -38,8 +38,16 @@ describe('participant pass', () => {
     expect(pass.amountPaid).toBe(100);
     expect(pass.feePerEvent).toBe(50);
     expect(pass.payableAtVenue).toBe(150);
-    expect(pass.events[0]).toMatchObject({ date: '17 October 2026', timing: 'To be announced', type: 'Technical · Team event' });
-    expect(pass.events[0].venue).toMatch(/R P Sarathy Institute of Technology/);
+    expect(pass.events[0]).toMatchObject({
+      date: '17 October 2026',
+      timing: '10:30 AM – 12:00 PM',
+      type: 'Technical · Individual or team',
+      venue: 'Delta Lab',
+    });
+    // An event without its own venue or time yet falls back to the college and "To be announced".
+    const shortFilm = pass.events.find((event) => event.id === 'short-film');
+    expect(shortFilm?.venue).toMatch(/R P Sarathy Institute of Technology/);
+    expect(shortFilm?.timing).toBe('To be announced');
   });
 
   it('shows times in IST', () => {

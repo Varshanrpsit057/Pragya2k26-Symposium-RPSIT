@@ -16,6 +16,7 @@ export const api = defineFunction({
   // API Gateway waits at most 30 s for an answer.
   timeoutSeconds: 29,
   schedule: 'every 10m',
+  logging: { retention: '3 months' },
   environment: {
     GOOGLE_CLIENT_ID: secret('GOOGLE_CLIENT_ID'),
     GOOGLE_CLIENT_SECRET: secret('GOOGLE_CLIENT_SECRET'),

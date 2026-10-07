@@ -1,17 +1,19 @@
 .hero {
+  --emblem-size: clamp(11rem, 4rem + 26vw, 17.5rem);
+
   position: relative;
-  isolation: isolate;
   display: grid;
   align-items: center;
   min-height: 100svh;
   padding-block: calc(var(--nav-offset) + 1.5rem) clamp(3rem, 8vh, 5.5rem);
 }
 
-/* Shades the sky behind the centred lockup so the text stays readable */
+/* Shades the sky behind the centred lockup so the text stays readable; under the emblem
+   layer (z-index -1), above the sky (-3) */
 .hero__veil {
   position: absolute;
   inset: 0;
-  z-index: -1;
+  z-index: -2;
   pointer-events: none;
   background: radial-gradient(60% 55% at 50% 45%, rgb(5 6 26 / 0.55) 0%, rgb(5 6 26 / 0.25) 55%, transparent 80%);
 }
@@ -61,27 +63,60 @@
   background-clip: text;
 }
 
+/* Where the emblem first appears (BrandEmblem draws it into this square) */
+.hero__emblem-slot {
+  width: var(--emblem-size);
+  height: var(--emblem-size);
+  margin-top: clamp(0.25rem, 1vh, 0.75rem);
+}
+
+/* The wordmark overlaps the lower ring of the emblem, as one lockup */
 .hero__title {
-  margin-block: clamp(0.25rem, 1vh, 0.75rem) 0;
-  line-height: 0;
+  display: grid;
+  justify-items: center;
+  gap: 0.35rem;
+  margin-top: calc(var(--emblem-size) * -0.17);
+  line-height: 1;
+  animation: hero-fade-up 0.9s var(--ease-out) 0.35s both;
 }
 
-/* The PRAGYA 2K26 emblem: the one loud element on the page */
-.hero__logo {
-  width: min(30rem, 84vw);
-  height: auto;
-  animation: hero-logo-in 1.1s var(--ease-out) 0.15s both;
+.hero__wordmark {
+  margin-right: -0.06em;
+  font-size: clamp(3.1rem, 1.4rem + 7.2vw, 6.6rem);
+  font-weight: 900;
+  font-stretch: 125%;
+  line-height: 0.92;
+  letter-spacing: 0.06em;
+  color: transparent;
+  background: linear-gradient(180deg, #ffffff 16%, #e7e1ff 46%, #b7a5ff 74%, #ff9ad9 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  filter: drop-shadow(0 0 24px rgb(140 108 255 / 0.5)) drop-shadow(0 2px 2px rgb(5 6 26 / 0.6));
 }
 
-@keyframes hero-logo-in {
-  from {
-    opacity: 0;
-    transform: scale(0.94);
-  }
-  to {
-    opacity: 1;
-    transform: none;
-  }
+/* 2K26 between two fine rules, in the spectrum */
+.hero__edition {
+  display: flex;
+  align-items: center;
+  gap: 0.9em;
+  font-size: clamp(1rem, 0.75rem + 1.2vw, 1.65rem);
+  font-weight: 400;
+  font-stretch: 125%;
+  letter-spacing: 0.55em;
+  color: #dcd6ff;
+  text-shadow: 0 0 18px rgb(140 108 255 / 0.65);
+}
+
+.hero__edition-rule {
+  width: clamp(2rem, 6vw, 4rem);
+  height: 1px;
+  background: linear-gradient(90deg, transparent, var(--c-synapse), var(--c-cortex));
+}
+
+/* The letter spacing also trails the last figure: pull the rule back so the line stays even */
+.hero__edition-rule:last-child {
+  margin-left: -0.55em;
+  background: linear-gradient(90deg, var(--c-cortex), var(--c-flare), transparent);
 }
 
 /* The symposium date: large, under the emblem, the second thing people read after the name */

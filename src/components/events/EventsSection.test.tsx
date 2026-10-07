@@ -17,7 +17,7 @@ const panelOf = (container: HTMLElement, eventId: string) => container.querySele
 
 describe('EventsSection (accordion gallery)', () => {
   it.each(['technical', 'non-technical'] as const)('shows the %s track as five panels with the new artwork', (category) => {
-    const { container } = renderTrack(category);
+    renderTrack(category);
     const list = eventsByCategory(category);
 
     const gallery = screen.getByRole('list', { name: `${category} events` });
@@ -31,9 +31,26 @@ describe('EventsSection (accordion gallery)', () => {
       // Every folded strip still says which event it is.
       expect(panel.querySelector('.ag-panel__peek')).toHaveTextContent(event.name);
     });
-    // The middle panel is open at first, with the event's details.
-    expect(panelOf(container, list[2].id)).toHaveAttribute('aria-current', 'true');
-    expect(screen.getByRole('heading', { name: list[2].name })).toBeInTheDocument();
+    // None is open at first: each event waits for the visitor to reach it.
+    panels.forEach((panel) => expect(panel).not.toHaveAttribute('aria-current'));
+    expect(gallery).toHaveAttribute('data-idle');
+  });
+
+  it('folds every panel back when the mouse leaves the row, but not when a finger lifts', () => {
+    const { container } = renderTrack('technical');
+    const list = eventsByCategory('technical');
+    const gallery = screen.getByRole('list', { name: 'technical events' });
+
+    fireEvent.click(panelOf(container, list[1].id));
+    expect(panelOf(container, list[1].id)).toHaveAttribute('aria-current', 'true');
+    expect(gallery).not.toHaveAttribute('data-idle');
+
+    fireEvent.pointerLeave(gallery, { pointerType: 'touch' });
+    expect(panelOf(container, list[1].id)).toHaveAttribute('aria-current', 'true');
+
+    fireEvent.pointerLeave(gallery, { pointerType: 'mouse' });
+    expect(gallery).toHaveAttribute('data-idle');
+    list.forEach((event) => expect(panelOf(container, event.id)).not.toHaveAttribute('aria-current'));
   });
 
   it('keeps the buttons of folded panels out of reach, and opens a panel when it is tapped or focused', () => {
@@ -94,6 +111,28 @@ describe('EventsSection (accordion gallery)', () => {
     // An event of the other track leaves this one as it is.
     act(() => focusEvent('code-flex'));
     expect(panelOf(container, shortFilm.id)).toHaveAttribute('aria-current', 'true');
+  });
+
+  it('gives a technical event its time, venue, prizes and coordinators, without repeating the poster', () => {
+    const { container } = renderTrack('technical');
+    const proPitch = events.find((event) => event.id === 'pro-pitch')!;
+    const panel = panelOf(container, proPitch.id);
+    fireEvent.click(panel);
+    fireEvent.click(within(panel).getByRole('button', { name: `See more about ${proPitch.name}` }));
+
+    const details = screen.getByRole('dialog', { name: proPitch.name });
+    expect(details.querySelector('img')).toBeNull();
+    expect(within(details).getByText('10:30 AM – 12:00 PM')).toBeInTheDocument();
+    expect(within(details).getByText('Delta Lab')).toBeInTheDocument();
+    expect(within(details).getByText(/1st prize: ₹1,000/)).toBeInTheDocument();
+
+    const coordinators = within(details).getByRole('heading', { name: 'Coordinators' }).closest('section') as HTMLElement;
+    for (const name of ['Mrs. D. Vidya', 'Kabil V', 'Vaishnavi R']) {
+      expect(within(coordinators).getByText(name)).toBeInTheDocument();
+    }
+    // Queries go to the overall coordinator, by phone.
+    expect(within(coordinators).getByRole('link', { name: '+91 73582 13736' })).toHaveAttribute('href', 'tel:+917358213736');
+    expect(within(details).queryByText(/Details are provisional/)).toBeNull();
   });
 
   it('opens the event named in a #event-… link', () => {

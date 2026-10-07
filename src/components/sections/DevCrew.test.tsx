@@ -29,8 +29,8 @@ describe('DevCrewModal', () => {
     renderCrew();
 
     expect(within(card('Mohan Prabu K')).getByText('Senior Developer')).toBeInTheDocument();
-    expect(within(card('Varshan C')).getByText('Frontend Developer')).toBeInTheDocument();
-    expect(within(card('Barath S')).getByText('Backend Developer')).toBeInTheDocument();
+    expect(within(card('Varshan C')).getByText('UI/UX Design')).toBeInTheDocument();
+    expect(within(card('Barath S')).getByText('Prompt Engineer & API Authenticator')).toBeInTheDocument();
     crew.forEach((member) => expect(within(card(member.name)).getByText('III Year – AI&DS')).toBeInTheDocument());
   });
 

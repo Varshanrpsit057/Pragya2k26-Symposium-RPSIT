@@ -40,6 +40,10 @@ export interface SymposiumEvent {
   venue?: string;
   schedule?: string;
   rules?: string[];
+  /** e.g. ['1st prize: ₹1,000', …] */
+  prizes?: string[];
+  chiefGuest?: string;
+  /** Staff and student coordinators; an event with coordinators counts as confirmed. */
   coordinators?: Person[];
 }
 
@@ -135,6 +139,8 @@ export interface CrewMember {
   role: string;
   /** Year and department, e.g. 'III Year – AI&DS' */
   study: string;
+  /** Also named under "Developed by" in the footer. */
+  credited?: boolean;
   /** Portrait URL (square). Without one, the card shows the member's initials. */
   photo?: string;
   links: CrewLink[];

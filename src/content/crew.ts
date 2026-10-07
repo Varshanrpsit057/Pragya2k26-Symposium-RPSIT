@@ -11,13 +11,18 @@ const portraitFor = (id: string): string | undefined => portraits[`../assets/cre
 /** Year and department, shown after each name. */
 const CLASS = 'III Year – AI&DS';
 
-/** The developers who built this site, in card order. */
+/**
+ * The team who built this site, in card order, as the Dev Crew window shows them (opened
+ * from the incognito button in the navigation). `credited` members are also named under
+ * "Developed by" in the footer.
+ */
 export const crew: CrewMember[] = [
   {
     id: 'mohan-prabu-k',
     name: 'Mohan Prabu K',
     role: 'Senior Developer',
     study: CLASS,
+    credited: true,
     photo: portraitFor('mohan-prabu-k'),
     links: [
       { kind: 'linkedin', url: 'https://www.linkedin.com/in/mohan-prabu-k-061739325' },
@@ -28,7 +33,7 @@ export const crew: CrewMember[] = [
   {
     id: 'varshan-c',
     name: 'Varshan C',
-    role: 'Frontend Developer',
+    role: 'UI/UX Design',
     study: CLASS,
     photo: portraitFor('varshan-c'),
     links: [
@@ -39,7 +44,7 @@ export const crew: CrewMember[] = [
   {
     id: 'barath-s',
     name: 'Barath S',
-    role: 'Backend Developer',
+    role: 'Prompt Engineer & API Authenticator',
     study: CLASS,
     photo: portraitFor('barath-s'),
     links: [

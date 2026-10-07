@@ -3,122 +3,117 @@ import type { EventInfo } from './types';
 /**
  * What each event's See More window shows, by event id.
  *
- * PLACEHOLDER DETAILS: written from each event's name and type so the window has
- * something useful to show. Replace them with the coordinators' confirmed rules;
- * the window says the details are provisional until then.
+ * The five technical events follow the department's confirmed event list. The
+ * non-technical events still carry PLACEHOLDER DETAILS, written from each event's name
+ * and type; replace them with the coordinators' rules. The window says details are
+ * provisional for any event without coordinators in eventCatalog.ts.
  */
 
 /** Shared by every event: how the gate pass and event fee work on the day. */
 const COMMON_INSTRUCTIONS = [
-  'Register online for the PRAGYA 2026 gate pass (₹100 per person) before the event.',
+  'Register online for the PRAGYA 2026 gate pass (₹100 per person) by 11:59 PM on 16 October 2026.',
+  'Your participant pass is emailed once the organisers verify your payment.',
   'Event registration is on-site only: ₹50 per event, paid at the venue.',
-  'Carry your college ID card and the gate pass payment screenshot.',
+  'Carry your college ID card and your participant pass (printed or on your phone).',
   'Report to the event venue at least 30 minutes before the start.',
 ];
 
 export const eventInfo: Record<string, EventInfo> = {
   'pro-pitch': {
-    type: 'Technical · Team event',
-    team: '2 to 3 members per team',
+    type: 'Technical · Individual or team',
+    team: 'Individual or team',
     rounds: [
-      {
-        name: 'Round 1: Prompt & Build',
-        detail: 'Build a working app prototype from a problem statement using AI tools (90 minutes).',
-      },
-      { name: 'Round 2: Pitch', detail: 'Demo the app and pitch it to the judges (5 minutes + 2 minutes Q&A).' },
+      { name: 'Round 1: Prompt & build', detail: 'Build a working app for the idea you draw, using AI prompts (40 minutes).' },
+      { name: 'Round 2: Final build', detail: 'Round 1 qualifiers take their app further; the final working app is evaluated (40 minutes).' },
     ],
     procedure: [
-      'Problem statements are revealed at the start of Round 1.',
-      'Teams pick one statement and build a prototype with AI coding and design tools.',
-      'Shortlisted teams present a live demo and a short pitch in Round 2.',
+      'Each participant or team draws an app idea by lucky draw.',
+      'Develop a functional app for it with AI prompts: code, design and features.',
+      'Round 1 qualifiers proceed to Round 2, where the working app itself is evaluated.',
     ],
     rules: [
-      'AI assistants and no-code tools are allowed; the work must be built during the event.',
-      'Bring your own laptop and charger; internet access is provided.',
-      'The app must run during the demo; screenshots alone are not accepted.',
-      'Pre-built projects lead to disqualification.',
+      'AI tools such as ChatGPT, Gemini, Claude and Copilot are allowed for coding, design, features and development.',
+      'Screenshots are not accepted as the final output: the app must work.',
+      'Do not copy or reveal the exact name of the reference app; give your app a new and unique name.',
     ],
-    judging: ['Fit to the problem', 'Working prototype', 'Creativity and user experience', 'Clarity of the pitch'],
+    judging: ['Functionality', 'Creativity', 'AI prompt usage', 'UI and design', 'Final app quality'],
     instructions: COMMON_INSTRUCTIONS,
   },
   'viz-craft': {
     type: 'Technical · Individual or pair',
-    team: '1 or 2 members',
+    team: 'Individual or up to 2 participants',
     rounds: [
-      { name: 'Round 1: Dataset challenge', detail: 'Visualise a dataset given on the spot (60 minutes).' },
-      { name: 'Round 2: Data story', detail: 'Present your dashboard and its key insights (3 minutes).' },
+      { name: 'Round 1: Dataset', detail: 'Analyse the dataset provided and visualise what it shows (30 minutes).' },
+      { name: 'Round 2: New dataset', detail: 'Qualifiers work on a fresh dataset and present their insights (30 minutes).' },
     ],
     procedure: [
-      'Each team receives the same dataset at the start.',
-      'Build charts or a dashboard that answers the questions given with the data.',
-      'Shortlisted teams explain their findings to the judges.',
+      'A dataset is provided at the start of each round.',
+      'Create suitable visualizations and explain the insights you find.',
+      'Round 1 qualifiers proceed to Round 2.',
     ],
     rules: [
-      'Any tool is allowed: Excel, Power BI, Tableau, Python or similar.',
-      'Bring your own laptop with your tools installed.',
-      'Use only the dataset provided.',
+      'AI tools may be used for data analysis, visualization suggestions and assistance.',
+      'Excel, Power BI, Python or other approved tools may be used.',
     ],
-    judging: ['Accuracy of the data', 'Clarity of the visuals', 'Design', 'Insight and storytelling'],
+    judging: ['Data accuracy', 'Visualization quality', 'Insight interpretation', 'Creativity', 'Presentation'],
     instructions: COMMON_INSTRUCTIONS,
   },
   'paper-presentation': {
     type: 'Technical · Individual or team',
-    team: '1 to 3 members',
+    team: 'Individual or team',
     rounds: [
-      { name: 'Round 1: Abstract screening', detail: 'Submit an abstract before the deadline; selected papers are announced.' },
-      { name: 'Round 2: Presentation', detail: 'Present your paper (7 minutes + 3 minutes Q&A).' },
+      { name: 'Round 1: Presentation', detail: 'Present your paper with PowerPoint (5 minutes), followed by a short Q&A.' },
+      { name: 'Round 2: Final presentation', detail: 'Selected participants present again (5 minutes), followed by a short Q&A.' },
     ],
     procedure: [
-      'Send a one-page abstract on a topic in AI, data science or emerging technology.',
-      'Shortlisted teams prepare slides and present on the day.',
-      'Judges ask questions after each presentation.',
+      'Submit your paper and PPT before the event.',
+      'Present a research-based or innovative technical topic to the judges.',
+      'Round 1 selections proceed to Round 2 (about 15 minutes per team in all).',
     ],
     rules: [
-      'The paper must be your own original work.',
-      'Bring slides as PPT or PDF on a pen drive.',
-      'Stay within the time limit; time is strictly kept.',
+      'The paper and PPT must be submitted before the event.',
+      'The presentation must use PowerPoint.',
+      'Finish within the time given; each presentation is followed by a short Q&A.',
     ],
-    judging: ['Originality', 'Technical depth', 'Presentation', 'Answers to questions'],
+    judging: ['Technical content', 'Originality', 'Presentation skill', 'Clarity', 'Q&A'],
     instructions: COMMON_INSTRUCTIONS,
   },
   'code-flex': {
     type: 'Technical · Individual event',
     team: 'Individual',
     rounds: [
-      { name: 'Round 1: Debug & MCQ', detail: 'Find the bugs and answer programming questions (30 minutes).' },
-      { name: 'Round 2: Coding', detail: 'Solve programming problems in C, C++, Java or Python (60 minutes).' },
+      { name: 'Round 1', detail: 'Solve the given programming problems (30 minutes).' },
+      { name: 'Round 2', detail: 'Qualifiers solve the final round of problems (30 minutes).' },
     ],
     procedure: [
-      'Round 1 shortlists participants for the coding round.',
-      'In Round 2, solve as many problems as you can in any of the allowed languages.',
-      'Solutions are checked against hidden test cases.',
+      'Choose any permitted language: Python, Java, C or C++.',
+      'Solve the problems and submit your source code within the time given.',
+      'Round 1 qualifiers proceed to Round 2.',
     ],
     rules: [
-      'Systems are provided; no internet, phones or notes are allowed.',
-      'Allowed languages: C, C++, Java and Python.',
-      'Copied code leads to disqualification.',
+      'Internet, AI tools and external assistance are not allowed.',
+      'Allowed languages: Python, Java, C and C++.',
+      'Source code must be submitted within the given time.',
     ],
-    judging: ['Correct output', 'Number of problems solved', 'Efficiency of the solution', 'Time taken'],
+    judging: ['Correctness', 'Logic', 'Efficiency', 'Completion time'],
     instructions: COMMON_INSTRUCTIONS,
   },
   cognix: {
-    type: 'Technical · Team quiz',
-    team: '2 members per team',
+    type: 'Technical · Individual quiz',
+    team: 'Individual',
     rounds: [
-      { name: 'Round 1: Prelims', detail: 'A written round of 25 questions (20 minutes).' },
-      { name: 'Round 2: Finals', detail: 'The top teams compete on stage in themed and rapid-fire rounds.' },
+      { name: 'Round 1: Preliminary', detail: '20 questions (30 minutes); the top scorers are shortlisted.' },
+      { name: 'Round 2: Final', detail: '20 questions for the shortlisted participants (30 minutes).' },
     ],
     procedure: [
-      'All teams take the written prelims at the same time.',
-      'The highest-scoring teams move on to the stage finals.',
-      'Questions cover technology, computing, AI and current tech news.',
+      'Questions cover AI, data science, machine learning, deep learning, generative AI, recent AI technologies and AI current affairs.',
+      'Round 1 is the preliminary round; shortlisted participants proceed to Round 2.',
     ],
     rules: [
-      'No phones or other devices during the quiz.',
-      'Answers must be given within the time allowed.',
-      "The quizmaster's decision is final.",
+      'Internet, AI tools and external assistance are not allowed.',
+      'Each round has 20 questions and 30 minutes.',
     ],
-    judging: ['Total points across rounds', 'Tie-breaker question if scores are level'],
+    judging: ['Accuracy', 'Completion time'],
     instructions: COMMON_INSTRUCTIONS,
   },
   'visual-logo-design': {
