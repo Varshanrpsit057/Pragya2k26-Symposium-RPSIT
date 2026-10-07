@@ -496,7 +496,7 @@
 }
 
 .reg-pay__qr {
-  width: 8.25rem;
+  width: 14rem;
   height: auto;
   border-radius: var(--r-sm);
   background: #fff;
@@ -661,6 +661,20 @@
 
 .reg__required span {
   color: var(--c-flare);
+}
+
+.reg__fallback {
+  padding-top: 1rem;
+  border-top: 1px solid var(--c-line);
+  font-size: var(--step--1);
+  color: var(--c-text-muted);
+  text-align: center;
+}
+
+.reg__fallback-link {
+  color: var(--c-synapse);
+  font-weight: 600;
+  text-underline-offset: 0.2em;
 }
 
 /* Success */

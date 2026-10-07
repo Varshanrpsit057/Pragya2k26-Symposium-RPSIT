@@ -35,6 +35,7 @@ export const crew: CrewMember[] = [
     name: 'Varshan C',
     role: 'UI/UX Design',
     study: CLASS,
+    credited: true,
     photo: portraitFor('varshan-c'),
     links: [
       { kind: 'linkedin', url: 'https://www.linkedin.com/in/varshan-c-56b30a339' },
@@ -46,6 +47,7 @@ export const crew: CrewMember[] = [
     name: 'Barath S',
     role: 'Prompt Engineer & API Authenticator',
     study: CLASS,
+    credited: true,
     photo: portraitFor('barath-s'),
     links: [
       { kind: 'linkedin', url: 'https://www.linkedin.com/in/barath-sivalingam-4ba41a330' },

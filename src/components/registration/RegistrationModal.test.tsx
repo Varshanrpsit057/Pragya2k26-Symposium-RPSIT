@@ -501,4 +501,24 @@ describe('Registration window lock', () => {
     window.dispatchEvent(leaving);
     expect(leaving.defaultPrevented).toBe(true);
   });
+
+  it('shows the UPI ID, the payee and the QR code for the gate pass payment', () => {
+    renderWithForm();
+    const dialog = openForm();
+
+    const { upiId, payee, qrImage } = site.registration.payment;
+    expect(within(dialog).getByText(String(upiId))).toBeInTheDocument();
+    expect(dialog.textContent).toContain(String(payee));
+    expect(within(dialog).getByRole('img', { name: `UPI QR code for ${upiId}` })).toHaveAttribute('src', String(qrImage));
+  });
+
+  it('offers the Google Form at the end, for when the site itself fails', () => {
+    renderWithForm();
+    const dialog = openForm();
+
+    const link = within(dialog).getByRole('link', { name: 'Google Form' });
+    expect(link).toHaveAttribute('href', String(site.registration.fallbackFormUrl));
+    expect(link).toHaveAttribute('target', '_blank');
+    expect(link).toHaveAttribute('rel', 'noopener noreferrer');
+  });
 });

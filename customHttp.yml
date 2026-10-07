@@ -17,6 +17,17 @@ customHeaders:
     headers:
       - key: 'Cache-Control'
         value: 'public, max-age=31536000, immutable'
+  # Fonts in public/ keep one stable name and never change in place; a new cut gets a new name.
+  - pattern: '/fonts/**'
+    headers:
+      - key: 'Cache-Control'
+        value: 'public, max-age=31536000, immutable'
+  # Images in public/ keep their names, so they are NOT immutable: the payment QR has to be
+  # replaceable within a day, not stuck in caches for a year.
+  - pattern: '/images/**'
+    headers:
+      - key: 'Cache-Control'
+        value: 'public, max-age=86400, must-revalidate'
   # The admin dashboard: never framed, cached or indexed; only this site's own code may run,
   # and it may talk only to the AWS API and the private S3 links the API hands out.
   - pattern: '/landing/**'
