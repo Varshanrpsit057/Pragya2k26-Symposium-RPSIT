@@ -1,0 +1,40 @@
+/*
+ * The emblem layer: above the sky (z-index -3) and the hero's shade (-2), below all of the
+ * page's content. Placed and faded by BrandEmblem.tsx.
+ */
+.brand-emblem {
+  position: fixed;
+  top: 0;
+  left: 0;
+  z-index: -1;
+  visibility: hidden;
+  transform-origin: 50% 50%;
+  pointer-events: none;
+  will-change: transform, opacity;
+}
+
+.brand-emblem[data-ready] {
+  visibility: visible;
+}
+
+.brand-emblem__art {
+  display: block;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+}
+
+.brand-emblem[data-ready] .brand-emblem__art {
+  animation: brand-emblem-in 1.2s var(--ease-out) 0.1s both;
+}
+
+@keyframes brand-emblem-in {
+  from {
+    opacity: 0;
+    transform: scale(0.9);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}

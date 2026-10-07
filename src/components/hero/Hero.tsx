@@ -1,9 +1,12 @@
-import pragyaLogo from '../../assets/brand/pragya-2k26-logo.webp';
 import { site } from '../../content/site';
+import { EMBLEM_SLOT_ID } from '../brand/BrandEmblem';
 import { RegisterButton } from '../ui/RegisterButton';
 import { SpecularButton } from '../ui/SpecularButton';
 import { Countdown } from './Countdown';
 import './Hero.css';
+
+/** 'PRAGYA' and '2026' → the edition mark '2K26'. */
+const edition = `${site.year.slice(0, 1)}K${site.year.slice(-2)}`;
 
 export function Hero() {
   // The date is shown large in the lockup; only the venue is left for the facts below.
@@ -20,12 +23,21 @@ export function Hero() {
             <span className="hero__department-of">Department of</span>
             <span className="hero__department-name">{site.department}</span>
           </p>
+          {/* The emblem (BrandEmblem, a background layer) appears in this square, then drifts
+              into the background as the page scrolls. */}
+          <div id={EMBLEM_SLOT_ID} className="hero__emblem-slot" aria-hidden="true" />
           <h1 id="hero-title" className="hero__title">
             <span className="sr-only">
               {site.name} {site.year}
             </span>
-            {/* The PRAGYA 2K26 emblem and wordmark; the heading text above is what is read out */}
-            <img className="hero__logo" src={pragyaLogo} alt="" width={580} height={448} fetchPriority="high" />
+            <span className="hero__wordmark" aria-hidden="true">
+              {site.name}
+            </span>
+            <span className="hero__edition" aria-hidden="true">
+              <span className="hero__edition-rule" />
+              {edition}
+              <span className="hero__edition-rule" />
+            </span>
           </h1>
           {site.dates && <p className="hero__date">{site.dates}</p>}
         </div>
@@ -36,7 +48,7 @@ export function Hero() {
 
         <div className="hero__actions">
           <RegisterButton size="lg" magnetic className="spec-btn--intro" />
-          <SpecularButton href="#events" variant="ghost" size="lg">
+          <SpecularButton href="#technical" variant="ghost" size="lg">
             Explore the events
           </SpecularButton>
         </div>

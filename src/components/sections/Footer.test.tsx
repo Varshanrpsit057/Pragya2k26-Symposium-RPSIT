@@ -1,8 +1,6 @@
-import { fireEvent, render, screen, within } from '@testing-library/react';
+import { render, screen, within } from '@testing-library/react';
 import { afterEach, describe, expect, it } from 'vitest';
-import { crew } from '../../content/crew';
 import { site } from '../../content/site';
-import { SiteModalsProvider } from '../modal/SiteModals';
 import { CONTACT_PENDING_MESSAGE, Footer } from './Footer';
 
 const originalContacts = site.contacts;
@@ -16,24 +14,28 @@ afterEach(() => {
 });
 
 describe('Footer', () => {
-  it('opens the Dev Crew from the incognito button beside "Developed by"', () => {
-    render(
-      <SiteModalsProvider>
-        <Footer links={[]} />
-      </SiteModalsProvider>,
-    );
-
-    expect(screen.queryByRole('dialog', { name: 'Dev Crew' })).toBeNull();
-    fireEvent.click(screen.getByRole('button', { name: 'Meet the Dev Crew' }));
-    expect(screen.getByRole('dialog', { name: 'Dev Crew' })).toHaveAttribute('open');
-  });
-
-  it('shows each developer with their role and class', () => {
+  it('credits only Mohan Prabu K under "Developed by", with his role and class', () => {
     render(<Footer links={[]} />);
 
-    expect(screen.getByText('Senior Developer · III Year – AI&DS')).toBeInTheDocument();
-    expect(screen.getByText('Frontend Developer · III Year – AI&DS')).toBeInTheDocument();
-    expect(screen.getByText('Backend Developer · III Year – AI&DS')).toBeInTheDocument();
+    const credits = screen.getByRole('heading', { name: 'Developed by' }).closest('.footer__credits') as HTMLElement;
+    expect(within(credits).getAllByRole('listitem')).toHaveLength(1);
+    expect(within(credits).getByText('Mohan Prabu K')).toBeInTheDocument();
+    expect(within(credits).getByText('Senior Developer · III Year – AI&DS')).toBeInTheDocument();
+    expect(within(credits).queryByText(/Varshan|Barath/)).toBeNull();
+  });
+
+  it('leaves the Dev Crew button to the navigation', () => {
+    render(<Footer links={[]} />);
+
+    expect(screen.queryByRole('button', { name: 'Meet the Dev Crew' })).toBeNull();
+  });
+
+  it('gives the overall coordinator as the contact, with a number to call', () => {
+    render(<Footer links={[]} />);
+
+    expect(screen.getByRole('heading', { name: 'Coordinator contact' })).toBeInTheDocument();
+    expect(screen.getByText('Balajimanikandhaan S.S')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: '+91 73582 13736' })).toHaveAttribute('href', 'tel:+917358213736');
   });
 
   it('says contact details are coming while none are set', () => {
@@ -62,12 +64,12 @@ describe('Footer', () => {
     expect(screen.getAllByText(new RegExp(site.institution)).length).toBeGreaterThan(0);
   });
 
-  it('gives the college address and website, without phone numbers', () => {
+  it('gives the college address and website, without college phone numbers', () => {
     render(<Footer links={[]} />);
 
     expect(screen.getByText(/Poosaripatty, Kadayampatty Taluk, Salem – 636305/)).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'www.rpsit.ac.in' })).toHaveAttribute('href', 'https://www.rpsit.ac.in/');
-    expect(document.querySelector('a[href^="tel:"]')).toBeNull();
+    expect(document.querySelector('.footer__info a[href^="tel:"]')).toBeNull();
     expect(screen.queryByText(/Admin Office|Admission Cell/)).toBeNull();
   });
 
@@ -82,6 +84,14 @@ describe('Footer', () => {
     const { container } = render(<Footer links={[]} />);
 
     expect(container.querySelector('img.footer__logo')).toHaveAttribute('src', '/images/rpsit-logo-sm.webp');
+  });
+
+  it('puts the map beside the credits, after the contact details', () => {
+    const { container } = render(<Footer links={[]} />);
+
+    const blocks = [...container.querySelectorAll('.footer__grid > *')].map((block) => block.className);
+    expect(blocks).toEqual(['footer__brand', 'footer__contact', 'footer__more', 'footer__location']);
+    expect(container.querySelector('.footer__more .footer__credits')).not.toBeNull();
   });
 
   it('embeds the campus map lazily and links to it on Google Maps', () => {
@@ -107,14 +117,13 @@ describe('Footer', () => {
     );
   });
 
-  it('credits the developers with their profiles', () => {
+  it('links the credited developer\'s profiles', () => {
     render(<Footer links={[]} />);
 
     const credits = screen.getByRole('heading', { name: 'Developed by' }).closest('.footer__credits') as HTMLElement;
-    crew.forEach((member) => expect(within(credits).getByText(member.name)).toBeInTheDocument());
-    expect(within(credits).getByRole('link', { name: 'Barath S on GitHub (opens in a new tab)' })).toHaveAttribute(
+    expect(within(credits).getByRole('link', { name: 'Mohan Prabu K on GitHub (opens in a new tab)' })).toHaveAttribute(
       'href',
-      'https://github.com/Barath-S-07',
+      'https://github.com/MohanPrabu018-K',
     );
   });
 });

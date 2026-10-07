@@ -20,10 +20,11 @@ interface EventsSectionProps {
 const ACCENTS: Record<EventCategory, string> = { technical: '#45e3ff', 'non-technical': '#ff5cc8' };
 
 /**
- * One track's five events as React Bits' Accordion Gallery: the open panel shows the event
- * (name, description, See More, Register Now); hovering, focusing or tapping another opens it.
- * Phones stack the panels in a column. The carousel, the map of events and #event-… links
- * open an event here (lib/eventFocus.ts).
+ * One track's five events as React Bits' Accordion Gallery. All five rest side by side until
+ * one is reached: hovering, focusing or tapping a panel opens it to show the event (name,
+ * description, See More, Register Now), and moving the mouse away folds it back. Phones stack
+ * the panels in a column. The carousel and #event-… links open an event here
+ * (lib/eventFocus.ts).
  */
 export function EventsSection({ category, title, lead }: EventsSectionProps) {
   const list = eventsByCategory(category);
@@ -31,7 +32,8 @@ export function EventsSection({ category, title, lead }: EventsSectionProps) {
   const stacked = useMediaQuery('(max-width: 640px)');
   const roomy = useMediaQuery('(min-width: 960px)');
 
-  const [active, setActive] = useState(Math.min(2, list.length - 1));
+  // None open until the visitor reaches a panel (or another part of the page opens one).
+  const [active, setActive] = useState(-1);
   // A request to show an event (from elsewhere on the page) opens its panel, once per request.
   const focus = useSyncExternalStore(subscribeEventFocus, getEventFocus, getServerEventFocus);
   const [handled, setHandled] = useState(0);
@@ -76,6 +78,7 @@ export function EventsSection({ category, title, lead }: EventsSectionProps) {
             accentColor={ACCENTS[category]}
             overlayColor="#05061a"
             trigger="hover"
+            collapseOnLeave
             ariaLabel={title}
           />
         </div>

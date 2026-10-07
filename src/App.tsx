@@ -1,4 +1,5 @@
 import { SkyBackdrop } from './components/background/SkyBackdrop';
+import { BrandEmblem } from './components/brand/BrandEmblem';
 import { EventOrbit } from './components/events/EventOrbit';
 import { EventsSection } from './components/events/EventsSection';
 import { Hero } from './components/hero/Hero';
@@ -48,7 +49,7 @@ export function App() {
 }
 
 function Page() {
-  const { openRegistration } = useSiteModals();
+  const { openRegistration, openDevCrew } = useSiteModals();
 
   return (
     <>
@@ -56,12 +57,14 @@ function Page() {
         Skip to content
       </a>
       <SkyBackdrop />
+      <BrandEmblem />
       <PillNav
         items={NAV_ITEMS}
         sectionIds={SECTION_IDS}
         brandLabel={site.name}
         cta={REGISTER_ITEM}
         onCtaClick={() => openRegistration()}
+        onCrewClick={openDevCrew}
       />
 
       <main id="main">

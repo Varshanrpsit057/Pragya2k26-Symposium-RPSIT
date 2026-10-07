@@ -79,6 +79,12 @@
   --ag-dim: 0;
 }
 
+/* site: nothing open yet, the panels rest side by side (see IDLE_* in the component) */
+.accordion-gallery[data-idle] .ag-panel__media {
+  --ag-gray: 0.45;
+  --ag-dim: 0.22;
+}
+
 .accordion-gallery--vertical .ag-panel__media {
   width: 100%;
   height: var(--ag-media-size);

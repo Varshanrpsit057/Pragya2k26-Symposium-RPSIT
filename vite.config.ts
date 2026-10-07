@@ -68,6 +68,8 @@ export default defineConfig({
           include: ['src/**/*.test.{ts,tsx}'],
           environment: 'jsdom',
           setupFiles: ['./src/test/polyfills.ts', './src/test/setup.ts'],
+          // Rendering the whole page in jsdom takes several seconds while every file runs at once.
+          testTimeout: 20_000,
         },
       },
       {

@@ -10,7 +10,8 @@ import './DriftWall.css';
  * the wall is off screen. Tiles lift on hover. Purely decorative.
  */
 
-const COLUMNS = 7;
+/** Matches the plane's grid in DriftWall.css. */
+const COLUMNS = 9;
 
 const columns = Array.from({ length: COLUMNS }, (_, c) => {
   const offset = (c * 3) % events.length;

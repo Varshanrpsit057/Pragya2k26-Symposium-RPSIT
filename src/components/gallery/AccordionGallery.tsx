@@ -25,7 +25,10 @@ import './AccordionGallery.css';
  *    inert while its panel is folded, so hidden buttons are never focused;
  *  - `peek` is a short name shown on folded panels, so every strip says what it is;
  *  - `id` gives a panel an address for links (#event-…);
- *  - the first paint (prerendered HTML, before GSAP runs) already shows the opened layout.
+ *  - an index of -1 means no panel is open: all of them rest side by side, evenly, until
+ *    one is hovered, tapped or focused; with `collapseOnLeave` the row folds back to that
+ *    rest when the mouse leaves it;
+ *  - the first paint (prerendered HTML, before GSAP runs) already shows the right layout.
  */
 
 export interface AccordionItem {
@@ -42,8 +45,9 @@ export interface AccordionItem {
 
 export interface AccordionGalleryProps {
   items?: AccordionItem[];
+  /** The panel open at first; -1 for none. */
   defaultIndex?: number;
-  /** Controlled open panel (with onActiveChange). */
+  /** Controlled open panel (with onActiveChange); -1 for none. */
   activeIndex?: number;
   onActiveChange?: (index: number) => void;
   accentColor?: string;
@@ -64,6 +68,8 @@ export interface AccordionGalleryProps {
   grayscale?: boolean;
   /** How the panel images load (lazy below the fold). */
   loading?: 'lazy' | 'eager';
+  /** Fold every panel back when the mouse leaves the row (hover trigger only). */
+  collapseOnLeave?: boolean;
   className?: string;
   ariaLabel?: string;
 }
@@ -77,6 +83,10 @@ const DEFAULT_ITEMS: AccordionItem[] = [
 ];
 
 const clampRatio = (ratio: number) => Math.min(Math.max(ratio, 0.2), 0.9);
+
+/** Folded panels at rest (none open): partly in colour and a little dimmed. */
+const IDLE_GRAY = 0.45;
+const IDLE_DIM = 0.22;
 
 /** flex-grow of the open panel, so that it takes `ratio` of the row. */
 const growFor = (ratio: number, count: number) => {
@@ -106,6 +116,7 @@ export default function AccordionGallery({
   showLabels = true,
   grayscale = true,
   loading = 'lazy',
+  collapseOnLeave = false,
   className = '',
   ariaLabel = 'Image accordion gallery',
 }: AccordionGalleryProps) {
@@ -121,7 +132,7 @@ export default function AccordionGallery({
 
   const vertical = orientation === 'vertical';
   const count = items.length;
-  const clampIndex = (index: number) => Math.min(Math.max(index, 0), count - 1);
+  const clampIndex = (index: number) => (index < 0 ? -1 : Math.min(index, count - 1));
   const [ownActive, setOwnActive] = useState(() => clampIndex(defaultIndex));
   const active = activeIndex === undefined ? ownActive : clampIndex(activeIndex);
   // The panel that is open in the prerendered HTML; its inline styles never change after
@@ -149,6 +160,7 @@ export default function AccordionGallery({
       const dur = animate && !prefersReduced ? duration : 0;
       const tl = gsap.timeline();
 
+      const idle = active < 0;
       panels.forEach((panel, i) => {
         if (!panel) return;
         const isActive = i === active;
@@ -157,15 +169,16 @@ export default function AccordionGallery({
         const text = textRefs.current[i];
         const peek = peekRefs.current[i];
 
-        const rot = isActive ? 0 : i < active ? tilt : -tilt;
+        // At rest (none open) the panels stand flat, side by side.
+        const rot = isActive || idle ? 0 : i < active ? tilt : -tilt;
         const rotProp = vertical ? { rotateX: -rot } : { rotateY: rot };
 
         tl.to(panel, { flexGrow: isActive ? grow : 1, ...rotProp, duration: dur, ease }, 0);
 
         if (media) {
-          const drift = Math.max(-1.5, Math.min(1.5, active - i));
+          const drift = idle ? 0 : Math.max(-1.5, Math.min(1.5, active - i));
           const shift = drift * parallax * mediaSize * 0.06;
-          const gray = grayscale ? (isActive ? 0 : 1) : 0;
+          const gray = grayscale ? (isActive ? 0 : idle ? IDLE_GRAY : 1) : 0;
           tl.to(
             media,
             {
@@ -174,7 +187,7 @@ export default function AccordionGallery({
               x: vertical ? 0 : isActive ? 0 : shift,
               y: vertical ? (isActive ? 0 : shift) : 0,
               '--ag-gray': gray,
-              '--ag-dim': isActive ? 0 : 0.35,
+              '--ag-dim': isActive ? 0 : idle ? IDLE_DIM : 0.35,
               duration: dur,
               ease,
             },
@@ -245,6 +258,10 @@ export default function AccordionGallery({
     if (e.movementX !== 0 || e.movementY !== 0) setActive(i);
   };
 
+  const handleLeave = (e: PointerEvent) => {
+    if (collapseOnLeave && trigger === 'hover' && e.pointerType === 'mouse' && active >= 0) setActive(-1);
+  };
+
   const handleClick = (i: number, e: MouseEvent) => {
     if (i !== active) {
       e.preventDefault();
@@ -286,11 +303,13 @@ export default function AccordionGallery({
       }
       role="list"
       aria-label={ariaLabel}
+      data-idle={active < 0 ? '' : undefined}
+      onPointerLeave={handleLeave}
     >
       {items.map((item, i) => {
         const isActive = i === active;
         const Tag = item.link ? 'a' : 'div';
-        const firstRot = i === firstActive ? 0 : i < firstActive ? tilt : -tilt;
+        const firstRot = firstActive < 0 || i === firstActive ? 0 : i < firstActive ? tilt : -tilt;
         return (
           <Tag
             key={item.id ?? i}

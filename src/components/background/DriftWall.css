@@ -6,14 +6,18 @@
   perspective-origin: 50% 30%;
 }
 
+/*
+ * Tilted back and turned, the plane's far (top) edge recedes and its corners swing in, so
+ * it reaches well past the section on every side; otherwise the corners show bare sky.
+ */
 .drift-wall__plane {
   position: absolute;
-  top: -40%;
-  left: -15%;
-  right: -15%;
-  bottom: -40%;
+  top: -90%;
+  left: -30%;
+  right: -30%;
+  bottom: -50%;
   display: grid;
-  grid-template-columns: repeat(7, minmax(9.5rem, 1fr));
+  grid-template-columns: repeat(9, minmax(9.5rem, 1fr));
   gap: 1rem;
   transform: rotateX(52deg) rotateZ(-16deg) translateZ(-60px);
   transform-style: preserve-3d;

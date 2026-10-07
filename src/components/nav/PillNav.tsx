@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type MouseEvent } from 'react';
 import { useScrollSpy } from '../../hooks/useScrollSpy';
+import { IncognitoIcon } from '../icons/IncognitoIcon';
 import './PillNav.css';
 
 /*
@@ -21,12 +22,14 @@ interface PillNavProps {
   cta: NavItem;
   /** Run instead of following the CTA's link (it opens the registration form). */
   onCtaClick?: () => void;
+  /** Opens the Dev Crew: an incognito button right after the last link (Contact). */
+  onCrewClick?: () => void;
 }
 
 // Runs before paint in the browser; harmless no-op during server rendering.
 const useIsomorphicLayoutEffect = typeof window === 'undefined' ? useEffect : useLayoutEffect;
 
-export function PillNav({ items, sectionIds, brandLabel, cta, onCtaClick }: PillNavProps) {
+export function PillNav({ items, sectionIds, brandLabel, cta, onCtaClick, onCrewClick }: PillNavProps) {
   const activeId = useScrollSpy(sectionIds);
   const [menuOpen, setMenuOpen] = useState(false);
   const listRef = useRef<HTMLUListElement>(null);
@@ -129,6 +132,18 @@ export function PillNav({ items, sectionIds, brandLabel, cta, onCtaClick }: Pill
               </li>
             ))}
           </ul>
+          {onCrewClick && (
+            <button
+              type="button"
+              className="icon-link pill-nav__crew"
+              aria-label="Meet the Dev Crew"
+              title="Meet the Dev Crew"
+              aria-haspopup="dialog"
+              onClick={onCrewClick}
+            >
+              <IncognitoIcon size={17} />
+            </button>
+          )}
         </div>
 
         <a
@@ -163,18 +178,39 @@ export function PillNav({ items, sectionIds, brandLabel, cta, onCtaClick }: Pill
         inert={!menuOpen}
       >
         <ul>
-          {[...items, cta].map((item) => (
+          {items.map((item) => (
             <li key={item.id}>
-              <a
-                href={`#${item.id}`}
-                aria-current={activeId === item.id ? 'true' : undefined}
-                aria-haspopup={item === cta && onCtaClick ? 'dialog' : undefined}
-                onClick={item === cta ? handleCtaClick : closeMenu}
-              >
+              <a href={`#${item.id}`} aria-current={activeId === item.id ? 'true' : undefined} onClick={closeMenu}>
                 {item.label}
               </a>
             </li>
           ))}
+          {onCrewClick && (
+            <li>
+              <button
+                type="button"
+                className="pill-nav__menu-crew"
+                aria-haspopup="dialog"
+                onClick={() => {
+                  closeMenu();
+                  onCrewClick();
+                }}
+              >
+                <IncognitoIcon size={18} />
+                Dev Crew
+              </button>
+            </li>
+          )}
+          <li>
+            <a
+              href={`#${cta.id}`}
+              aria-current={activeId === cta.id ? 'true' : undefined}
+              aria-haspopup={onCtaClick ? 'dialog' : undefined}
+              onClick={handleCtaClick}
+            >
+              {cta.label}
+            </a>
+          </li>
         </ul>
       </div>
     </header>

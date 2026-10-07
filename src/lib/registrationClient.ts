@@ -56,6 +56,7 @@ export interface OwnRegistration {
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 const UNREACHABLE = "Couldn't reach the registration server. Check your connection and try again.";
+const BUSY = 'The registration server is very busy right now. Please wait a minute and try again. You will not be registered twice.';
 const NOT_CONNECTED = 'Online registration is not connected yet. Please try again later or contact the organisers.';
 const UPLOAD_FAILED = 'Your payment screenshot could not be uploaded. Check your connection and try again.';
 
@@ -115,13 +116,14 @@ async function postJson<T extends { success: true }>(
       await sleep(retryAfterMs(response, retryDelay));
       continue;
     }
-    // A gateway in front of the API answered instead of it.
-    if (!data && isGatewayError(response.status)) {
+    // A gateway in front of the API answered instead of it: down, restarting or throttling.
+    const fromGateway = typeof data?.success !== 'boolean';
+    if (fromGateway && (isGatewayError(response.status) || response.status === 429)) {
       if (retryDelay !== undefined) {
-        await sleep(retryDelay);
+        await sleep(retryAfterMs(response, retryDelay));
         continue;
       }
-      throw new RegistrationError(UNREACHABLE);
+      throw new RegistrationError(response.status === 429 ? BUSY : UNREACHABLE);
     }
 
     const failure = data && !data.success ? data : null;

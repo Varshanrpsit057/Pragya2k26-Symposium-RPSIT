@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { events } from '../content/events';
+import { site } from '../content/site';
 import {
   DEPARTMENTS,
   EMPTY_REGISTRATION,
@@ -73,6 +74,13 @@ describe('isRegistrationClosed', () => {
     expect(isRegistrationClosed(closesAt, closesAtMs - 1)).toBe(false);
     expect(isRegistrationClosed(closesAt, closesAtMs)).toBe(true);
     expect(isRegistrationClosed(closesAt, closesAtMs + 86_400_000)).toBe(true);
+  });
+
+  it("closes the site's registration at 11:59 PM IST on 16 October 2026", () => {
+    const deadline = Date.parse('2026-10-16T18:29:00Z');
+    expect(site.registration.closesAt).toBe('2026-10-16T23:59:00');
+    expect(isRegistrationClosed(site.registration.closesAt, deadline - 1)).toBe(false);
+    expect(isRegistrationClosed(site.registration.closesAt, deadline)).toBe(true);
   });
 
   it('never closes when no closing time is set', () => {
@@ -342,6 +350,32 @@ describe('submitRegistration', () => {
     );
     expect((await submitRegistration(valid, { apiBase, ...submitOptions, fetchImpl })).registrationId).toBe('PRG26-0045');
     expect(registerCalls(fetchImpl)).toHaveLength(2);
+  });
+
+  it('waits out the gateway throttle and gets through, with the same submission id', async () => {
+    const throttled = () => json({ message: 'Too Many Requests' }, { status: 429 });
+    const fetchImpl = api(throttled(), success({ registrationId: 'PRG26-0046' }));
+
+    expect((await submitRegistration(valid, { apiBase, ...submitOptions, fetchImpl })).registrationId).toBe('PRG26-0046');
+    expect(registerCalls(fetchImpl)).toHaveLength(2);
+  });
+
+  it('says the server is busy if the gateway keeps throttling', async () => {
+    const fetchImpl = api(...Array.from({ length: 3 }, () => json({ message: 'Too Many Requests' }, { status: 429 })));
+    const failure = await submitRegistration(valid, { apiBase, ...submitOptions, fetchImpl }).catch((error) => error);
+
+    expect(failure).toBeInstanceOf(RegistrationError);
+    expect(failure.message).toMatch(/very busy right now/);
+    expect(registerCalls(fetchImpl)).toHaveLength(3);
+  });
+
+  it("passes on the server's own rate limit without retrying", async () => {
+    const limited = json({ success: false, code: 'RATE_LIMITED', error: 'Too many registration attempts from your network.' }, { status: 429 });
+    const fetchImpl = api(limited);
+    const failure = await submitRegistration(valid, { apiBase, ...submitOptions, fetchImpl }).catch((error) => error);
+
+    expect(failure.message).toBe('Too many registration attempts from your network.');
+    expect(registerCalls(fetchImpl)).toHaveLength(1);
   });
 
   it("does not retry the server's own refusal", async () => {

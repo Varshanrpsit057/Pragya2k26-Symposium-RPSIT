@@ -37,7 +37,7 @@ const INNER_GRADIENT = 'linear-gradient(145deg,#60496e8c 0%,#71C4FF44 100%)';
 
 /**
  * The developers who built the site, on React Bits' Profile Card, in a window opened from
- * the incognito button beside "Developed by" in the footer. Each photo keeps its own
+ * the incognito button beside Contact in the navigation. Each photo keeps its own
  * background; the cards are static and only load when the window opens.
  */
 export function DevCrewModal({ open, onClose }: { open: boolean; onClose: () => void }) {

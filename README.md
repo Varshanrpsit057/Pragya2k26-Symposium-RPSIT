@@ -7,8 +7,12 @@ It is deployed straight from GitHub to **AWS Amplify**: no servers to run, no SS
 
 ## 1. Project overview
 
-- **Public website** (React + TypeScript + Vite, prerendered): hero with the PRAGYA 2K26 emblem and the
-  registration countdown, the ten events, the registration form, and the footer.
+- **Public website** (React + TypeScript + Vite, prerendered): the hero with the PRAGYA 2K26 emblem
+  (drawn in code, in the site's colours; scrolling turns it into a faint backdrop for the whole page)
+  and the countdown to the registration deadline (**11:59 PM IST, 16 October 2026**); the ten events,
+  folded until a visitor reaches one, each with a See More window (rules, time, venue, prizes,
+  coordinators); the registration form; and the footer (coordinator contact, credits beside the map).
+  The Dev Crew opens from the incognito button next to Contact in the navigation.
 - **Registration form**: participant details, event selection, the ₹100 gate-pass payment details,
   the payment screenshot and the transaction ID.
 - **Admin dashboard** at `/landing/admin/`: sign in, check each payment screenshot, then approve or
@@ -58,7 +62,7 @@ GitHub ──push──▶ AWS Amplify Hosting (build: amplify.yml)
   `/api/admin/*` route checks it on the server. Changing the password signs every session out.
 
 ```
-amplify/            backend.ts (DynamoDB, S3, HTTP API, CORS, throttling), functions/api (Lambda)
+amplify/            backend.ts (DynamoDB, S3, HTTP API, CORS, throttling, logs), functions/api (Lambda)
 server/             the API: http.ts (routes), service.ts (workflow), auth.ts, dynamoStore.ts,
                     files.ts (S3), sheets.ts, drive.ts, gmail.ts, google.ts, pass.ts (PDF), validate.ts
 src/                the website (content in src/content/), src/admin/ (dashboard)
@@ -66,6 +70,29 @@ landing/admin/      the dashboard's page (built to dist/landing/admin/index.html
 scripts/            google-auth.mjs, admin-password.ts, check-secrets.mjs, prerender.mjs
 amplify.yml         Amplify build;  customHttp.yml  security headers
 ```
+
+### Rate limiting and scale
+
+Every layer scales on demand (CloudFront, API Gateway, Lambda, DynamoDB on-demand, S3) and every
+layer has a limit, so a flood of requests is turned away cheaply instead of running up the bill:
+
+| Layer | Limit |
+| --- | --- |
+| Website (Amplify Hosting, CloudFront) | Static and cached at the edge. Optionally turn on the **Amplify firewall** (below). |
+| API Gateway, per route, all visitors together | `uploads`, `register` 50/s (burst 100) · `status` 25/s · `pass` 10/s · `admin/login` 2/s (burst 10) · other admin routes 20/s GET, 10/s POST · `health` 5/s · whole API 100/s (burst 200). Unknown paths get a 404 without running the function. |
+| Lambda, per network address | registration (upload + submit) `RATE_LIMIT_MAX` per `RATE_LIMIT_WINDOW_MINUTES` (300 per 10 min: a college network shares one address) · status/pass 120 per 10 min · admin sign-in 10 per 15 min |
+| Lambda, concurrency (optional) | `API_RESERVED_CONCURRENCY` caps simultaneous runs (e.g. `50`), which bounds cost and the Google API load |
+| Logs | API access logs (address, route, status, latency) and function logs, kept 3 months in CloudWatch |
+
+The limits per route are in `ROUTES` in `amplify/backend.ts`. A throttled form submission waits and
+tries again with the same submission id (never a second registration), then asks the student to try
+again in a minute.
+
+**Amplify firewall (recommended for the event).** In the Amplify console: **Hosting → Firewall →
+Enable firewall**, then add a rate-based rule (for example, block an address after 1,000 requests in
+5 minutes) and the **Amazon IP reputation list**. It is AWS WAF and adds a monthly AWS charge (see the
+Amplify Hosting and AWS WAF pricing pages before turning it on). It protects the website; the API is an API Gateway HTTP API, which WAF cannot be
+attached to, so the gateway throttles and per-address limits above protect it.
 
 ## 3. Settings
 
@@ -92,6 +119,7 @@ All values live in AWS, never in git. `.env.example` lists every name.
 | `GOOGLE_DRIVE_PASS_FOLDER_ID` | auto | folder for passes; empty: "Participant Passes" next to the payment folder |
 | `ALLOWED_ORIGINS` | none | extra site addresses allowed to call the API, e.g. a custom domain `https://pragya.rpsit.ac.in` |
 | `RATE_LIMIT_MAX` / `RATE_LIMIT_WINDOW_MINUTES` | `300` / `10` | registration requests per IP address per window |
+| `API_RESERVED_CONCURRENCY` | none | cap on simultaneous API runs, e.g. `50`; leave unset on a new AWS account (its concurrency quota may be too low to reserve any) |
 
 Set automatically (do not set them): `REGISTRATIONS_TABLE`, `CONTROL_TABLE`, `FILES_BUCKET` and the
 website's API address (`VITE_API_URL`, read from `amplify_outputs.json` at build time). Nothing in a
@@ -222,6 +250,8 @@ the build and the secret check.
 | Email status **FAILED** | Gmail refused it (see the error). Use **Retry failed steps**; it is also retried automatically. |
 | Email status **UNKNOWN** | Gmail did not confirm. Check the sender's Sent folder, then **Resend email** only if it is not there. |
 | "Too many sign-in attempts" | 10 wrong attempts from one address: wait 15 minutes. |
+| "The registration server is very busy" | A route's gateway throttle was reached (CloudWatch access logs show status 429). If it is genuine traffic, raise that route in `ROUTES` in `amplify/backend.ts` and push. |
+| Deploy fails on `ReservedConcurrentExecutions` | The account cannot reserve that much concurrency: lower or remove `API_RESERVED_CONCURRENCY`. |
 | `/landing/admin` shows the main page | Use `/landing/admin/`, or add a rewrite in **Hosting → Rewrites and redirects**: source `/landing/admin`, target `/landing/admin/index.html`, type `200`. |
 | First registration right after the very first deploy says "temporarily unavailable" | The ID counter starts from the sheet's highest ID; the schedule sets it up within 10 minutes of the first deploy, or check the Google settings. |
 
@@ -238,11 +268,16 @@ Turn on the pre-commit secret check once per clone: `git config core.hooksPath .
 If a real secret is ever committed or pushed, rotate it: deleting it from git is not enough.
 
 Content (dates, venue, fees, UPI details, contacts, events, rules) lives in `src/content/`:
-`site.ts` (dates, registration closing time, fees, payment details, college, socials), `events.ts`
-and `eventCatalog.ts` (the ten events), `eventInfo.ts` (See More details), `crew.ts` (Dev Crew).
+`site.ts` (dates, registration closing time, fees, payment details, college, socials, the overall
+coordinator in `contacts`), `events.ts` and `eventCatalog.ts` (the ten events: description, time,
+venue, prizes, coordinators), `eventInfo.ts` (See More details), `crew.ts` (Dev Crew; `credited`
+members are named under "Developed by" in the footer).
+
+The PRAGYA emblem is an SVG drawn in code (`src/components/brand/PragyaEmblem.tsx`, colours in its
+gradients); `BrandEmblem.tsx` moves it from the hero into the page background as visitors scroll.
 
 Event posters are WebP files named after the event id in `src/assets/events/`: `<id>.webp` (3:4,
-about 420×560, for the circular carousel, the See More window and the poster wall) and
+about 420×560, for the circular carousel and the poster wall behind Register) and
 `<id>-large.webp` (the whole artwork, about 840 px wide, for the event panels). Replace both files
 to change a poster; the originals stay in `image/` on your computer (git ignores that folder).
 The fonts (Mona Sans, SIL Open Font License) are self-hosted in `public/fonts/`.

@@ -1,6 +1,7 @@
 import { categoryLabels } from '../../content/events';
 import { eventInfo } from '../../content/eventInfo';
-import type { SymposiumEvent } from '../../content/types';
+import { site } from '../../content/site';
+import type { Person, SymposiumEvent } from '../../content/types';
 import { Modal } from '../modal/Modal';
 import { SpecularButton } from '../ui/SpecularButton';
 import './EventDetailsModal.css';
@@ -17,15 +18,14 @@ export function EventDetailsModal({ event, onClose, onRegister }: EventDetailsMo
   // Confirmed details set on the event itself win over the placeholder ones.
   const team = event?.teamSize ?? info?.team;
   const rules = event?.rules ?? info?.rules ?? [];
+  // Events with their coordinators named carry the department's confirmed details.
+  const confirmed = Boolean(event?.coordinators?.length);
 
   return (
     <Modal open={Boolean(event)} onClose={onClose} labelledBy="event-details-title" className="event-modal">
       {event && (
         <article className="event-details" data-category={event.category}>
           <header className="event-details__head">
-            {event.poster && (
-              <img className="event-details__poster" src={event.poster} alt="" width={150} height={200} decoding="async" />
-            )}
             <div className="event-details__intro">
               <span className="event-details__category">{categoryLabels[event.category]} event</span>
               <h2 id="event-details-title" className="event-details__name">
@@ -58,11 +58,24 @@ export function EventDetailsModal({ event, onClose, onRegister }: EventDetailsMo
               )}
               {event.schedule && (
                 <div>
-                  <dt>Schedule</dt>
+                  <dt>Time</dt>
                   <dd>{event.schedule}</dd>
                 </div>
               )}
+              {event.prizes && event.prizes.length > 0 && (
+                <div className="event-details__fact--wide">
+                  <dt>Prizes</dt>
+                  <dd>{event.prizes.join(' · ')}</dd>
+                </div>
+              )}
             </dl>
+          )}
+
+          {event.chiefGuest && (
+            <p className="event-details__guest">
+              <span>Chief guest &amp; jury</span>
+              {event.chiefGuest.replace(/\s*\(chief guest and jury\)$/i, '')}
+            </p>
           )}
 
           {info && (
@@ -86,25 +99,34 @@ export function EventDetailsModal({ event, onClose, onRegister }: EventDetailsMo
             {info && <DetailList id="event-details-instructions" title="Important instructions" items={info.instructions} />}
           </div>
 
-          {event.coordinators && event.coordinators.length > 0 && (
+          {confirmed && (
             <section className="event-details__block" aria-labelledby="event-details-coordinators">
               <h3 id="event-details-coordinators">Coordinators</h3>
               <ul className="event-details__people">
-                {event.coordinators.map((person) => (
-                  <li key={`${person.name}-${person.phone ?? person.email ?? ''}`}>
-                    <span>{person.name}</span>
-                    {person.phone && <a href={`tel:${person.phone.replace(/\s+/g, '')}`}>{person.phone}</a>}
-                    {person.email && <a href={`mailto:${person.email}`}>{person.email}</a>}
-                  </li>
+                {event.coordinators!.map((person) => (
+                  <PersonLine key={`${person.name}-${person.phone ?? person.email ?? ''}`} person={person} />
                 ))}
               </ul>
+              {/* Until each event's own numbers are listed, queries go to the symposium coordinators. */}
+              {!event.coordinators!.some((person) => person.phone) && site.contacts.length > 0 && (
+                <div className="event-details__queries">
+                  <p>For queries, contact:</p>
+                  <ul className="event-details__people">
+                    {site.contacts.map((person) => (
+                      <PersonLine key={`${person.name}-${person.phone ?? ''}`} person={person} />
+                    ))}
+                  </ul>
+                </div>
+              )}
             </section>
           )}
 
           <footer className="event-details__foot">
-            <p className="event-details__provisional">
-              Details are provisional; the coordinators will confirm the final rules.
-            </p>
+            {!confirmed && (
+              <p className="event-details__provisional">
+                Details are provisional; the coordinators will confirm the final rules.
+              </p>
+            )}
             <div className="event-details__actions">
               <SpecularButton variant="ghost" onClick={onClose}>
                 Close
@@ -138,5 +160,17 @@ function DetailList({ id, title, items, ordered = false }: DetailListProps) {
         ))}
       </List>
     </section>
+  );
+}
+
+/** A coordinator: name, role, and how to reach them when known. */
+function PersonLine({ person }: { person: Person }) {
+  return (
+    <li>
+      <span className="event-details__person">{person.name}</span>
+      {person.role && <span className="event-details__role">{person.role}</span>}
+      {person.phone && <a href={`tel:${person.phone.replace(/[^\d+]/g, '')}`}>{person.phone}</a>}
+      {person.email && <a href={`mailto:${person.email}`}>{person.email}</a>}
+    </li>
   );
 }
