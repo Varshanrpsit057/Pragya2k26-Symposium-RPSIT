@@ -3,7 +3,7 @@
   "private": true,
   "version": "0.1.0",
   "type": "module",
-  "description": "Website for PRAGYA 2026, the AI & technology symposium at R P Sarathy Institute of Technology, Salem.",
+  "description": "PRAGYA 2026 website, registration and admin approval, on AWS Amplify (R P Sarathy Institute of Technology, Salem).",
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build && vite build --ssr src/entry-server.tsx --outDir dist-ssr && node scripts/prerender.mjs",
@@ -12,45 +12,52 @@
     "lint": "eslint .",
     "test": "vitest run",
     "test:watch": "vitest",
-    "images": "node scripts/optimize-images.mjs",
     "check": "npm run lint && npm run test && npm run build && npm run check:secrets",
     "check:secrets": "node scripts/check-secrets.mjs",
+    "sandbox": "ampx sandbox",
+    "admin:password": "tsx scripts/admin-password.ts",
     "google:auth": "node scripts/google-auth.mjs",
     "google:check": "node scripts/google-auth.mjs --check",
-    "build:server": "vite build --config vite.server.config.ts --logLevel warn",
-    "server": "npm run build:server && node dist-server/node.js",
-    "start": "node dist-server/node.js",
-    "google:setup": "npm run build:server && node dist-server/setup.js"
+    "google:setup": "tsx server/setup.ts"
   },
   "dependencies": {
+    "@aws-sdk/client-dynamodb": "^3.1147.0",
+    "@aws-sdk/client-s3": "^3.1147.0",
+    "@aws-sdk/lib-dynamodb": "^3.1147.0",
+    "@aws-sdk/s3-presigned-post": "^3.1147.0",
+    "@aws-sdk/s3-request-presigner": "^3.1147.0",
     "ogl": "^1.0.11",
     "pdf-lib": "^1.17.1",
     "react": "^19.3.0",
     "react-dom": "^19.3.0"
   },
   "devDependencies": {
-    "@cloudflare/workers-types": "^5.20261006.1",
+    "@aws-amplify/backend": "^1.25.1",
+    "@aws-amplify/backend-cli": "^1.10.0",
     "@eslint/js": "^10.0.1",
     "@testing-library/jest-dom": "^7.0.1",
     "@testing-library/react": "^16.3.3",
+    "@types/aws-lambda": "^8.10.164",
     "@types/node": "^24.19.1",
     "@types/react": "^19.3.0",
     "@types/react-dom": "^19.3.0",
     "@vitejs/plugin-react": "^6.1.2",
+    "aws-cdk-lib": "^2.272.0",
+    "constructs": "^10.8.1",
+    "esbuild": "^0.28.2",
     "eslint": "^10.12.0",
     "eslint-plugin-react-hooks": "^7.1.1",
     "globals": "^17.13.0",
     "jsdom": "^30.1.2",
-    "sharp": "^0.35.5",
+    "tsx": "^4.23.15",
     "typescript": "~6.0.3",
     "typescript-eslint": "^8.71.0",
     "vite": "^8.3.2",
-    "vitest": "^5.0.3",
-    "wrangler": "^4.147.0"
+    "vitest": "^5.0.3"
   },
   "allowScripts": {
-    "esbuild@0.28.1": true,
-    "workerd@1.20261001.1": true
+    "esbuild@0.28.2": true,
+    "esbuild@0.25.12": true
   },
   "engines": {
     "node": ">=22"

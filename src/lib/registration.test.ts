@@ -41,7 +41,7 @@ const valid: RegistrationInput = {
 const json = (body: unknown, init: ResponseInit = {}) =>
   new Response(JSON.stringify(body), { headers: { 'Content-Type': 'application/json' }, ...init });
 
-const submitOptions = { submissionId: 'a1b2c3d4e5f6a7b8c9d0', retryDelaysMs: [1, 1] };
+const submitOptions = { submissionId: 'a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6', retryDelaysMs: [1, 1] };
 
 describe('feeSummary', () => {
   it.each([
@@ -210,19 +210,57 @@ describe('newSubmissionId', () => {
 });
 
 describe('submitRegistration', () => {
-  const endpoint = '/api/register';
+  const apiBase = 'https://api.example.com';
+  const ticket = {
+    success: true,
+    uploadId: '0f8fad5b-d9cb-469f-a165-70867728950e',
+    url: 'https://bucket.s3.test/',
+    fields: { key: 'uploads/0f8fad5b-d9cb-469f-a165-70867728950e', 'Content-Type': 'image/png' },
+  };
+  const success = (extra: object = {}) =>
+    json({ success: true, registrationId: 'PRG26-0042', status: 'PENDING', registeredAt: '2026-10-10T06:30:00.000Z', ...extra });
+
+  /** Answers like the API and S3; `register` holds the answers to /api/register, in order. */
+  const api = (...register: (Response | Error)[]) =>
+    vi.fn(async (input: string | URL | Request) => {
+      const url = String(input);
+      if (url === `${apiBase}/api/uploads`) return json(ticket);
+      if (url === ticket.url) return new Response(null, { status: 204 });
+      const next = register.shift();
+      if (!next) throw new Error(`Unexpected call to ${url}`);
+      if (next instanceof Error) throw next;
+      return next;
+    });
+  const registerCalls = (fetchImpl: ReturnType<typeof api>) =>
+    fetchImpl.mock.calls.filter(([url]) => String(url).endsWith('/api/register')) as unknown as [string, RequestInit][];
 
   it('refuses to pretend when online registration is switched off', async () => {
-    await expect(submitRegistration(valid, { endpoint: null, ...submitOptions })).rejects.toThrow(/not connected yet/);
+    await expect(submitRegistration(valid, { apiBase: null, ...submitOptions })).rejects.toThrow(/not connected yet/);
   });
 
-  it('posts the details, event ids and screenshot as JSON, and returns the Registration ID', async () => {
-    const fetchImpl = vi.fn(async () => json({ success: true, registrationId: 'PRG26-0042', emailStatus: 'PENDING' }));
-    const result = await submitRegistration(valid, { endpoint, ...submitOptions, fetchImpl });
+  it('uploads the screenshot privately to S3, then sends the details with the upload, and returns the Registration ID', async () => {
+    const fetchImpl = api(success());
+    const result = await submitRegistration(valid, { apiBase, ...submitOptions, fetchImpl });
 
-    expect(result).toEqual({ registrationId: 'PRG26-0042', emailStatus: 'PENDING', duplicate: false });
-    const [url, init] = fetchImpl.mock.calls[0] as unknown as [string, RequestInit];
-    expect(url).toBe(endpoint);
+    expect(result).toEqual({
+      registrationId: 'PRG26-0042',
+      status: 'PENDING',
+      registeredAt: '2026-10-10T06:30:00.000Z',
+      duplicate: false,
+      key: submitOptions.submissionId,
+    });
+    const urls = fetchImpl.mock.calls.map(([url]) => String(url));
+    expect(urls).toEqual([`${apiBase}/api/uploads`, ticket.url, `${apiBase}/api/register`]);
+
+    const [, uploadInit] = fetchImpl.mock.calls[0] as unknown as [string, RequestInit];
+    expect(JSON.parse(String(uploadInit.body))).toEqual({ contentType: 'image/png', size: screenshot.size });
+
+    // S3 gets the signed fields first and the file last.
+    const form = (fetchImpl.mock.calls[1] as unknown as [string, RequestInit])[1].body as FormData;
+    expect([...form.keys()]).toEqual(['key', 'Content-Type', 'file']);
+    expect(form.get('key')).toBe(ticket.fields.key);
+
+    const [, init] = registerCalls(fetchImpl)[0];
     expect(init.method).toBe('POST');
     expect(new Headers(init.headers).get('Content-Type')).toBe('application/json');
     const body = JSON.parse(String(init.body));
@@ -237,97 +275,100 @@ describe('submitRegistration', () => {
     });
     expect(body.events).toEqual(['pro-pitch', 'code-flex', 'short-film']);
     expect(body.transactionId).toBe('412345678901');
-    expect(body.screenshot).toMatchObject({ type: 'image/png', name: 'payment.png' });
-    expect(body.screenshot.data).toMatch(/^data:image\/png;base64,/);
+    expect(body.upload).toEqual({ id: ticket.uploadId });
+    // The screenshot never travels inside the registration itself.
+    expect(body).not.toHaveProperty('screenshot');
   });
 
   it('sends the typed department when Other is chosen', async () => {
-    const fetchImpl = vi.fn(async () => json({ success: true, registrationId: 'PRG26-0043', emailStatus: 'PENDING' }));
+    const fetchImpl = api(success({ registrationId: 'PRG26-0043' }));
     const other = { ...valid, department: OTHER_DEPARTMENT, departmentOther: 'Robotics and Automation Engineering' };
-    await submitRegistration(other, { endpoint, ...submitOptions, fetchImpl });
+    await submitRegistration(other, { apiBase, ...submitOptions, fetchImpl });
 
-    const [, init] = fetchImpl.mock.calls[0] as unknown as [string, RequestInit];
+    const [, init] = registerCalls(fetchImpl)[0];
     expect(JSON.parse(String(init.body)).participant.department).toBe('Robotics and Automation Engineering');
   });
 
-  it("shows the server's message and field errors when it rejects the registration", async () => {
-    const fetchImpl = vi.fn(async () =>
+  it("shows the server's message and field errors when it refuses the registration", async () => {
+    const fetchImpl = api(
       json(
         { success: false, error: 'This transaction ID has already been used.', code: 'DUPLICATE_TRANSACTION', fieldErrors: { transactionId: 'Already used.' } },
         { status: 409 },
       ),
     );
-    const failure = await submitRegistration(valid, { endpoint, ...submitOptions, fetchImpl }).catch((error) => error);
+    const failure = await submitRegistration(valid, { apiBase, ...submitOptions, fetchImpl }).catch((error) => error);
 
     expect(failure).toBeInstanceOf(RegistrationError);
     expect(failure.message).toBe('This transaction ID has already been used.');
     expect(failure.code).toBe('DUPLICATE_TRANSACTION');
     expect(failure.fieldErrors).toEqual({ transactionId: 'Already used.' });
-    expect(fetchImpl).toHaveBeenCalledTimes(1);
+    expect(registerCalls(fetchImpl)).toHaveLength(1);
   });
 
   it('waits and tries again, with the same submission id, while the server is busy', async () => {
-    const fetchImpl = vi
-      .fn()
-      .mockResolvedValueOnce(json({ success: false, error: 'Busy', code: 'BUSY' }, { status: 503 }))
-      .mockResolvedValueOnce(json({ success: true, registrationId: 'PRG26-0044', emailStatus: 'PENDING' }));
-    const result = await submitRegistration(valid, { endpoint, ...submitOptions, fetchImpl });
+    const fetchImpl = api(json({ success: false, error: 'Busy', code: 'BUSY' }, { status: 503 }), success({ registrationId: 'PRG26-0044' }));
+    const result = await submitRegistration(valid, { apiBase, ...submitOptions, fetchImpl });
 
     expect(result.registrationId).toBe('PRG26-0044');
-    expect(fetchImpl).toHaveBeenCalledTimes(2);
-    const ids = fetchImpl.mock.calls.map(([, init]) => JSON.parse(String((init as RequestInit).body)).submissionId);
-    expect(new Set(ids)).toEqual(new Set([submitOptions.submissionId]));
+    const calls = registerCalls(fetchImpl);
+    expect(calls).toHaveLength(2);
+    expect(new Set(calls.map(([, init]) => JSON.parse(String(init.body)).submissionId))).toEqual(new Set([submitOptions.submissionId]));
   });
 
   it('retries a dropped connection, then explains it if the server stays out of reach', async () => {
     const fetchImpl = vi.fn(async () => {
       throw new TypeError('Failed to fetch');
     });
-    const failure = await submitRegistration(valid, { endpoint, ...submitOptions, fetchImpl }).catch((error) => error);
+    const failure = await submitRegistration(valid, { apiBase, ...submitOptions, fetchImpl }).catch((error) => error);
 
     expect(failure).toBeInstanceOf(RegistrationError);
     expect(failure.message).toMatch(/Couldn't reach the registration server/);
     expect(fetchImpl).toHaveBeenCalledTimes(3);
   });
 
-  it('retries when a proxy answers for a server that is down, then says the server is out of reach', async () => {
-    // What the Vite proxy (or a hosting proxy) sends when the registration server is not running.
+  it('retries when a gateway answers for an API that is down, then says the server is out of reach', async () => {
     const fetchImpl = vi.fn(async () => new Response('', { status: 502, headers: { 'Content-Type': 'text/plain' } }));
-    const failure = await submitRegistration(valid, { endpoint, ...submitOptions, fetchImpl }).catch((error) => error);
+    const failure = await submitRegistration(valid, { apiBase, ...submitOptions, fetchImpl }).catch((error) => error);
 
     expect(failure).toBeInstanceOf(RegistrationError);
     expect(failure.message).toMatch(/Couldn't reach the registration server/);
     expect(fetchImpl).toHaveBeenCalledTimes(3);
   });
 
-  it('gets through once the server is back after a proxy error', async () => {
-    const fetchImpl = vi
-      .fn()
-      .mockResolvedValueOnce(new Response('<html>Bad Gateway</html>', { status: 504, headers: { 'Content-Type': 'text/html' } }))
-      .mockResolvedValueOnce(json({ success: true, registrationId: 'PRG26-0045', emailStatus: 'PENDING' }));
+  it('gets through once the API is back after a gateway error', async () => {
+    const fetchImpl = api(
+      new Response('<html>Bad Gateway</html>', { status: 504, headers: { 'Content-Type': 'text/html' } }),
+      success({ registrationId: 'PRG26-0045' }),
+    );
+    expect((await submitRegistration(valid, { apiBase, ...submitOptions, fetchImpl })).registrationId).toBe('PRG26-0045');
+    expect(registerCalls(fetchImpl)).toHaveLength(2);
+  });
 
-    expect((await submitRegistration(valid, { endpoint, ...submitOptions, fetchImpl })).registrationId).toBe('PRG26-0045');
+  it("does not retry the server's own refusal", async () => {
+    const fetchImpl = api(json({ success: false, code: 'UPLOAD_MISSING', error: 'Your payment screenshot did not reach us.' }, { status: 400 }));
+    const failure = await submitRegistration(valid, { apiBase, ...submitOptions, fetchImpl }).catch((error) => error);
+
+    expect(failure.message).toBe('Your payment screenshot did not reach us.');
+    expect(registerCalls(fetchImpl)).toHaveLength(1);
+  });
+
+  it('explains when S3 refuses the screenshot, without registering', async () => {
+    const fetchImpl = vi.fn(async (input: string | URL | Request) =>
+      String(input).endsWith('/api/uploads') ? json(ticket) : new Response('<Error>EntityTooLarge</Error>', { status: 400 }),
+    );
+    const failure = await submitRegistration(valid, { apiBase, ...submitOptions, fetchImpl }).catch((error) => error);
+
+    expect(failure.fieldErrors.screenshot).toMatch(/could not be uploaded/);
     expect(fetchImpl).toHaveBeenCalledTimes(2);
   });
 
-  it("does not retry the server's own storage failure", async () => {
-    const fetchImpl = vi.fn(async () =>
-      json({ success: false, code: 'STORAGE_FAILED', error: "We couldn't save your registration right now." }, { status: 502 }),
-    );
-    const failure = await submitRegistration(valid, { endpoint, ...submitOptions, fetchImpl }).catch((error) => error);
-
-    expect(failure.message).toBe("We couldn't save your registration right now.");
-    expect(fetchImpl).toHaveBeenCalledTimes(1);
-  });
-
-  it('marks a duplicate registration reported by the server', async () => {
-    const fetchImpl = vi.fn(async () =>
-      json({ success: true, registrationId: 'PRG26-0007', emailStatus: 'SENT', duplicate: true }),
-    );
-    expect(await submitRegistration(valid, { endpoint, ...submitOptions, fetchImpl })).toEqual({
+  it('marks a duplicate registration reported by the server, without a status key', async () => {
+    const fetchImpl = api(success({ registrationId: 'PRG26-0007', status: 'APPROVED', duplicate: true }));
+    expect(await submitRegistration(valid, { apiBase, ...submitOptions, fetchImpl })).toMatchObject({
       registrationId: 'PRG26-0007',
-      emailStatus: 'SENT',
+      status: 'APPROVED',
       duplicate: true,
+      key: null,
     });
   });
 });

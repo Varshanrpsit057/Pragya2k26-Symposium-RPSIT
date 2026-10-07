@@ -5,7 +5,7 @@ import tseslint from 'typescript-eslint';
 import { defineConfig, globalIgnores } from 'eslint/config';
 
 export default defineConfig([
-  globalIgnores(['dist', 'dist-ssr', 'dist-server', 'dist-worker', '.data', '.wrangler']),
+  globalIgnores(['dist', 'dist-ssr', '.amplify', 'amplify_outputs.json']),
   {
     files: ['**/*.{ts,tsx}'],
     extends: [js.configs.recommended, tseslint.configs.recommended, reactHooks.configs.flat.recommended],
@@ -15,10 +15,10 @@ export default defineConfig([
     },
   },
   {
-    // The registration server runs on Node (and optionally Cloudflare Workers).
-    files: ['server/**/*.ts'],
+    // The registration API (AWS Lambda, Node.js), its Amplify backend and the setup scripts.
+    files: ['server/**/*.ts', 'amplify/**/*.ts', 'scripts/**/*.ts'],
     languageOptions: {
-      globals: { ...globals.node, ...globals.browser },
+      globals: globals.node,
     },
   },
   {

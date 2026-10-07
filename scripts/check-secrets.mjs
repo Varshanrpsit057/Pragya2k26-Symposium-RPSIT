@@ -4,10 +4,10 @@
 //   node scripts/check-secrets.mjs --staged
 //                                  only what is about to be committed (the pre-commit hook)
 //
-// Fails on files that must stay private (.env, the Google client JSON, the registration
-// server's state with student details, private keys) and on secret values inside any file
-// (Google client secrets, refresh and access tokens, API keys, private keys, GitHub and AWS
-// keys). Matches are reported by file and line only: a secret is never printed.
+// Fails on files that must stay private (.env, the Google client JSON, private keys, personal
+// photos) and on secret values inside any file (Google client secrets, refresh and access
+// tokens, API keys, private keys, GitHub and AWS keys, the admin password hash). Matches are
+// reported by file and line only: a secret is never printed.
 import { execFileSync } from 'node:child_process';
 import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
 import { extname, join, relative } from 'node:path';
@@ -17,11 +17,10 @@ const staged = process.argv.includes('--staged');
 /** Paths that must never be committed, whatever is inside them. */
 const PRIVATE_PATHS = [
   [/(^|\/)\.env(\.(?!example$)[^/]*)?$/, '.env file (secrets)'],
-  [/(^|\/)\.dev\.vars(\.[^/]*)?$/, 'Wrangler secrets file'],
   [/(^|\/)google client\//, 'Google OAuth client folder'],
   [/(^|\/)client_secret[^/]*\.json$/, 'Google OAuth client secret'],
   [/(^|\/)service-account[^/]*\.json$/, 'Google service account key'],
-  [/(^|\/)\.data\//, 'registration server state (student details)'],
+  [/(^|\/)amplify_outputs[^/]*\.json$/, 'Amplify outputs (generated per deploy)'],
   [/\.(pem|key|p12|pfx)$/, 'private key'],
   [/(^|\/)dev_crew\//, 'full-size personal photos'],
 ];
@@ -35,8 +34,10 @@ const SECRET_VALUES = [
   [/-----BEGIN [A-Z ]*PRIVATE KEY-----/, 'private key'],
   [/\bgh[pousr]_[A-Za-z0-9]{36,}\b/, 'GitHub token'],
   [/\bAKIA[0-9A-Z]{16}\b/, 'AWS access key'],
+  [/\baws_secret_access_key\s*=\s*\S+/i, 'AWS secret access key'],
+  [/\bscrypt\$\d+\$\d+\$\d+\$[A-Za-z0-9_-]{16,}\$[A-Za-z0-9_-]{32,}/, 'admin password hash'],
   // A real value after a secret setting's name (placeholders such as your-... are fine).
-  [/^\s*(GOOGLE_CLIENT_SECRET|GOOGLE_REFRESH_TOKEN)\s*=\s*(?!your-|<|\s*$)\S+/m, 'secret setting with a value'],
+  [/^\s*(GOOGLE_CLIENT_SECRET|GOOGLE_REFRESH_TOKEN|ADMIN_PASSWORD_HASH)\s*=\s*(?!your-|<|\s*$)\S+/m, 'secret setting with a value'],
 ];
 
 const BINARY = new Set(['.png', '.jpg', '.jpeg', '.webp', '.avif', '.gif', '.ico', '.woff', '.woff2', '.pdf', '.zip']);
@@ -80,7 +81,7 @@ for (const file of filesToCheck()) {
 if (problems.length) {
   console.error(`\nSecret check FAILED (${problems.length}):`);
   for (const problem of problems) console.error(`  ✗ ${problem}`);
-  console.error('\nRemove these from git (git rm --cached <file>) and keep secrets in .env only.');
+  console.error('\nRemove these from git (git rm --cached <file>). Secrets belong in Amplify secrets (or .env locally).');
   console.error('If a real secret was ever committed or pushed, rotate it: removing it is not enough.\n');
   process.exit(1);
 }

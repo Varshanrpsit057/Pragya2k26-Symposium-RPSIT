@@ -20,7 +20,6 @@ import {
   REGISTRATION_FIELDS,
   RegistrationError,
   YEARS_OF_STUDY,
-  buildRegistrationRecord,
   feeSummary,
   isRegistrationClosed,
   newSubmissionId,
@@ -31,8 +30,10 @@ import {
   type RegistrationField,
   type RegistrationInput,
 } from '../../lib/registration';
-import { submitRegistration, type RegistrationResult } from '../../lib/registrationClient';
+import { API_BASE } from '../../lib/api';
+import { submitRegistration, type OwnRegistration, type RegistrationResult } from '../../lib/registrationClient';
 import { formatIst, parseEventStart } from '../../lib/countdown';
+import { statusLink } from '../../lib/statusLink';
 import { Modal } from '../modal/Modal';
 import { SearchSelect } from '../ui/SearchSelect';
 import { SpecularButton } from '../ui/SpecularButton';
@@ -47,6 +48,8 @@ interface RegistrationModalProps {
   /** Registration had closed when the window was opened. */
   closed?: boolean;
   onClose: () => void;
+  /** Opens the status window for a registration just made. */
+  onCheckStatus?: (own: OwnRegistration) => void;
 }
 
 type Status = 'editing' | 'submitting' | 'error' | 'success';
@@ -63,8 +66,8 @@ const TEXT_FIELDS: readonly TextField[] = [
   'transactionId',
 ];
 
-/** The registration server: same site by default, or another address set at build time. */
-const ENDPOINT: string | null = import.meta.env.VITE_REGISTRATION_API_URL || site.registration.endpoint;
+/** The registration API (see lib/api.ts), or null while online registration is switched off. */
+const API: string | null = site.registration.endpoint ? API_BASE : null;
 
 const fieldId = (field: RegistrationField) => `reg-${field}`;
 
@@ -91,7 +94,7 @@ function closedMessage(): string {
 const useIsomorphicLayoutEffect = typeof window === 'undefined' ? useEffect : useLayoutEffect;
 
 /** The one registration form for the whole site, in a window. */
-export function RegistrationModal({ open, event, request = 0, closed = false, onClose }: RegistrationModalProps) {
+export function RegistrationModal({ open, event, request = 0, closed = false, onClose, onCheckStatus }: RegistrationModalProps) {
   const [values, setValues] = useState<RegistrationInput>(EMPTY_REGISTRATION);
   const [errors, setErrors] = useState<RegistrationErrors>({});
   const [checked, setChecked] = useState<Partial<Record<RegistrationField, boolean>>>({});
@@ -101,7 +104,6 @@ export function RegistrationModal({ open, event, request = 0, closed = false, on
   const [preview, setPreview] = useState<string | null>(null);
   const [dragging, setDragging] = useState(false);
   const [submitted, setSubmitted] = useState(false);
-  const [passState, setPassState] = useState<'idle' | 'working' | 'error'>('idle');
   const [seenRequest, setSeenRequest] = useState(request);
   const formRef = useRef<HTMLFormElement>(null);
   const previewRef = useRef<string | null>(null);
@@ -205,38 +207,7 @@ export function RegistrationModal({ open, event, request = 0, closed = false, on
     setStatus('editing');
     setSubmitError('');
     setResult(null);
-    setPassState('idle');
     submissionRef.current = null;
-  };
-
-  // The same participant pass the email carries, made here so it can be saved straight away.
-  // The PDF code is loaded only when it is asked for.
-  const downloadPass = async () => {
-    if (!result || passState === 'working') return;
-    setPassState('working');
-    try {
-      const [{ buildPassPdf, passData, passFileName }, logo] = await Promise.all([
-        import('../../lib/pass'),
-        fetch('/images/rpsit-logo-pass.jpg').then((response) => {
-          if (!response.ok) throw new Error('logo');
-          return response.arrayBuffer();
-        }),
-      ]);
-      const record = buildRegistrationRecord(values, allEvents, fees);
-      const pdf = await buildPassPdf(
-        passData({ registrationId: result.registrationId, registeredAt: result.registeredAt, record, eventIds: values.events }),
-        logo,
-      );
-      const url = URL.createObjectURL(new Blob([new Uint8Array(pdf)], { type: 'application/pdf' }));
-      const link = document.createElement('a');
-      link.href = url;
-      link.download = passFileName(result.registrationId);
-      link.click();
-      setTimeout(() => URL.revokeObjectURL(url), 60_000);
-      setPassState('idle');
-    } catch {
-      setPassState('error');
-    }
   };
 
   const close = () => {
@@ -270,7 +241,7 @@ export function RegistrationModal({ open, event, request = 0, closed = false, on
     setSubmitError('');
     submissionRef.current ??= newSubmissionId();
     try {
-      const saved = await submitRegistration(values, { endpoint: ENDPOINT, submissionId: submissionRef.current });
+      const saved = await submitRegistration(values, { apiBase: API, submissionId: submissionRef.current });
       setResult(saved);
       setStatus('success');
     } catch (error) {
@@ -338,19 +309,18 @@ export function RegistrationModal({ open, event, request = 0, closed = false, on
             </svg>
           </span>
           <h2 id="registration-title" className="reg__title">
-            Registration Successfully Completed!
+            Registration Submitted
           </h2>
           <p className="reg-done__id">
             <span>Registration ID</span>
             <strong>{result.registrationId}</strong>
           </p>
-          <p className="reg__lead">
-            Your registration details and payment screenshot have been successfully received.
-          </p>
+          <p className="reg-state reg-state--pending">Pending verification</p>
+          <p className="reg__lead">Your registration details and payment screenshot have been received.</p>
           <p className="reg-done__mail">
             {result.duplicate
-              ? 'You were already registered with this email and transaction ID, so no second registration was made. Your participant pass was emailed when you first registered.'
-              : `Your participant pass (PDF) and a confirmation email are being sent to your registered email address, ${values.email.trim()}. If it is not in your inbox within a few minutes, check your Spam folder and mark it "Not spam".`}
+              ? 'You were already registered with this email and transaction ID, so no second registration was made.'
+              : `The organisers will now verify your payment. Your registration is confirmed only once it is approved: you will then receive a confirmation email with your participant pass (PDF) at ${values.email.trim()}. If it is not in your inbox, check your Spam folder.`}
           </p>
           <dl className="reg-done__summary">
             <div>
@@ -371,17 +341,14 @@ export function RegistrationModal({ open, event, request = 0, closed = false, on
             Please keep your Registration ID for future reference. Kindly bring {rupees(summary.eventTotal)} for your{' '}
             {plural(summary.eventCount, 'event')} when you come to the college for the symposium.
           </p>
-          {!result.duplicate && (
-            <div className="reg-done__pass">
-              <SpecularButton onClick={downloadPass} busy={passState === 'working'}>
-                {passState === 'working' ? 'Preparing your pass…' : 'Download participant pass (PDF)'}
-              </SpecularButton>
-              {passState === 'error' && (
-                <p className="reg-done__pass-error" role="alert">
-                  The pass could not be prepared here. It is attached to your confirmation email.
-                </p>
-              )}
-            </div>
+          {result.key && (
+            <StatusLinkBox
+              own={{ registrationId: result.registrationId, key: result.key }}
+              onCheck={(own) => {
+                close();
+                onCheckStatus?.(own);
+              }}
+            />
           )}
           <div className="reg-done__actions">
             <SpecularButton variant="ghost" onClick={reset}>
@@ -775,6 +742,47 @@ function Field({ field, label, labelId, error, hint, wide, children }: FieldProp
           </p>
         )
       )}
+    </div>
+  );
+}
+
+/** The participant's private status link, to keep for later (and to download the pass once approved). */
+function StatusLinkBox({ own, onCheck }: { own: OwnRegistration; onCheck: (own: OwnRegistration) => void }) {
+  const [copied, setCopied] = useState(false);
+  const link = statusLink(own);
+
+  const copy = async () => {
+    try {
+      await navigator.clipboard.writeText(link);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2500);
+    } catch {
+      // No clipboard access (e.g. plain http): the link can still be selected and copied.
+    }
+  };
+
+  return (
+    <div className="reg-link">
+      <p className="reg-link__title">Your private status link</p>
+      <p className="reg-link__hint">
+        Save it to check whether your registration is approved and, after approval, to download your participant pass.
+        Do not share it.
+      </p>
+      <div className="reg-link__row">
+        <input
+          className="reg-link__input"
+          readOnly
+          value={link}
+          aria-label="Your private status link"
+          onFocus={(focusEvent) => focusEvent.target.select()}
+        />
+        <button type="button" className="reg-link__copy" onClick={copy}>
+          {copied ? 'Copied' : 'Copy'}
+        </button>
+      </div>
+      <SpecularButton variant="ghost" onClick={() => onCheck(own)}>
+        Check status
+      </SpecularButton>
     </div>
   );
 }

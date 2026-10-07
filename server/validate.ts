@@ -7,6 +7,7 @@ import {
   ACCEPTED_SCREENSHOT_TYPES,
   MAX_SCREENSHOT_BYTES,
   SUBMISSION_ID,
+  UPLOAD_ID,
   buildRegistrationRecord,
   splitDepartment,
   validateField,
@@ -35,7 +36,8 @@ export interface ValidRegistration {
   /** For duplicate checks: lower-case email, upper-case transaction ID. */
   emailKey: string;
   transactionKey: string;
-  image: CheckedImage;
+  /** The payment screenshot the browser uploaded to S3 just before (checked separately). */
+  uploadId: string;
 }
 
 export type ValidationResult =
@@ -43,7 +45,6 @@ export type ValidationResult =
   | { ok: false; error: string; fieldErrors?: RegistrationErrors };
 
 const TEXT_FIELDS: RegistrationField[] = ['name', 'department', 'departmentOther', 'year', 'college', 'phone', 'email', 'events', 'transactionId'];
-const SCREENSHOT_EXTENSIONS = /\.(jpe?g|jfif|png|webp)$/i;
 
 const isObject = (value: unknown): value is Record<string, unknown> =>
   typeof value === 'object' && value !== null && !Array.isArray(value);
@@ -102,42 +103,17 @@ export function sniffImage(bytes: Uint8Array): Omit<CheckedImage, 'bytes'> | nul
   return null;
 }
 
-function decodeBase64(base64: string): Uint8Array | null {
-  if (!/^[A-Za-z0-9+/]*={0,2}$/.test(base64) || base64.length % 4 === 1) return null;
-  try {
-    const binary = atob(base64);
-    const bytes = new Uint8Array(binary.length);
-    for (let i = 0; i < binary.length; i += 1) bytes[i] = binary.charCodeAt(i);
-    return bytes;
-  } catch {
-    return null;
-  }
-}
-
-function checkScreenshot(value: unknown): CheckedImage | string {
-  if (!isObject(value)) return 'Upload a screenshot of your payment.';
-  const name = str(value.name, 200);
-  const declared = str(value.type, 60);
-  const data = typeof value.data === 'string' ? value.data : '';
-
-  const match = /^data:(image\/[a-z0-9.+-]+);base64,/i.exec(data.slice(0, 64));
-  if (!match) return 'Upload a screenshot of your payment.';
-  if (name && /\.[a-z0-9]{1,8}$/i.test(name) && !SCREENSHOT_EXTENSIONS.test(name)) {
+/**
+ * Checks the uploaded payment screenshot by its bytes, never by what the browser claims:
+ * a real JPEG, PNG or WebP of a sensible size. Returns the image, or what is wrong with it.
+ */
+export function checkScreenshot(bytes: Uint8Array): CheckedImage | string {
+  if (bytes.length < 200) return 'The screenshot could not be read. Please upload it again.';
+  if (bytes.length > MAX_SCREENSHOT_BYTES) return 'The image must be 5 MB or smaller.';
+  const sniffed = sniffImage(bytes);
+  if (!sniffed || !(ACCEPTED_SCREENSHOT_TYPES as readonly string[]).includes(sniffed.type)) {
     return 'The screenshot must be a PNG or JPG image.';
   }
-  // base64 is 4/3 of the size: refuse oversized uploads before decoding them.
-  const base64 = data.slice(match[0].length);
-  if (base64.length > Math.ceil(MAX_SCREENSHOT_BYTES / 3) * 4) return 'The image must be 5 MB or smaller.';
-
-  const bytes = decodeBase64(base64);
-  if (!bytes || bytes.length < 200) return 'The screenshot could not be read. Please upload it again.';
-  if (bytes.length > MAX_SCREENSHOT_BYTES) return 'The image must be 5 MB or smaller.';
-
-  const sniffed = sniffImage(bytes);
-  if (!sniffed) return 'The screenshot must be a PNG or JPG image.';
-  // The declared type must agree with what the file really is.
-  const claimed = [declared, match[1]].map((type) => type.toLowerCase().replace('image/jpg', 'image/jpeg'));
-  if (claimed.some((type) => type && type !== sniffed.type)) return 'The screenshot must be a PNG or JPG image.';
   if (sniffed.width < 16 || sniffed.height < 16 || sniffed.width > 20_000 || sniffed.height > 20_000) {
     return 'The screenshot could not be read. Please upload it again.';
   }
@@ -183,10 +159,10 @@ export function validatePayload(body: unknown, fees: Fees): ValidationResult {
     delete fieldErrors.departmentOther;
   }
 
-  const image = checkScreenshot(body.screenshot);
-  if (typeof image === 'string') fieldErrors.screenshot = image;
+  const uploadId = isObject(body.upload) ? str(body.upload.id, 80) : '';
+  if (!UPLOAD_ID.test(uploadId)) fieldErrors.screenshot = 'Upload a screenshot of your payment.';
 
-  if (Object.keys(fieldErrors).length || typeof image === 'string') {
+  if (Object.keys(fieldErrors).length) {
     return { ok: false, error: 'Please check the highlighted fields.', fieldErrors };
   }
 
@@ -199,7 +175,7 @@ export function validatePayload(body: unknown, fees: Fees): ValidationResult {
       eventIds: input.events,
       emailKey: record.participant.email,
       transactionKey: record.payment.transactionId.toUpperCase(),
-      image,
+      uploadId,
     },
   };
 }

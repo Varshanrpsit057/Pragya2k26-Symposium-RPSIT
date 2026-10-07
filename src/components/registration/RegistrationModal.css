@@ -759,6 +759,96 @@
   color: var(--c-text-muted);
 }
 
+/* Where the registration stands: only an organiser's approval completes it */
+.reg-state {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.35rem 0.9rem;
+  border: 1px solid currentColor;
+  border-radius: var(--r-pill);
+  font-size: var(--step--1);
+  font-weight: 750;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.reg-state::before {
+  content: '';
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: 50%;
+  background: currentColor;
+}
+
+.reg-state--pending {
+  color: #ffd27a;
+}
+
+.reg-state--approved {
+  color: #5ef0a6;
+}
+
+.reg-state--rejected {
+  color: #ff8ad8;
+}
+
+/* The private status link, to keep for later */
+.reg-link {
+  display: grid;
+  justify-items: center;
+  gap: 0.6rem;
+  width: 100%;
+  max-width: 36rem;
+  padding: 1rem;
+  border: 1px solid var(--c-line);
+  border-radius: var(--r-md);
+  background: rgb(255 255 255 / 0.03);
+}
+
+.reg-link__title {
+  font-weight: 700;
+}
+
+.reg-link__hint {
+  font-size: var(--step--1);
+  color: var(--c-text-muted);
+}
+
+.reg-link__row {
+  display: flex;
+  gap: 0.5rem;
+  width: 100%;
+}
+
+.reg-link__input {
+  flex: 1;
+  min-width: 0;
+  padding: 0.55rem 0.75rem;
+  border: 1px solid var(--c-line-strong);
+  border-radius: var(--r-sm);
+  font: inherit;
+  font-size: var(--step--1);
+  color: var(--c-text);
+  background: rgb(5 6 26 / 0.6);
+}
+
+.reg-link__copy {
+  padding: 0.55rem 1rem;
+  border: 1px solid var(--c-line-strong);
+  border-radius: var(--r-sm);
+  font: inherit;
+  font-weight: 650;
+  color: var(--c-text);
+  background: rgb(255 255 255 / 0.06);
+  cursor: pointer;
+}
+
+.reg-link__copy:hover,
+.reg-link__copy:focus-visible {
+  background: rgb(255 255 255 / 0.12);
+}
+
 /* The participant pass download, under the summary */
 .reg-done__pass {
   display: grid;

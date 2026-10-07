@@ -52,10 +52,24 @@ const fillValidForm = (dialog: HTMLElement) => {
   fill(dialog, /transaction id/i, '412345678901');
 };
 
+const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } });
+
+/**
+ * Answers like the registration API and S3: an upload ticket, the screenshot upload, and
+ * `body` for the registration itself.
+ */
 const respondWith = (body: unknown, status = 200) =>
-  vi
-    .spyOn(globalThis, 'fetch')
-    .mockResolvedValue(new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } }));
+  vi.spyOn(globalThis, 'fetch').mockImplementation(async (input) => {
+    const url = String(input);
+    if (url.endsWith('/api/uploads')) {
+      return json({ success: true, uploadId: '0f8fad5b-d9cb-469f-a165-70867728950e', url: 'https://bucket.s3.test/', fields: { key: 'uploads/x' } });
+    }
+    if (url === 'https://bucket.s3.test/') return new Response(null, { status: 204 });
+    return json(body, status);
+  });
+
+const registerCall = (fetchSpy: ReturnType<typeof respondWith>) =>
+  fetchSpy.mock.calls.find(([url]) => String(url).endsWith('/api/register')) as [string, RequestInit] | undefined;
 
 /** The live summary's three figures and the grand total. */
 const summaryOf = (form: HTMLElement) => {
@@ -228,8 +242,8 @@ describe('RegistrationModal', () => {
     expect(summaryOf(dialog).eventTotal).toBe('₹50');
   });
 
-  it('shows success only once the server confirms, with the Registration ID and the amount to bring', async () => {
-    const fetchSpy = respondWith({ success: true, registrationId: 'PRG26-0042', emailStatus: 'PENDING' });
+  it('says the registration is submitted and pending verification, with no pass before approval', async () => {
+    const fetchSpy = respondWith({ success: true, registrationId: 'PRG26-0042', status: 'PENDING', registeredAt: '2026-10-10T06:30:00.000Z' });
     renderWithForm();
     const dialog = openForm();
     fillValidForm(dialog);
@@ -237,23 +251,26 @@ describe('RegistrationModal', () => {
     fireEvent.click(within(dialog).getByRole('button', { name: 'Submit Registration' }));
     expect(within(dialog).getByRole('button', { name: 'Submitting…' })).toBeInTheDocument();
 
-    await waitFor(() =>
-      expect(within(dialog).getByRole('heading', { name: 'Registration Successfully Completed!' })).toBeInTheDocument(),
-    );
+    await waitFor(() => expect(within(dialog).getByRole('heading', { name: 'Registration Submitted' })).toBeInTheDocument());
     expect(within(dialog).getByText('PRG26-0042')).toBeInTheDocument();
-    expect(
-      within(dialog).getByText('Your registration details and payment screenshot have been successfully received.'),
-    ).toBeInTheDocument();
-    expect(within(dialog).getByText(/participant pass \(PDF\) and a confirmation email are being sent to .*barath@example\.com/)).toBeInTheDocument();
-    // New sender addresses can land in spam: say where to look and how to fix it.
-    expect(within(dialog).getByText(/check your Spam folder.*Not spam/)).toBeInTheDocument();
+    expect(within(dialog).getByText('Pending verification')).toBeInTheDocument();
+    expect(within(dialog).getByText('Your registration details and payment screenshot have been received.')).toBeInTheDocument();
+    expect(within(dialog).getByText(/confirmed only once it is approved.*participant pass \(PDF\) at barath@example\.com/)).toBeInTheDocument();
+    // New sender addresses can land in spam: say where to look.
+    expect(within(dialog).getByText(/check your Spam folder/)).toBeInTheDocument();
     expect(within(dialog).getByText('412345678901')).toBeInTheDocument();
     expect(within(dialog).getByText('COGNIX · E-SPORTS')).toBeInTheDocument();
     expect(within(dialog).getByText(/Kindly bring ₹100 for your 2 events/)).toBeInTheDocument();
+    // Nothing to download before an organiser approves; a private link to check later instead.
+    expect(within(dialog).queryByRole('button', { name: /download/i })).toBeNull();
+    expect((within(dialog).getByLabelText('Your private status link') as HTMLInputElement).value).toMatch(
+      /#status=PRG26-0042\.[0-9a-f]{32}$/,
+    );
 
-    const [url, init] = fetchSpy.mock.calls[0] as [string, RequestInit];
+    const [url, init] = registerCall(fetchSpy)!;
     expect(url).toBe('/api/register');
     const body = JSON.parse(String(init.body));
+    expect(body.upload).toEqual({ id: '0f8fad5b-d9cb-469f-a165-70867728950e' });
     expect(body.participant.department).toBe('Artificial Intelligence and Data Science (AI & DS)');
     expect(body.events).toEqual(['cognix', 'e-sports']);
     expect(body.submissionId).toMatch(/^[0-9a-f]{32}$/);
@@ -271,7 +288,7 @@ describe('RegistrationModal', () => {
     fireEvent.click(within(dialog).getByRole('button', { name: 'Submit Registration' }));
 
     await waitFor(() => expect(within(dialog).getByRole('alert')).toHaveTextContent("We couldn't save your registration"));
-    expect(within(dialog).queryByRole('heading', { name: 'Registration Successfully Completed!' })).toBeNull();
+    expect(within(dialog).queryByRole('heading', { name: 'Registration Submitted' })).toBeNull();
     expect(within(dialog).getByLabelText(/name with initial/i)).toHaveValue('Barath S');
   });
 
@@ -405,7 +422,7 @@ describe('Department dropdown', () => {
   });
 
   it('shows a required "Please specify" field for Other, and clears it when another department is chosen', async () => {
-    const fetchSpy = respondWith({ success: true, registrationId: 'PRG26-0050', emailStatus: 'PENDING' });
+    const fetchSpy = respondWith({ success: true, registrationId: 'PRG26-0050', status: 'PENDING', registeredAt: '2026-10-10T06:30:00.000Z' });
     renderWithForm();
     const dialog = openForm();
     fillValidForm(dialog);
@@ -430,8 +447,8 @@ describe('Department dropdown', () => {
     });
 
     fireEvent.click(within(dialog).getByRole('button', { name: 'Submit Registration' }));
-    await waitFor(() => expect(fetchSpy).toHaveBeenCalledTimes(1));
-    const body = JSON.parse(String((fetchSpy.mock.calls[0] as [string, RequestInit])[1].body));
+    await waitFor(() => expect(registerCall(fetchSpy)).toBeDefined());
+    const body = JSON.parse(String(registerCall(fetchSpy)![1].body));
     expect(body.participant.department).toBe('Robotics and Automation Engineering');
   });
 });

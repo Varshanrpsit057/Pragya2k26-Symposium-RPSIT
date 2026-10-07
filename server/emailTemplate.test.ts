@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { eventCatalog } from '../src/content/eventCatalog';
-import { passData } from '../src/lib/pass';
+import { passData } from './pass';
 import { buildRegistrationRecord } from '../src/lib/registration';
 import { confirmationEmail } from './emailTemplate';
 
@@ -30,12 +30,13 @@ describe('confirmation email', () => {
   const email = confirmationEmail(pass);
 
   it('has a plain subject with the Registration ID', () => {
-    expect(email.subject).toBe('Your PRAGYA 2026 registration (PRG26-0042)');
+    expect(email.subject).toBe('Your PRAGYA 2026 registration is confirmed (PRG26-0042)');
   });
 
   it('is a plain-text letter with the details that are personal to this participant', () => {
     expect(email).not.toHaveProperty('html');
     expect(email.text).toContain('Dear Varshan C,');
+    expect(email.text).toMatch(/registration for PRAGYA 2026.*is confirmed/);
     expect(email.text).toContain('Registration ID: PRG26-0042');
     expect(email.text).toContain('Events: Pro-Pitch, Short Film');
     expect(email.text).toContain('Date: 17 October 2026');

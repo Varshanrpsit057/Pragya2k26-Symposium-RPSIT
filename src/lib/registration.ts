@@ -287,35 +287,41 @@ export function buildRegistrationRecord(
 }
 
 // ---------------------------------------------------------------------------------------
-// What travels between the form and the registration server (POST /api/register).
+// What travels between the form and the registration API.
+//
+//   1. POST /api/uploads   → a short-lived, private S3 upload for the payment screenshot
+//   2. the browser uploads the screenshot straight to S3
+//   3. POST /api/register  → the registration, which the server checks against the upload
 
-export interface ScreenshotUpload {
-  name: string;
-  type: string;
-  /** base64 data URL */
-  data: string;
+/** The answer to POST /api/uploads: where to send the screenshot (an S3 presigned POST). */
+export interface UploadTicket {
+  uploadId: string;
+  url: string;
+  fields: Record<string, string>;
 }
 
 export interface RegistrationPayload {
   /**
    * Made once per filled-in form and kept until it succeeds. Sending the same form again
-   * (after a timeout or a lost connection) returns the first result, never a second registration.
+   * (after a timeout or a lost connection) returns the first result, never a second
+   * registration. It is also the participant's private key for checking their status.
    */
   submissionId: string;
   participant: ParticipantDetails;
   /** Event ids; the server looks up their names and works out the fees itself. */
   events: string[];
   transactionId: string;
-  screenshot: ScreenshotUpload;
+  upload: { id: string };
 }
 
-export type EmailStatus = 'PENDING' | 'SENT' | 'FAILED';
+/** Where a registration stands. Only an organiser can move it from PENDING. */
+export type RegistrationStatus = 'PENDING' | 'APPROVED' | 'REJECTED';
 
-/** The server's answer once Google Drive and Google Sheets have both stored the registration. */
+/** The server's answer once the registration and its screenshot are stored. */
 export interface RegistrationSuccess {
   success: true;
   registrationId: string;
-  emailStatus: EmailStatus;
+  status: RegistrationStatus;
   /** When the registration was stored (ISO 8601). */
   registeredAt: string;
   /** This person was already registered with the same email and transaction ID. */
@@ -329,7 +335,26 @@ export interface RegistrationFailure {
   fieldErrors?: RegistrationErrors;
 }
 
-export const SUBMISSION_ID = /^[A-Za-z0-9_-]{16,64}$/;
+/** The answer to POST /api/status. */
+export interface StatusResult {
+  success: true;
+  registrationId: string;
+  status: RegistrationStatus;
+  registeredAt: string;
+  /** The participant pass can be downloaded (approved, and the PDF is ready). */
+  passAvailable: boolean;
+  /** Why it was rejected, when the organisers gave a reason. */
+  reason?: string;
+}
+
+/** 128 random bits or more: it doubles as the participant's private status key. */
+export const SUBMISSION_ID = /^[A-Za-z0-9_-]{32,64}$/;
+
+/** A screenshot upload handed out by the server (a UUID). */
+export const UPLOAD_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
+
+/** A Registration ID, e.g. PRG26-0042. */
+export const REGISTRATION_ID = /^PRG26-\d{4,6}$/;
 
 /** A random id for one filled-in form. Works on plain http too, unlike crypto.randomUUID. */
 export function newSubmissionId(): string {

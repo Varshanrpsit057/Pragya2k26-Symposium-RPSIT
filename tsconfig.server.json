@@ -21,10 +21,8 @@
     "noFallthroughCasesInSwitch": true
   },
   "include": [
-    "server"
-  ],
-  "exclude": [
-    "server/cloudflare.ts",
-    "server/assets.d.ts"
+    "server",
+    "amplify",
+    "scripts/**/*.ts"
   ]
 }

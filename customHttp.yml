@@ -1,0 +1,33 @@
+# Response headers for the website on AWS Amplify Hosting.
+customHeaders:
+  - pattern: '**'
+    headers:
+      - key: 'Strict-Transport-Security'
+        value: 'max-age=31536000; includeSubDomains'
+      - key: 'X-Content-Type-Options'
+        value: 'nosniff'
+      - key: 'X-Frame-Options'
+        value: 'SAMEORIGIN'
+      - key: 'Referrer-Policy'
+        value: 'strict-origin-when-cross-origin'
+      - key: 'Permissions-Policy'
+        value: 'camera=(), microphone=(), geolocation=()'
+  # Fingerprinted build files never change.
+  - pattern: '/assets/**'
+    headers:
+      - key: 'Cache-Control'
+        value: 'public, max-age=31536000, immutable'
+  # The admin dashboard: never framed, cached or indexed; only this site's own code may run,
+  # and it may talk only to the AWS API and the private S3 links the API hands out.
+  - pattern: '/landing/**'
+    headers:
+      - key: 'Cache-Control'
+        value: 'no-store'
+      - key: 'X-Robots-Tag'
+        value: 'noindex, nofollow, noarchive'
+      - key: 'X-Frame-Options'
+        value: 'DENY'
+      - key: 'Referrer-Policy'
+        value: 'no-referrer'
+      - key: 'Content-Security-Policy'
+        value: "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data: https://*.amazonaws.com; connect-src 'self' https://*.amazonaws.com; font-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'; object-src 'none'"

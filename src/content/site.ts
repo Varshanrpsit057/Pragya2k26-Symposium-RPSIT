@@ -30,8 +30,8 @@ export const site: SiteInfo = {
   dates: '17 October 2026',
   venue: null,
   registration: {
-    // The registration server (server/, see the README). It serves this site too, so the
-    // form posts to the same address; set VITE_REGISTRATION_API_URL if it lives elsewhere.
+    // The registration API's route (AWS Lambda; its address comes from the Amplify build, see
+    // the README). Set to null to switch online registration off.
     endpoint: '/api/register',
     // The hero countdown runs to this moment (IST); after it, registration shows as closed.
     closesAt: '2026-10-16T17:00:00',

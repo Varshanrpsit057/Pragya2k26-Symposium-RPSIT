@@ -59,6 +59,24 @@ export class DriveStore {
     return { id: file.id, name: file.name ?? name };
   }
 
+  /**
+   * The file uploaded earlier with these private labels (e.g. registration ID and kind), if
+   * any: a retry after a lost answer finds it instead of uploading a second copy.
+   */
+  async findByProperties(properties: Record<string, string>): Promise<StoredFile | null> {
+    const query = [
+      ...Object.entries(properties).map(([key, value]) => `appProperties has { key=${quote(key)} and value=${quote(value)} }`),
+      'trashed = false',
+    ].join(' and ');
+    const found = await this.google.request<{ files?: StoredFile[] }>(
+      `https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(query)}&fields=files(id,name)&pageSize=1` +
+        '&supportsAllDrives=true&includeItemsFromAllDrives=true',
+      { method: 'GET' },
+      { label: 'Drive: find file', idempotent: true },
+    );
+    return found.files?.[0] ?? null;
+  }
+
   /** Moves a file to the Drive trash (recoverable for 30 days), e.g. after a failed registration. */
   async trash(fileId: string): Promise<void> {
     await this.google.request(
