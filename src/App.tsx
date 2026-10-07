@@ -69,13 +69,11 @@ function Page() {
         <EventOrbit />
         <EventsSection
           category="technical"
-          layout="lead-pair"
           title="Technical events"
           lead="Five events on AI, code and data: build from a prompt, visualize, present, code and quiz."
         />
         <EventsSection
           category="non-technical"
-          layout="trail-pair"
           title="Non-technical events"
           lead="Five events on design, film, observation, branding and gaming."
         />

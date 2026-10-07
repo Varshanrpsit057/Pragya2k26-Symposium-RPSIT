@@ -37,8 +37,11 @@ describe('events content', () => {
     events.forEach((event) => expect(event.description.trim()).not.toBe(''));
   });
 
-  it('gives every event its poster', () => {
-    events.forEach((event) => expect(event.poster, event.name).toMatch(new RegExp(`${event.id}\\.webp`)));
+  it('gives every event its poster, and the large artwork for its panel', () => {
+    events.forEach((event) => {
+      expect(event.poster, event.name).toMatch(new RegExp(`/${event.id}\\.webp`));
+      expect(event.posterLarge, event.name).toMatch(new RegExp(`/${event.id}-large\\.webp`));
+    });
   });
 
   it('has See More details for every event', () => {

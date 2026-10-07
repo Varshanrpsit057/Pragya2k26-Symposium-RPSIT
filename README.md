@@ -240,4 +240,9 @@ If a real secret is ever committed or pushed, rotate it: deleting it from git is
 Content (dates, venue, fees, UPI details, contacts, events, rules) lives in `src/content/`:
 `site.ts` (dates, registration closing time, fees, payment details, college, socials), `events.ts`
 and `eventCatalog.ts` (the ten events), `eventInfo.ts` (See More details), `crew.ts` (Dev Crew).
+
+Event posters are WebP files named after the event id in `src/assets/events/`: `<id>.webp` (3:4,
+about 420×560, for the circular carousel, the See More window and the poster wall) and
+`<id>-large.webp` (the whole artwork, about 840 px wide, for the event panels). Replace both files
+to change a poster; the originals stay in `image/` on your computer (git ignores that folder).
 The fonts (Mona Sans, SIL Open Font License) are self-hosted in `public/fonts/`.
