@@ -1,7 +1,9 @@
 import { site } from '../../content/site';
 import { useRegistrationPhase } from '../../hooks/useRegistrationPhase';
 import { useSchedule } from '../../lib/liveSchedule';
+import { onsiteClosingTime } from '../../lib/schedule';
 import { EMBLEM_SLOT_ID } from '../brand/BrandEmblem';
+import { SiteNotice } from '../help/SiteNotice';
 import { RegisterButton } from '../ui/RegisterButton';
 import { SpecularButton } from '../ui/SpecularButton';
 import { Countdown } from './Countdown';
@@ -10,21 +12,23 @@ import './Hero.css';
 /** 'PRAGYA' and '2026' → the edition mark '2K26'. */
 const edition = `${site.year.slice(0, 1)}K${site.year.slice(-2)}`;
 
-/** Where registration stands: a short title, and when the desk closes under it. */
-const PHASE_NOTES: Record<'between' | 'onsite' | 'closed', { title: string; sub?: string }> = {
-  between: { title: 'On-site registration only', sub: `At the desk on ${site.dates ?? 'the event day'}, until 11:59 AM` },
-  onsite: { title: 'On-site registration open', sub: 'Closes today at 11:59 AM' },
-  closed: { title: 'Registration closed' },
-};
+/** Where registration stands: a short title, and when the desk closes under it (the time follows the schedule in force). */
+const phaseNote = (phase: 'between' | 'onsite' | 'closed', closes: string): { title: string; sub?: string } =>
+  phase === 'between'
+    ? { title: 'On-site registration only', sub: `At the desk on ${site.dates ?? 'the event day'}, until ${closes}` }
+    : phase === 'onsite'
+      ? { title: 'On-site registration open', sub: `Closes today at ${closes}` }
+      : { title: 'Registration closed' };
 
 /** The countdown while online registration is open; then where registration stands. */
 function HeroRegistration() {
   const phase = useRegistrationPhase();
-  const { onlineClosesAt } = useSchedule();
+  const schedule = useSchedule();
+  const { onlineClosesAt } = schedule;
   if (phase === 'online') {
     return onlineClosesAt ? <Countdown target={onlineClosesAt} label="Registration closes in" endedLabel="Registration closed" /> : null;
   }
-  const note = PHASE_NOTES[phase];
+  const note = phaseNote(phase, onsiteClosingTime(schedule));
   return (
     <p className="countdown countdown--ended" role="status">
       <span className="countdown__ended-dot" aria-hidden="true" />
@@ -46,6 +50,8 @@ export function Hero() {
       <div className="hero__veil" aria-hidden="true" />
 
       <div className="container hero__inner">
+        {/* An admin's notice on the day (e.g. a venue change), first thing on the page */}
+        <SiteNotice className="hero__notice" />
         <div className="hero__lockup">
           <p className="hero__department">
             <span className="hero__department-of">Department of</span>

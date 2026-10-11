@@ -34,7 +34,7 @@ import { API_BASE } from '../../lib/api';
 import { submitRegistration, type OwnRegistration, type RegistrationResult } from '../../lib/registrationClient';
 import { formatIst, parseEventStart } from '../../lib/countdown';
 import { currentSchedule } from '../../lib/liveSchedule';
-import { registrationPhase, type RegistrationPhase } from '../../lib/schedule';
+import { onsiteClosingTime, registrationPhase, type RegistrationPhase } from '../../lib/schedule';
 import { statusLink } from '../../lib/statusLink';
 import { Modal } from '../modal/Modal';
 import { HelpDeskLine } from '../help/HelpDeskLine';
@@ -763,6 +763,7 @@ function ClosedNotice({ phase, onClose }: { phase: RegistrationPhase; onClose: (
   const { gatePassFee, eventFee, onsite } = site.registration;
   const opens = onsite.opensAt ? parseEventStart(onsite.opensAt) : null;
   const onsiteAhead = phase === 'between' || phase === 'onsite';
+  const closes = onsiteClosingTime(currentSchedule());
   return (
     <div className="reg-done" role="status">
       <span className="reg-done__badge reg-done__badge--closed" aria-hidden="true">
@@ -778,14 +779,14 @@ function ClosedNotice({ phase, onClose }: { phase: RegistrationPhase; onClose: (
       </h2>
       <p className="reg__lead">
         {closedMessage()}
-        {onsiteAhead ? '' : ' On-site registration closed at 11:59 AM on the event day. Thank you for your interest.'}
+        {onsiteAhead ? '' : ` On-site registration closed at ${closes} on the event day. Thank you for your interest.`}
       </p>
       {onsiteAhead && (
         <div className="reg-note" role="note">
           <p className="reg-note__title">{phase === 'onsite' ? 'On-site registration is open today' : 'Register on-site on the event day'}</p>
           <p>
             {phase === 'onsite'
-              ? `Come to ${onsite.desk} today, until 11:59 AM.`
+              ? `Come to ${onsite.desk} today, until ${closes}.`
               : `On-site registration opens ${opens ? `on ${formatIst(opens)}` : 'on the event day'} at ${onsite.desk}.`}{' '}
             Pay the {rupees(gatePassFee)} gate pass there in cash or by UPI, then {rupees(eventFee)} for each event to its
             coordinator. Bring your college ID card.

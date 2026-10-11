@@ -53,7 +53,7 @@ describe('dashboard of the student coordinators', () => {
   it.each([
     [
       'ADMIN',
-      ['Registration desk', 'Online payments', 'Events', 'Results & certificates', 'Help requests', 'System status', 'Deleted', 'Campus map', 'Student coordinators', 'Reports', 'Testing', 'Roles'],
+      ['Registration desk', 'Online payments', 'Event-day controls', 'Events', 'Results & certificates', 'Help requests', 'System status', 'Deleted', 'Campus map', 'Student coordinators', 'Reports', 'Testing', 'Roles'],
     ],
     ['DESK', ['Registration desk', 'Roles']],
     ['COORDINATOR', ['Events', 'Results & certificates', 'Roles']],

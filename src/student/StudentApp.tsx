@@ -8,6 +8,7 @@
  * request. The help desk's numbers are always at the bottom.
  */
 import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
+import { SiteNotice } from '../components/help/SiteNotice';
 import { LazyCampusMap } from '../components/map/LazyCampusMap';
 import { GroupedId } from '../components/ui/GroupedId';
 import { site } from '../content/site';
@@ -98,6 +99,7 @@ export function StudentApp() {
         <p className="stu-head__sub">Student login · {site.dates}</p>
       </header>
       <main className="stu-main">
+        <SiteNotice className="stu-notice" />
         {screen.kind === 'loading' && <p className="stu-muted">Loading…</p>}
         {screen.kind === 'paused' && <Paused message={screen.message} onRetry={retry} />}
         {screen.kind === 'signin' && (

@@ -11,6 +11,10 @@
  *                  kept ("a real student") first.
  *
  * Both settings live in the Control table, so every server instance reads the same ones.
+ *
+ * Also here, because it is the same schedule: the registration times an admin changes for real
+ * (Registration times in the dashboard), e.g. on-site registration reopened until 2 PM. That
+ * change becomes the real schedule; a test timeline still replaces it while one is on.
  */
 import { eventCatalog } from '../src/content/eventCatalog';
 import { parseEventStart } from '../src/lib/countdown';
@@ -18,6 +22,9 @@ import { registrationPhase, scheduleProblem, type RegistrationSchedule } from '.
 import {
   CLEAR_PHRASE,
   type ClearResult,
+  NOTICE_MAX,
+  type RegistrationWindowView,
+  type SiteNoticeView,
   type TestRecordView,
   type TestSessionView,
   type TestingState,
@@ -36,6 +43,8 @@ import { claimsOf, type Registration, type RegistrationStatus, type Store } from
 
 export const TIMELINE_SETTING = 'timeline';
 export const TEST_SESSION_SETTING = 'test-session';
+export const WINDOW_SETTING = 'registration-window';
+export const NOTICE_SETTING = 'site-notice';
 /** How long a server instance trusts the settings it read (a change reaches all within this). */
 const SETTINGS_TTL_MS = 10_000;
 /** One clean-up call works for this long (the API answers within 29 s), then says what is left. */
@@ -56,6 +65,20 @@ interface StoredTimeline {
   setAt: string;
 }
 
+/** The admin's change to the registration times. */
+interface StoredWindow {
+  schedule: RegistrationSchedule;
+  setBy: string;
+  setAt: string;
+}
+
+/** The notice on the website. */
+interface StoredNotice {
+  text: string;
+  setBy: string;
+  setAt: string;
+}
+
 export interface TestToolsDeps {
   store: Store;
   files: FileStore;
@@ -63,7 +86,7 @@ export interface TestToolsDeps {
   sheets: Pick<SheetsStore, 'ready' | 'update'>;
   now: () => number;
   log: (message: string, details?: Record<string, unknown>) => void;
-  /** The real schedule. */
+  /** The planned schedule (src/content/site.ts). */
   standard: RegistrationSchedule;
   /** The schedule the whole API follows: changed in place, so every part sees the change. */
   schedule: RegistrationSchedule;
@@ -100,6 +123,8 @@ function typedTime(value: unknown): string | null {
 export class TestTools {
   private loadedAt = Number.NEGATIVE_INFINITY;
   private timelineSetting: StoredTimeline | null = null;
+  private windowSetting: StoredWindow | null = null;
+  private noticeSetting: StoredNotice | null = null;
   private session: TestSessionView | null = null;
 
   constructor(private readonly deps: TestToolsDeps) {}
@@ -116,14 +141,26 @@ export class TestTools {
     const now = this.deps.now();
     if (!force && now - this.loadedAt < SETTINGS_TTL_MS) return;
     try {
-      const [timeline, session] = await Promise.all([this.deps.store.getSetting(TIMELINE_SETTING), this.deps.store.getSetting(TEST_SESSION_SETTING)]);
+      const [timeline, session, window, notice] = await Promise.all([
+        this.deps.store.getSetting(TIMELINE_SETTING),
+        this.deps.store.getSetting(TEST_SESSION_SETTING),
+        this.deps.store.getSetting(WINDOW_SETTING),
+        this.deps.store.getSetting(NOTICE_SETTING),
+      ]);
       this.timelineSetting = parse<StoredTimeline>(timeline);
       this.session = parse<TestSessionView>(session);
+      this.windowSetting = parse<StoredWindow>(window);
+      this.noticeSetting = parse<StoredNotice>(notice);
       this.loadedAt = now;
     } catch (error) {
       this.deps.log('Could not read the test settings', { error: describeError(error) });
     }
-    Object.assign(this.deps.schedule, this.timelineSetting?.schedule ?? this.deps.standard);
+    Object.assign(this.deps.schedule, this.timelineSetting?.schedule ?? this.real());
+  }
+
+  /** The real schedule: as planned, or as an admin changed it. */
+  private real(): RegistrationSchedule {
+    return this.windowSetting?.schedule ?? this.deps.standard;
   }
 
   timeline(): TimelineView {
@@ -131,21 +168,122 @@ export class TestTools {
     const setting = this.timelineSetting;
     return {
       schedule: { ...this.deps.schedule },
-      standard: { ...this.deps.standard },
+      standard: { ...this.real() },
       override: setting ? { mode: setting.mode, setBy: setting.setBy, setAt: setting.setAt } : null,
       phase: registrationPhase(this.deps.schedule, now),
       serverTime: new Date(now).toISOString(),
     };
   }
 
-  /** For every signed-in staff member: is a test session or a test timeline on? */
+  /** For every signed-in staff member: is a test session or a test timeline on, have the registration times been changed? */
   status() {
-    return { session: this.session?.label ?? null, timeline: this.timelineSetting !== null };
+    const window = this.windowSetting;
+    return {
+      session: this.session?.label ?? null,
+      timeline: this.timelineSetting !== null,
+      window: window ? { setBy: window.setBy, setAt: window.setAt } : null,
+      notice: this.noticeSetting?.text ?? null,
+    };
   }
 
-  /** The schedule for the public website (no names). */
+  /** The notice on the website (admins). */
+  async noticeState(): Promise<SiteNoticeView> {
+    await this.sync(true);
+    return { success: true, notice: this.noticeSetting ? { ...this.noticeSetting } : null };
+  }
+
+  /** Posts the notice on the website and the student page, or (empty text) takes it down. */
+  async setNotice(actor: Actor, body: unknown): Promise<SiteNoticeView> {
+    const raw = isObject(body) && typeof body.text === 'string' ? body.text : '';
+    // Plain text on one line: no control characters, spaces tidied.
+    const text = Array.from(raw, (char) => (char.charCodeAt(0) < 32 || char.charCodeAt(0) === 127 ? ' ' : char))
+      .join('')
+      .replace(/\s+/g, ' ')
+      .trim();
+    if (!text) {
+      await this.deps.store.putSetting(NOTICE_SETTING, '');
+      this.deps.log('Website notice taken down', { by: actor.username });
+      return this.noticeState();
+    }
+    if (text.length > NOTICE_MAX) throw new ApiError(400, 'INVALID', `Keep the notice to ${NOTICE_MAX} characters (it has ${text.length}).`);
+    const stored: StoredNotice = { text, setBy: actor.username, setAt: this.iso() };
+    await this.deps.store.putSetting(NOTICE_SETTING, JSON.stringify(stored));
+    this.deps.log('Website notice posted', { by: actor.username, length: text.length });
+    return this.noticeState();
+  }
+
+  /** Registration times (admins): as planned, as changed, and what is in force now. */
+  async windowState(): Promise<RegistrationWindowView> {
+    await this.sync(true);
+    const now = this.deps.now();
+    const window = this.windowSetting;
+    return {
+      success: true,
+      planned: { ...this.deps.standard },
+      real: { ...this.real() },
+      inForce: { ...this.deps.schedule },
+      changed: window ? { setBy: window.setBy, setAt: window.setAt } : null,
+      testTimeline: this.timelineSetting !== null,
+      phase: registrationPhase(this.deps.schedule, now),
+      serverTime: new Date(now).toISOString(),
+    };
+  }
+
+  /**
+   * Changes the registration times for real (admins): on-site registration open until a time
+   * (reopened, extended or shortened; opened now if it was not open yet), every registration
+   * closed now, three times given, or back to the planned schedule. The API, the desks and the
+   * website follow within seconds.
+   */
+  async setWindow(actor: Actor, body: unknown): Promise<RegistrationWindowView> {
+    const action = isObject(body) ? body.action : null;
+    const now = this.deps.now();
+    const base = this.real();
+    const earliest = (a: string, b: string) => ((parseEventStart(a) ?? 0) <= (parseEventStart(b) ?? 0) ? a : b);
+    let schedule: RegistrationSchedule;
+    switch (action) {
+      case 'planned':
+        await this.deps.store.putSetting(WINDOW_SETTING, '');
+        this.deps.log('Registration times back to the plan', { by: actor.username });
+        return this.windowState();
+      case 'onsite-until': {
+        const until = typedTime(isObject(body) ? body.onsiteClosesAt : null);
+        if (!until) throw new ApiError(400, 'INVALID', 'Give the time on-site registration closes.');
+        if ((parseEventStart(until) ?? 0) <= now) throw new ApiError(400, 'INVALID', 'Choose a closing time later than now (to close now, use Close registration now).');
+        // Not open yet (e.g. a day early): it opens now, and online registration closes.
+        const opens = base.onsiteOpensAt && (parseEventStart(base.onsiteOpensAt) ?? 0) <= now ? base.onsiteOpensAt : istLocal(now - MINUTE);
+        const onlineCloses = base.onlineClosesAt ? earliest(base.onlineClosesAt, opens) : opens;
+        schedule = { onlineClosesAt: onlineCloses, onsiteOpensAt: opens, onsiteClosesAt: until };
+        break;
+      }
+      case 'close-now': {
+        const closes = istLocal(now);
+        const opens = base.onsiteOpensAt ? earliest(base.onsiteOpensAt, istLocal(now - MINUTE)) : istLocal(now - MINUTE);
+        schedule = { onlineClosesAt: base.onlineClosesAt ? earliest(base.onlineClosesAt, opens) : opens, onsiteOpensAt: opens, onsiteClosesAt: closes };
+        break;
+      }
+      case 'custom': {
+        const given = isObject(body) && isObject(body.schedule) ? body.schedule : {};
+        const custom = { onlineClosesAt: typedTime(given.onlineClosesAt), onsiteOpensAt: typedTime(given.onsiteOpensAt), onsiteClosesAt: typedTime(given.onsiteClosesAt) };
+        if (!custom.onlineClosesAt || !custom.onsiteOpensAt || !custom.onsiteClosesAt) throw new ApiError(400, 'INVALID', 'Give all three times: online closes, on-site opens and on-site closes.');
+        schedule = custom as RegistrationSchedule;
+        break;
+      }
+      default:
+        throw new ApiError(400, 'INVALID', 'Choose what to change.');
+    }
+    const problem = scheduleProblem(schedule);
+    if (problem) throw new ApiError(400, 'INVALID', `Those times do not work: ${problem}.`);
+    const stored: StoredWindow = { schedule, setBy: actor.username, setAt: this.iso() };
+    await this.deps.store.putSetting(WINDOW_SETTING, JSON.stringify(stored));
+    this.deps.log('Registration times changed', { action, ...schedule, by: actor.username });
+    return this.windowState();
+  }
+
+  /** The schedule and the notice for the public website (no names). */
   publicSchedule() {
-    return { success: true as const, schedule: { ...this.deps.schedule }, test: this.timelineSetting !== null };
+    const notice = this.noticeSetting;
+    return { success: true as const, schedule: { ...this.deps.schedule }, test: this.timelineSetting !== null, notice: notice ? { text: notice.text, setAt: notice.setAt } : null };
   }
 
   /** Sets a test timeline, or ('standard') goes back to the real schedule. */

@@ -153,4 +153,39 @@ export class StaffAccounts {
     }
     throw new ApiError(409, 'BUSY', 'The account was changed by someone else at the same moment. Please reload and try again.');
   }
+
+  /** Signs the person out on every device now (e.g. a lost phone); they can sign in again. */
+  async signOut(actor: Actor, username: string): Promise<{ success: true; signedOut: string }> {
+    const key = username.toLowerCase();
+    if (actor.kind === 'staff' && actor.username === key) throw new ApiError(400, 'INVALID', 'Use Sign out at the top to sign yourself out.');
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+      const current = await this.deps.store.getStaff(key);
+      if (!current) throw new ApiError(404, 'NOT_FOUND', 'There is no such student coordinator account.');
+      const now = this.iso();
+      const next: StaffAccount = { ...current, signedOutAt: now, updatedAt: now, updatedBy: actor.username, revision: current.revision + 1 };
+      if (await this.deps.store.saveStaff(next, current.revision)) {
+        this.deps.log('Staff member signed out', { username: key, by: actor.username });
+        return { success: true, signedOut: key };
+      }
+    }
+    throw new ApiError(409, 'BUSY', 'The account was changed by someone else at the same moment. Please reload and try again.');
+  }
+
+  /**
+   * Deletes the account (e.g. one made for testing): it can no longer sign in and anyone
+   * signed in with it is signed out at their next request. What it recorded keeps its name.
+   */
+  async remove(actor: Actor, username: string): Promise<{ success: true; deleted: string }> {
+    const key = username.toLowerCase();
+    if (actor.kind === 'staff' && actor.username === key) throw new ApiError(400, 'INVALID', 'You cannot delete your own account. Ask another admin.');
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+      const current = await this.deps.store.getStaff(key);
+      if (!current) throw new ApiError(404, 'NOT_FOUND', 'There is no such student coordinator account.');
+      if (await this.deps.store.deleteStaff(key, current.revision)) {
+        this.deps.log('Staff account deleted', { username: key, role: current.role, by: actor.username });
+        return { success: true, deleted: key };
+      }
+    }
+    throw new ApiError(409, 'BUSY', 'The account was changed by someone else at the same moment. Please reload and try again.');
+  }
 }

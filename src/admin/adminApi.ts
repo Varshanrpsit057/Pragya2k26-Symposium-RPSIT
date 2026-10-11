@@ -18,7 +18,18 @@ import type { HelpCategory, HelpRequest, SystemStatus } from '../lib/help';
 import type { RegistrationErrors } from '../lib/registration';
 import type { StudentPortalState } from '../lib/student';
 import type { SessionInfo, SignedInView, StaffAccountView, StaffRole } from '../lib/staff';
-import { CLEAR_PHRASE, type ClearResult, type DeletedView, type TestSessionView, type TestingState, type TimelineMode, type TimelineView } from '../lib/testTools';
+import {
+  CLEAR_PHRASE,
+  type ClearResult,
+  type DeletedView,
+  type RegistrationWindowView,
+  type SiteNoticeView,
+  type TestSessionView,
+  type TestingState,
+  type TimelineMode,
+  type TimelineView,
+  type WindowAction,
+} from '../lib/testTools';
 
 const TOKEN_KEY = 'pragya-admin-session';
 
@@ -309,5 +320,30 @@ export const createStaff = (token: string, account: StaffChange) =>
 
 export const updateStaff = (token: string, username: string, change: StaffChange) =>
   request<{ account: StaffAccountView }>(`/api/admin/staff/${encodeURIComponent(username)}`, { method: 'POST', body: change, token }).then((data) => data.account);
+/** Deletes a staff account (e.g. one made for testing); anyone signed in with it is signed out. */
+export const deleteStaff = (token: string, username: string) =>
+  request<{ deleted: string }>(`/api/admin/staff/${encodeURIComponent(username)}/delete`, { method: 'POST', body: {}, token }).then((data) => data.deleted);
+
+/** Signs the person out on every device now; they can sign in again. */
+export const signOutStaff = (token: string, username: string) =>
+  request<{ signedOut: string }>(`/api/admin/staff/${encodeURIComponent(username)}/sign-out`, { method: 'POST', body: {}, token }).then((data) => data.signedOut);
+
+// --- Event-day controls (admins): the notice on the website, the registration times ----------
+
+export const siteNotice = (token: string) => request<SiteNoticeView>('/api/admin/site-notice', { token }).then((data) => data.notice);
+/** Posts the notice (or, with '', takes it down). */
+export const setSiteNotice = (token: string, text: string) =>
+  request<SiteNoticeView>('/api/admin/site-notice', { method: 'POST', body: { text }, token }).then((data) => data.notice);
+
+export const registrationWindow = (token: string) => request<RegistrationWindowView>('/api/admin/registration-window', { token });
+export interface WindowRequest {
+  action: WindowAction;
+  /** 'onsite-until': '2026-10-17T14:00' (IST). */
+  onsiteClosesAt?: string;
+  /** 'custom': the three times (IST). */
+  schedule?: { onlineClosesAt: string; onsiteOpensAt: string; onsiteClosesAt: string };
+}
+export const setRegistrationWindow = (token: string, change: WindowRequest) =>
+  request<RegistrationWindowView>('/api/admin/registration-window', { method: 'POST', body: change, token });
 
 export const getReport = (token: string) => request<{ report: ReportSummary }>('/api/admin/reports', { token }).then((data) => data.report);

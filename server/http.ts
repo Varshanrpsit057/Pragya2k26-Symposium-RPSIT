@@ -151,6 +151,14 @@ export const STAFF_ROUTES: readonly StaffRoute[] = [
   { method: 'GET', path: route_('/staff'), permission: 'staff.manage', run: (s) => s.staff.list() },
   { method: 'POST', path: route_('/staff'), permission: 'staff.manage', run: (s, { actor, body }) => s.staff.create(actor, body) },
   { method: 'POST', path: route_(`/staff/${USER}`), permission: 'staff.manage', run: (s, { actor, body, params: [username] }) => s.staff.update(actor, username, body) },
+  { method: 'POST', path: route_(`/staff/${USER}/delete`), permission: 'staff.manage', run: (s, { actor, params: [username] }) => s.staff.remove(actor, username) },
+  { method: 'POST', path: route_(`/staff/${USER}/sign-out`), permission: 'staff.manage', run: (s, { actor, params: [username] }) => s.staff.signOut(actor, username) },
+  // The notice on the website (admins).
+  { method: 'GET', path: route_('/site-notice'), permission: 'site.notice', run: (s) => s.testing.noticeState() },
+  { method: 'POST', path: route_('/site-notice'), permission: 'site.notice', run: (s, { actor, body }) => s.testing.setNotice(actor, body) },
+  // The registration times (admins): reopen or extend on-site registration, close it, or set new times.
+  { method: 'GET', path: route_('/registration-window'), permission: 'registration.window', run: (s) => s.testing.windowState() },
+  { method: 'POST', path: route_('/registration-window'), permission: 'registration.window', run: (s, { actor, body }) => s.testing.setWindow(actor, body) },
   { method: 'GET', path: route_('/reports'), permission: 'reports.view', run: (s, { actor }) => s.report(actor) },
   { method: 'GET', path: route_('/student-portal'), permission: 'portal.manage', run: (s) => s.students.adminState() },
   { method: 'GET', path: route_('/sessions'), permission: 'staff.manage', run: (s) => s.signedIn() },

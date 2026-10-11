@@ -11,7 +11,7 @@
  * from the clock on every request, so the switch needs no deployment; the API enforces it,
  * and the website only mirrors it for display. Free of browser and Node APIs: both import it.
  */
-import { parseEventStart } from './countdown';
+import { clockIst, parseEventStart } from './countdown';
 
 export type RegistrationPhase = 'online' | 'between' | 'onsite' | 'closed';
 
@@ -66,6 +66,15 @@ export function isEventDay(schedule: RegistrationSchedule, now: number): boolean
 }
 
 /** Checks a schedule: every time readable, and in order. Returns what is wrong, or null. */
+/**
+ * When on-site registration closes, as a time of day ('11:59 AM'): it follows the schedule in
+ * force, so a closing time an admin moves shows everywhere at once.
+ */
+export function onsiteClosingTime(schedule: RegistrationSchedule): string {
+  const closes = schedule.onsiteClosesAt ? parseEventStart(schedule.onsiteClosesAt) : null;
+  return closes === null ? 'the end of the day' : clockIst(closes);
+}
+
 export function scheduleProblem(schedule: RegistrationSchedule): string | null {
   const entries = Object.entries(schedule) as [keyof RegistrationSchedule, string | null][];
   for (const [name, value] of entries) {

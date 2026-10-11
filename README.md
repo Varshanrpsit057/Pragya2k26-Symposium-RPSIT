@@ -316,11 +316,26 @@ The API decides from its own clock on every request (`src/lib/schedule.ts`); the
 it. The Google Form fallback link disappears with the online form, but **the Google Form itself must
 be closed by hand** (Forms → Responses → *Accepting responses* off) at 11:59 PM on 16 October.
 
+### Event-day controls (admins)
+
+- **Registration times**: reopen or extend on-site registration until a time (e.g. the desks stay
+  open until 2 PM; if the desk was not open yet it opens now and online registration closes), close
+  every registration now, set all three times, or go back to the planned times. The change becomes
+  the real schedule: the API, the desks, Student login and the website follow it within seconds,
+  and every closing time shown on the site follows it. Every dashboard shows a banner while the
+  times differ from the plan. A test timeline (Testing) still replaces it while one is on.
+- **Notice on the website**: one line (up to 300 characters, e.g. a venue or time change) at the
+  top of the home page and the student page; every open page shows it within two minutes, and
+  every dashboard shows it too. Take it down when it no longer applies.
+- **Student coordinators**: **Sign out** someone on every device (e.g. a lost phone; they can sign
+  in again), deactivate an account, or **Delete** it (e.g. accounts made for testing; the username
+  can be used again, and what they recorded keeps their name).
+
 ### Roles
 
 | Role | May | Events |
 | --- | --- | --- |
-| **Admin** | everything below, plus student coordinator accounts, who is signed in now (with desk numbers), cancelling or deleting records, corrections (void a fee, reopen results), reports and the Excel downloads, and **Testing** (test sessions) | all |
+| **Admin** | everything below, plus **Event-day controls** (the registration times and the notice on the website), student coordinator accounts (create, change, sign out, delete), who is signed in now (with desk numbers), cancelling or deleting records, corrections (void a fee, reopen results), reports and the Excel downloads, and **Testing** (test sessions) | all |
 | **Registration desk** | search registrations, register students at the desk on any day (cash, or GPay the student pays from Student login), approve GPay payments from the student's screenshot, correct details, add or remove events | all |
 | **Event coordinator** | look up participant IDs, add a participant to the event, take the ₹50 fee (cash, or approve the student's GPay screenshot), mark attendance, enter winners, submit results, download the event's Excel | assigned only |
 | **Certificate team** | read every event's participants (present first) and the three prizes with each student's details; Excel | all (read only) |

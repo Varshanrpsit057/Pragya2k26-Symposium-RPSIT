@@ -1,8 +1,8 @@
-/** Staff accounts (admins): create, set roles, assign events, reset passwords, deactivate. */
+/** Staff accounts (admins): create, set roles, assign events, reset passwords, deactivate, delete. */
 import { useCallback, useState, type FormEvent } from 'react';
 import { events as allEvents } from '../content/events';
 import { ROLE_INFO, STAFF_ROLES, type SessionInfo, type StaffAccountView, type StaffRole } from '../lib/staff';
-import { SignedOut, createStaff, listStaff, signedInNow, updateStaff, type StaffChange } from './adminApi';
+import { SignedOut, createStaff, deleteStaff, listStaff, signOutStaff, signedInNow, updateStaff, type StaffChange } from './adminApi';
 import { Badge, ErrorNote, LiveStatus, useLiveData, when } from './ui';
 
 interface PanelProps {
@@ -43,6 +43,27 @@ export function StaffPanel({ token, session, onSignedOut }: PanelProps) {
   const load = useCallback(() => listStaff(token), [token]);
   const live = useLiveData(load, onSignedOut, 60_000);
   const [editing, setEditing] = useState<string | null>(null);
+  const [deleting, setDeleting] = useState<string | null>(null);
+  const [deleteError, setDeleteError] = useState<unknown>(null);
+  const [deleted, setDeleted] = useState('');
+
+  const remove = async (account: StaffAccountView) => {
+    const question = `Delete the account ${account.username} (${account.displayName}, ${ROLE_INFO[account.role].label})?\n\nThey can no longer sign in, and are signed out if they are signed in now. What they recorded keeps their name. This cannot be undone: to use them again, make a new account.`;
+    if (!window.confirm(question)) return;
+    setDeleting(account.username);
+    setDeleteError(null);
+    setDeleted('');
+    try {
+      const username = await deleteStaff(token, account.username);
+      live.setData((current) => (current ?? []).filter((item) => item.username !== username));
+      setDeleted(`Deleted ${username}.`);
+    } catch (failure) {
+      if (failure instanceof SignedOut) onSignedOut();
+      else setDeleteError(failure);
+    } finally {
+      setDeleting(null);
+    }
+  };
 
   const replace = (account: StaffAccountView) =>
     live.setData((current) => {
@@ -52,7 +73,7 @@ export function StaffPanel({ token, session, onSignedOut }: PanelProps) {
 
   return (
     <main className="adm-page">
-      <SignedInNow token={token} onSignedOut={onSignedOut} />
+      <SignedInNow token={token} session={session} onSignedOut={onSignedOut} />
       <NewAccount token={token} onCreated={replace} onSignedOut={onSignedOut} />
       <section className="adm-card adm-pad">
         <div className="adm-toolbar">
@@ -61,9 +82,15 @@ export function StaffPanel({ token, session, onSignedOut }: PanelProps) {
         </div>
         <p className="adm-muted">
           The owner account ({session.kind === 'owner' ? 'you' : 'ADMIN_USERNAME'}) is set in the Amplify secrets and is not listed here. Changes apply
-          at once: a deactivated account or a reset password signs that person out.
+          at once: a deactivated or deleted account, or a reset password, signs that person out.
         </p>
         <ErrorNote error={live.error} />
+        <ErrorNote error={deleteError} />
+        {deleted && (
+          <p className="adm-note" role="status">
+            {deleted}
+          </p>
+        )}
         <div className="adm-table-wrap">
           <table className="adm-table adm-table--static">
             <thead>
@@ -92,9 +119,22 @@ export function StaffPanel({ token, session, onSignedOut }: PanelProps) {
                       {when(account.updatedAt)} by {account.updatedBy}
                     </td>
                     <td>
-                      <button className="adm-button adm-button--small" type="button" onClick={() => setEditing(account.username)}>
-                        Edit
-                      </button>
+                      <span className="adm-inline">
+                        <button className="adm-button adm-button--small" type="button" onClick={() => setEditing(account.username)}>
+                          Edit
+                        </button>
+                        {!(session.kind === 'staff' && session.username === account.username) && (
+                          <button
+                            className="adm-button adm-button--small adm-button--danger-outline"
+                            type="button"
+                            disabled={deleting !== null}
+                            aria-label={`Delete ${account.username}`}
+                            onClick={() => void remove(account)}
+                          >
+                            {deleting === account.username ? 'Deleting…' : 'Delete'}
+                          </button>
+                        )}
+                      </span>
                     </td>
                   </tr>
                 ),
@@ -258,18 +298,34 @@ function EditAccount({ token, account, onDone, onSignedOut }: { token: string; a
   );
 }
 
-/** Who is signed in right now, with the registration desk each desk sign-in is at. */
-function SignedInNow({ token, onSignedOut }: { token: string; onSignedOut: () => void }) {
+/** Who is signed in right now, with the registration desk each desk sign-in is at; an admin can sign someone out. */
+function SignedInNow({ token, session, onSignedOut }: { token: string; session: SessionInfo; onSignedOut: () => void }) {
   const load = useCallback(() => signedInNow(token), [token]);
   const live = useLiveData(load, onSignedOut, 30_000);
   const sessions = live.data ?? [];
+  const [busy, setBusy] = useState<string | null>(null);
+  const [error, setError] = useState<unknown>(null);
+  const signOutPerson = async (username: string, name: string) => {
+    if (!window.confirm(`Sign ${name} (${username}) out on every device now?\n\nThey can sign in again with their password (to stop that, deactivate the account).`)) return;
+    setBusy(username);
+    setError(null);
+    try {
+      await signOutStaff(token, username);
+      live.refresh();
+    } catch (failure) {
+      if (failure instanceof SignedOut) onSignedOut();
+      else setError(failure);
+    } finally {
+      setBusy(null);
+    }
+  };
   return (
     <section className="adm-card adm-pad" aria-label="Signed in now">
       <div className="adm-toolbar">
         <h2 className="adm-h2">Signed in now ({sessions.length})</h2>
         <LiveStatus updatedAt={live.updatedAt} loading={live.loading} onRefresh={live.refresh} />
       </div>
-      <ErrorNote error={live.error} />
+      <ErrorNote error={live.error ?? error} />
       {sessions.length === 0 ? (
         <p className="adm-muted">{live.loading ? 'Loading…' : 'Nobody is signed in.'}</p>
       ) : (
@@ -283,6 +339,7 @@ function SignedInNow({ token, onSignedOut }: { token: string; onSignedOut: () =>
                 <th scope="col">Desk</th>
                 <th scope="col">Signed in</th>
                 <th scope="col">Until</th>
+                <th scope="col" />
               </tr>
             </thead>
             <tbody>
@@ -294,6 +351,13 @@ function SignedInNow({ token, onSignedOut }: { token: string; onSignedOut: () =>
                   <td>{item.deskNumber ? <Badge tone="good">Desk {item.deskNumber}</Badge> : item.role === 'DESK' ? <Badge tone="warn">Not chosen</Badge> : '—'}</td>
                   <td>{when(item.since)}</td>
                   <td>{when(item.until)}</td>
+                  <td>
+                    {item.kind === 'staff' && !(session.kind === 'staff' && session.username === item.username) && (
+                      <button className="adm-button adm-button--small" type="button" disabled={busy !== null} onClick={() => void signOutPerson(item.username, item.displayName)}>
+                        {busy === item.username ? 'Signing out…' : 'Sign out'}
+                      </button>
+                    )}
+                  </td>
                 </tr>
               ))}
             </tbody>

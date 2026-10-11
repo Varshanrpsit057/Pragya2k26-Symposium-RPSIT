@@ -14,7 +14,7 @@ export type TimelineMode = 'standard' | 'onsite-now' | 'online-now' | 'closed' |
 export interface TimelineView {
   /** What the website and the API follow now. */
   schedule: RegistrationSchedule;
-  /** The real schedule (src/content/site.ts). */
+  /** The real schedule: the planned one (src/content/site.ts), or as an admin changed it (Registration times). */
   standard: RegistrationSchedule;
   /** Set when a test timeline replaces the real one. */
   override: { mode: TimelineMode; setBy: string; setAt: string } | null;
@@ -79,4 +79,44 @@ export interface DeletedView {
   deletedAt: string;
   deletedBy: string;
   reason: string;
+}
+
+/**
+ * The registration times an admin controls (Registration times in the dashboard): the planned
+ * schedule, and any change made to it, e.g. on-site registration reopened until 2 PM.
+ */
+export interface RegistrationWindowView {
+  success: true;
+  /** As planned (src/content/site.ts). */
+  planned: RegistrationSchedule;
+  /** The real schedule: the planned one, or the admin's change. */
+  real: RegistrationSchedule;
+  /** What the website and the API follow now (a test timeline may replace the real one). */
+  inForce: RegistrationSchedule;
+  changed: { setBy: string; setAt: string } | null;
+  /** A test timeline (Testing) is on and replaces the real schedule until it is set back. */
+  testTimeline: boolean;
+  phase: 'online' | 'between' | 'onsite' | 'closed';
+  serverTime: string;
+}
+
+/**
+ * - 'onsite-until': on-site registration open until the time given (it opens now if it was not open yet)
+ * - 'close-now': every registration closes now
+ * - 'custom': the three times given
+ * - 'planned': back to the planned schedule
+ */
+export type WindowAction = 'onsite-until' | 'close-now' | 'custom' | 'planned';
+
+/** A notice an admin posts on the website and the student page (e.g. "COGNIX has moved to LH-05"). */
+export interface SiteNotice {
+  text: string;
+  setAt: string;
+}
+
+export const NOTICE_MAX = 300;
+
+export interface SiteNoticeView {
+  success: true;
+  notice: (SiteNotice & { setBy: string }) | null;
 }
