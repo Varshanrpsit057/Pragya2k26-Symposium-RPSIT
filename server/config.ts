@@ -6,6 +6,9 @@
  * table and bucket names from the Amplify backend. None of them ever reaches the browser.
  */
 
+import { site } from '../src/content/site';
+import { scheduleOf, scheduleProblem, type RegistrationSchedule } from '../src/lib/schedule';
+
 /** Setting values by name (process.env on Lambda, a plain object in tests). */
 export type Settings = Readonly<Record<string, string | undefined>>;
 
@@ -21,7 +24,20 @@ export interface AppConfig {
   rateLimit: { max: number; windowMs: number };
   tables: { registrations: string; control: string };
   bucket: string;
+  /** When online and on-site registration are open (src/content/site.ts unless overridden). */
+  schedule: RegistrationSchedule;
 }
+
+/**
+ * Optional overrides of the registration schedule, for rehearsing the event day on a sandbox
+ * backend (e.g. SCHEDULE_ONSITE_OPENS_AT=2026-10-12T09:00:00). Leave them unset in production:
+ * the schedule in src/content/site.ts applies.
+ */
+export const SCHEDULE_SETTINGS = {
+  onlineClosesAt: 'SCHEDULE_ONLINE_CLOSES_AT',
+  onsiteOpensAt: 'SCHEDULE_ONSITE_OPENS_AT',
+  onsiteClosesAt: 'SCHEDULE_ONSITE_CLOSES_AT',
+} as const;
 
 const REQUIRED = [
   'GOOGLE_CLIENT_ID',
@@ -47,9 +63,22 @@ function integer(value: unknown, fallback: number, min: number, max: number): nu
   return Number.isFinite(parsed) ? Math.min(max, Math.max(min, parsed)) : fallback;
 }
 
+/** The schedule, with any overrides; a bad override is reported, never silently ignored. */
+function readSchedule(env: Settings): { schedule: RegistrationSchedule; problem: string | null } {
+  const schedule = scheduleOf(site.registration);
+  for (const [key, name] of Object.entries(SCHEDULE_SETTINGS) as [keyof RegistrationSchedule, string][]) {
+    const value = text(env[name]);
+    if (value) schedule[key] = value;
+  }
+  const problem = scheduleProblem(schedule);
+  return { schedule, problem: problem && `SCHEDULE_* (${problem})` };
+}
+
 /** The settings, or the names of the missing ones (the API answers 503 until they are set). */
 export function readConfig(env: Settings): { config: AppConfig | null; missing: string[] } {
-  const missing = REQUIRED.filter((name) => !text(env[name]));
+  const { schedule, problem } = readSchedule(env);
+  const missing: string[] = REQUIRED.filter((name) => !text(env[name]));
+  if (problem) missing.push(problem);
   if (missing.length) return { config: null, missing };
   const required = (name: (typeof REQUIRED)[number]) => text(env[name])!;
   return {
@@ -78,6 +107,7 @@ export function readConfig(env: Settings): { config: AppConfig | null; missing: 
       },
       tables: { registrations: required('REGISTRATIONS_TABLE'), control: required('CONTROL_TABLE') },
       bucket: required('FILES_BUCKET'),
+      schedule,
     },
   };
 }

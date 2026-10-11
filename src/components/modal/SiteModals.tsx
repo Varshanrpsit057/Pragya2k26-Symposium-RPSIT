@@ -1,7 +1,7 @@
 import { useCallback, useMemo, useState, useSyncExternalStore, type ReactNode } from 'react';
 import { site } from '../../content/site';
 import type { SymposiumEvent } from '../../content/types';
-import { isRegistrationClosed } from '../../lib/registration';
+import { registrationPhase, scheduleOf, type RegistrationPhase } from '../../lib/schedule';
 import type { OwnRegistration } from '../../lib/registrationClient';
 import { parseStatusHash, statusHash } from '../../lib/statusLink';
 import { EventDetailsModal } from '../events/EventDetailsModal';
@@ -25,13 +25,13 @@ const noHash = () => '';
  */
 export function SiteModalsProvider({ children }: { children: ReactNode }) {
   // `request` counts openings, so the form can pre-select the event behind each one;
-  // `closed` is decided at the moment of opening, against registration.closesAt.
+  // `phase` (online, on-site or closed) is decided at the moment of opening, by the clock.
   const [registration, setRegistration] = useState<{
     open: boolean;
     event?: SymposiumEvent;
     request: number;
-    closed: boolean;
-  }>({ open: false, request: 0, closed: false });
+    phase: RegistrationPhase;
+  }>({ open: false, request: 0, phase: 'online' });
   const [detailsEvent, setDetailsEvent] = useState<SymposiumEvent | null>(null);
   const [crewOpen, setCrewOpen] = useState(false);
   const hash = useSyncExternalStore(subscribeToHash, readHash, noHash);
@@ -39,8 +39,8 @@ export function SiteModalsProvider({ children }: { children: ReactNode }) {
 
   const openRegistration = useCallback((event?: SymposiumEvent) => {
     setDetailsEvent(null);
-    const closed = isRegistrationClosed(site.registration.closesAt, Date.now());
-    setRegistration((current) => ({ open: true, event, request: current.request + 1, closed }));
+    const phase = registrationPhase(scheduleOf(site.registration), Date.now());
+    setRegistration((current) => ({ open: true, event, request: current.request + 1, phase }));
   }, []);
   const openEventDetails = useCallback((event: SymposiumEvent) => setDetailsEvent(event), []);
   const closeRegistration = useCallback(() => setRegistration((current) => ({ ...current, open: false })), []);
@@ -70,7 +70,7 @@ export function SiteModalsProvider({ children }: { children: ReactNode }) {
         open={registration.open}
         event={registration.event}
         request={registration.request}
-        closed={registration.closed}
+        phase={registration.phase}
         onClose={closeRegistration}
         onCheckStatus={openStatus}
       />

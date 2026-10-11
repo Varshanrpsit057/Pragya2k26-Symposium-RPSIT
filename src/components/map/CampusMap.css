@@ -1,0 +1,415 @@
+/* The campus map: a printed-plan look that reads on the dark site and the light dashboard alike */
+.map {
+  display: grid;
+  gap: 0.75rem;
+  color: inherit;
+}
+
+.map__where {
+  margin: 0;
+}
+
+.map__tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+
+.map__tab {
+  display: inline-flex;
+  gap: 0.35rem;
+  align-items: center;
+  padding: 0.45rem 0.85rem;
+  border: 1px solid rgb(127 137 190 / 0.45);
+  border-radius: 999px;
+  color: inherit;
+  font: inherit;
+  font-size: 0.92rem;
+  background: transparent;
+  cursor: pointer;
+}
+
+.map__tab[aria-selected='true'] {
+  border-color: #6c5ce7;
+  color: #fff;
+  background: #5b4fd6;
+}
+
+.map__tab-dot {
+  width: 0.55rem;
+  height: 0.55rem;
+  border-radius: 50%;
+  background: #ff5cc8;
+}
+
+.map__canvas {
+  overflow: hidden;
+  border-radius: 14px;
+}
+
+.map__legend,
+.map__note {
+  margin: 0;
+  font-size: 0.85rem;
+  opacity: 0.85;
+}
+
+.map__note {
+  padding: 0.45rem 0.65rem;
+  border-left: 3px solid #ffc15a;
+  border-radius: 6px;
+  background: rgb(255 193 90 / 0.1);
+  opacity: 1;
+}
+
+.map__key {
+  display: inline-block;
+  width: 0.9rem;
+  height: 0.9rem;
+  margin: 0 0.25rem 0 0.6rem;
+  border-radius: 3px;
+  vertical-align: -0.1rem;
+}
+
+.map__key--venue {
+  background: #ff5cc8;
+}
+
+.map__key--stairs {
+  background: #cdd3e6;
+}
+
+.map__key--dot {
+  width: 1.15rem;
+  height: 1.15rem;
+  border-radius: 50%;
+  color: #fff;
+  font-size: 0.7rem;
+  font-weight: 700;
+  line-height: 1.15rem;
+  text-align: center;
+  background: #0f8b8d;
+}
+
+.map__steps {
+  display: grid;
+  gap: 0.35rem;
+  margin: 0;
+  padding-left: 1.3rem;
+}
+
+/* The plan itself */
+.map-plan {
+  display: block;
+  width: 100%;
+  height: auto;
+  font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  user-select: none;
+}
+
+.map-plan.is-placing {
+  cursor: crosshair;
+}
+
+.map-plan__paper {
+  fill: #f6f4ee;
+}
+
+.map-plan__building {
+  fill: #ead7c2;
+  stroke: #b98d64;
+  stroke-width: 3;
+}
+
+.map-plan__corridor {
+  fill: #f3e7d8;
+  stroke: #d2b596;
+  stroke-width: 1.5;
+}
+
+.map-plan__court {
+  fill: #cfe5c4;
+  stroke: #9fc48e;
+  stroke-width: 2;
+}
+
+.map-plan__amphi {
+  fill: none;
+  stroke: #8db27c;
+  stroke-width: 3;
+}
+
+.map-plan__court-label,
+.map-plan__corridor-label,
+.map-plan__front,
+.map-plan__entry text {
+  fill: #6c6250;
+  font-size: 15px;
+  text-anchor: middle;
+}
+
+.map-plan__corridor-label {
+  font-size: 12px;
+}
+
+.map-plan__entry path {
+  fill: none;
+  stroke: #b03a8b;
+  stroke-width: 4;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.map-plan__entry text {
+  fill: #b03a8b;
+  font-weight: 700;
+}
+
+.map-room rect {
+  fill: #ffffff;
+  stroke: #9b8a76;
+  stroke-width: 1.5;
+}
+
+.map-room text {
+  fill: #2a2a36;
+  font-size: 14px;
+  font-weight: 600;
+  text-anchor: middle;
+  pointer-events: none;
+}
+
+.map-room--stairs rect,
+.map-room--washroom rect {
+  fill: #e4e7f1;
+}
+
+.map-room--lab rect {
+  fill: #e9e4ff;
+}
+
+.map-room--hall rect {
+  fill: #e1f3f4;
+}
+
+.map-room--entrance rect {
+  fill: #fde7f4;
+  stroke: #b03a8b;
+}
+
+.map-room--empty rect {
+  fill: #efece6;
+  stroke-dasharray: 5 4;
+}
+
+.map-room--empty text {
+  fill: #9a917f;
+}
+
+.map-room[role='button'] {
+  cursor: pointer;
+}
+
+.map-room[role='button']:hover rect,
+.map-room[role='button']:focus-visible rect {
+  stroke: #5b4fd6;
+  stroke-width: 3;
+}
+
+.map-room.is-selected rect {
+  stroke: #5b4fd6;
+  stroke-width: 4;
+}
+
+.map-room.is-venue rect {
+  fill: #ff5cc8;
+  stroke: #a3157a;
+  stroke-width: 4;
+  animation: map-pulse 1.6s ease-in-out infinite;
+}
+
+.map-room.is-venue text {
+  fill: #ffffff;
+}
+
+@keyframes map-pulse {
+  50% {
+    fill: #ff8ad8;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .map-room.is-venue rect {
+    animation: none;
+  }
+}
+
+.map-dot {
+  cursor: pointer;
+}
+
+.map-dot circle {
+  fill: #0f8b8d;
+  stroke: #ffffff;
+  stroke-width: 3;
+}
+
+.map-dot text {
+  fill: #ffffff;
+  font-size: 16px;
+  font-weight: 800;
+  text-anchor: middle;
+  pointer-events: none;
+}
+
+.map-dot:hover circle,
+.map-dot:focus-visible circle,
+.map-dot.is-selected circle {
+  fill: #ff5cc8;
+}
+
+/* The campus overview */
+.map-campus__ground {
+  fill: #e3eedb;
+}
+
+.map-campus__field {
+  fill: #b9d9a8;
+  stroke: #8fbf7a;
+  stroke-width: 3;
+}
+
+.map-campus__shed {
+  fill: #5b8fd9;
+  stroke: #3d6cb3;
+  stroke-width: 2;
+}
+
+.map-campus__block {
+  fill: #f2efe7;
+  stroke: #a59d8c;
+  stroke-width: 2;
+}
+
+.map-campus__main {
+  fill: #f0b9c9;
+  stroke: #c4627f;
+  stroke-width: 3;
+}
+
+.map-campus__court {
+  fill: #cfe5c4;
+  stroke: #9fc48e;
+  stroke-width: 2;
+}
+
+.map-campus__amphi {
+  fill: none;
+  stroke: #8db27c;
+  stroke-width: 3;
+}
+
+.map-campus__portico {
+  fill: #f6e3b4;
+  stroke: #c49a4c;
+  stroke-width: 2;
+}
+
+.map-campus__road {
+  fill: #9aa0ad;
+}
+
+.map-campus__island {
+  fill: #8fbf7a;
+}
+
+.map-campus__median {
+  stroke: #f5f5f5;
+  stroke-width: 3;
+  stroke-dasharray: 14 10;
+}
+
+.map-campus__trees circle {
+  fill: #5f9e4f;
+}
+
+.map-campus__gate {
+  fill: #4b4f5c;
+}
+
+.map-campus__label,
+.map-campus__title {
+  fill: #1f2433;
+  font-size: 16px;
+  font-weight: 600;
+  text-anchor: middle;
+}
+
+.map-campus__title {
+  font-size: 18px;
+  font-weight: 800;
+}
+
+.map-campus__label--strong {
+  fill: #b03a8b;
+  font-size: 18px;
+  font-weight: 800;
+}
+
+.map-campus__route {
+  fill: none;
+  stroke: #ff5cc8;
+  stroke-width: 7;
+  stroke-dasharray: 2 14;
+  stroke-linecap: round;
+}
+
+.map-campus__arrow {
+  fill: none;
+  stroke: #ff5cc8;
+  stroke-width: 6;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+/* A photo spot's picture */
+.map-photo {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: grid;
+  place-items: center;
+  padding: 1rem;
+  background: rgb(5 6 26 / 0.85);
+}
+
+.map-photo figure {
+  display: grid;
+  gap: 0.6rem;
+  max-width: min(100%, 52rem);
+  margin: 0;
+  padding: 0.75rem;
+  border-radius: 14px;
+  color: #1f2433;
+  background: #ffffff;
+}
+
+.map-photo img {
+  width: 100%;
+  max-height: 70vh;
+  object-fit: contain;
+  border-radius: 8px;
+  background: #eee;
+}
+
+.map-button {
+  justify-self: end;
+  padding: 0.5rem 1.1rem;
+  border: 0;
+  border-radius: 999px;
+  color: #fff;
+  font: inherit;
+  font-weight: 700;
+  background: #5b4fd6;
+  cursor: pointer;
+}

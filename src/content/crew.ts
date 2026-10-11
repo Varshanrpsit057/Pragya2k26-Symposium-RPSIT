@@ -33,7 +33,7 @@ export const crew: CrewMember[] = [
   {
     id: 'varshan-c',
     name: 'Varshan C',
-    role: 'UI/UX Design',
+    role: 'Project Lead & Product Architect',
     study: CLASS,
     credited: true,
     photo: portraitFor('varshan-c'),
@@ -45,13 +45,25 @@ export const crew: CrewMember[] = [
   {
     id: 'barath-s',
     name: 'Barath S',
-    role: 'Prompt Engineer & API Authenticator',
+    role: 'Backend & AWS Hosting',
     study: CLASS,
     credited: true,
     photo: portraitFor('barath-s'),
     links: [
       { kind: 'linkedin', url: 'https://www.linkedin.com/in/barath-sivalingam-4ba41a330' },
       { kind: 'github', url: 'https://github.com/Barath-S-07' },
+    ],
+  },
+  {
+    id: 'sivakasi-n',
+    name: 'Sivakasi N',
+    role: 'UI/UX & Logo Designer',
+    study: CLASS,
+    credited: true,
+    photo: portraitFor('sivakasi-n'),
+    links: [
+      { kind: 'linkedin', url: 'https://www.linkedin.com/in/sivakasi-n-832049352' },
+      { kind: 'github', url: 'https://github.com/sivakasi1866-sketch' },
     ],
   },
 ];

@@ -20,7 +20,7 @@ describe('Footer', () => {
 
     const credits = screen.getByRole('heading', { name: 'Developed by' }).closest('.footer__credits') as HTMLElement;
     const credited = crew.filter((member) => member.credited);
-    expect(credited.map((member) => member.name)).toEqual(['Mohan Prabu K', 'Varshan C', 'Barath S']);
+    expect(credited.map((member) => member.name)).toEqual(['Mohan Prabu K', 'Varshan C', 'Barath S', 'Sivakasi N']);
     expect(within(credits).getAllByRole('listitem')).toHaveLength(credited.length);
     for (const member of credited) {
       expect(within(credits).getByText(member.name)).toBeInTheDocument();
@@ -39,7 +39,9 @@ describe('Footer', () => {
 
     expect(screen.getByRole('heading', { name: 'Coordinator contact' })).toBeInTheDocument();
     expect(screen.getByText('Balajimanikandhaan S.S')).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: '+91 73582 13736' })).toHaveAttribute('href', 'tel:+917358213736');
+    for (const link of screen.getAllByRole('link', { name: '+91 73582 13736' })) expect(link).toHaveAttribute('href', 'tel:+917358213736');
+    // The help desk, for any help.
+    expect(screen.getByRole('heading', { name: 'Help desk' })).toBeInTheDocument();
   });
 
   it('says contact details are coming while none are set', () => {
@@ -87,7 +89,7 @@ describe('Footer', () => {
   it('shows the RPSIT crest instead of the PRAGYA mark', () => {
     const { container } = render(<Footer links={[]} />);
 
-    expect(container.querySelector('img.footer__logo')).toHaveAttribute('src', '/images/rpsit-logo-sm.webp');
+    expect(container.querySelector('img.footer__logo')).toHaveAttribute('src', '/images/rpsit-crest.webp');
   });
 
   it('puts the map beside the credits, after the contact details', () => {

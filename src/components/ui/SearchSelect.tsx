@@ -26,22 +26,36 @@ interface SearchSelectProps {
   emptyText?: (query: string) => string;
   invalid?: boolean;
   describedBy?: string;
+  /** Long lists: matches that start with what was typed come first (see filterOptions). */
+  bestFirst?: boolean;
 }
 
 /** Lowercase words, ignoring punctuation: 'Data Science (AI & DS)' → data, science, ai, ds. */
 const words = (text: string) => text.toLowerCase().split(/[^a-z0-9]+/).filter(Boolean);
 
 /**
- * Options in which every word of the search appears inside one of the option's words,
- * in their original order. 'cse' finds '(CSE)' but not 'Mechatronics Engineering'.
+ * Options in which every word of the search appears inside one of the option's words: 'cse'
+ * finds '(CSE)' but not 'Mechatronics Engineering'. They keep their order, unless `bestFirst`
+ * (long lists such as colleges), which puts first:
+ *   1. options that start with what was typed, ignoring spaces and punctuation, so the first
+ *      few letters find a name, and initials work: 'ksr' finds 'K.S.R. College of Engineering'
+ *   2. options where every typed word starts a word: 'sona tech' finds 'Sona College of Technology'
  */
-export function filterOptions(options: readonly string[], query: string): string[] {
+export function filterOptions(options: readonly string[], query: string, bestFirst = false): string[] {
   const wanted = words(query);
   if (wanted.length === 0) return [...options];
-  return options.filter((option) => {
+  const typed = wanted.join('');
+  const ranked: { option: string; rank: number; index: number }[] = [];
+  options.forEach((option, index) => {
     const optionWords = words(option);
-    return wanted.every((word) => optionWords.some((optionWord) => optionWord.includes(word)));
+    let rank: number;
+    if (optionWords.join('').startsWith(typed)) rank = 0;
+    else if (wanted.every((word) => optionWords.some((optionWord) => optionWord.startsWith(word)))) rank = 1;
+    else if (wanted.every((word) => optionWords.some((optionWord) => optionWord.includes(word)))) rank = 2;
+    else return;
+    ranked.push({ option, rank, index });
   });
+  return (bestFirst ? ranked.sort((a, b) => a.rank - b.rank || a.index - b.index) : ranked).map(({ option }) => option);
 }
 
 export function SearchSelect({
@@ -56,6 +70,7 @@ export function SearchSelect({
   emptyText = (query) => `Nothing matches “${query}”.`,
   invalid,
   describedBy,
+  bestFirst = false,
 }: SearchSelectProps) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState('');
@@ -66,7 +81,7 @@ export function SearchSelect({
   const listRef = useRef<HTMLUListElement>(null);
   const popupRef = useRef<HTMLDivElement>(null);
 
-  const filtered = useMemo(() => filterOptions(options, query), [options, query]);
+  const filtered = useMemo(() => filterOptions(options, query, bestFirst), [options, query, bestFirst]);
   const listId = `${id}-list`;
   const optionId = (option: string) => `${id}-option-${options.indexOf(option)}`;
   const activeOption = filtered[Math.min(active, filtered.length - 1)];

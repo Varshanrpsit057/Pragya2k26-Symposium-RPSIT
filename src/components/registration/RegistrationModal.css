@@ -807,6 +807,10 @@
   color: #ff8ad8;
 }
 
+.reg-state--cancelled {
+  color: #a9b8cf;
+}
+
 /* The private status link, to keep for later */
 .reg-link {
   display: grid;

@@ -61,6 +61,31 @@ export class DriveStore {
   }
 
   /**
+   * Replaces a file's contents (and name), keeping its ID and links; Drive keeps the earlier
+   * contents as revisions. Checks the size Google stored, as for an upload.
+   */
+  async replace(fileId: string, { name, mimeType, bytes }: Omit<UploadRequest, 'folderId' | 'properties'>): Promise<StoredFile> {
+    const boundary = `pragya-${crypto.randomUUID()}`;
+    const head = encoder.encode(
+      `--${boundary}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n${JSON.stringify({ name, mimeType })}\r\n` +
+        `--${boundary}\r\nContent-Type: ${mimeType}\r\n\r\n`,
+    );
+    const tail = encoder.encode(`\r\n--${boundary}--\r\n`);
+    const body = new Uint8Array(head.length + bytes.length + tail.length);
+    body.set(head, 0);
+    body.set(bytes, head.length);
+    body.set(tail, head.length + bytes.length);
+    const file = await this.google.request<{ id?: string; name?: string; size?: string }>(
+      `https://www.googleapis.com/upload/drive/v3/files/${encodeURIComponent(fileId)}?uploadType=multipart&supportsAllDrives=true&fields=id,name,size`,
+      { method: 'PATCH', headers: { 'Content-Type': `multipart/related; boundary=${boundary}` }, body },
+      // Writing the same contents twice is harmless.
+      { label: `Drive: update ${name}`, idempotent: true, timeoutMs: 60_000 },
+    );
+    if (!file.id || Number(file.size) !== bytes.length) throw new GoogleApiError(`Drive: ${name} was not stored completely`, 500, 'incomplete', true, false);
+    return { id: file.id, name: file.name ?? name };
+  }
+
+  /**
    * The file uploaded earlier with these private labels (e.g. registration ID and kind), if
    * any: a retry after a lost answer finds it instead of uploading a second copy.
    */

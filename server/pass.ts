@@ -12,6 +12,7 @@ import { eventInfo } from '../src/content/eventInfo';
 import { site } from '../src/content/site';
 import type { EventCategory } from '../src/content/types';
 import type { ParticipantDetails, RegistrationRecord } from '../src/lib/registration';
+import type { GatePassPayment } from './store';
 
 export interface PassEvent {
   id: string;
@@ -33,6 +34,8 @@ export interface PassData {
   registeredAt: string;
   participant: ParticipantDetails;
   transactionId: string;
+  /** How the gate pass was paid: the online transaction ID, or cash / UPI at the desk. */
+  paymentDetail: { label: string; value: string };
   /** Only the events this participant selected, in the site's order. */
   events: PassEvent[];
   amountPaid: number;
@@ -42,7 +45,7 @@ export interface PassData {
 }
 
 const TO_BE_ANNOUNCED = 'To be announced';
-const CATEGORY_LABEL: Record<EventCategory, string> = { technical: 'Technical', 'non-technical': 'Non-Technical' };
+const CATEGORY_LABEL: Record<EventCategory, string> = { technical: 'Technical' };
 
 /** Everything the pass shows, from a stored registration and the site's event details. */
 export function passData(input: {
@@ -50,6 +53,8 @@ export function passData(input: {
   registeredAt: string;
   record: RegistrationRecord;
   eventIds: readonly string[];
+  /** On-site registrations: the gate pass as the desk received it. */
+  gatePass?: Pick<GatePassPayment, 'method' | 'reference'>;
 }): PassData {
   const { record } = input;
   const events = eventCatalog
@@ -75,6 +80,15 @@ export function passData(input: {
     registeredAt: input.registeredAt,
     participant: record.participant,
     transactionId: record.payment.transactionId,
+    paymentDetail: input.gatePass
+      ? {
+          label: 'Gate pass payment',
+          value:
+            input.gatePass.method === 'CASH'
+              ? 'Cash at the registration desk'
+              : `UPI at the registration desk${input.gatePass.reference ? ` (${input.gatePass.reference})` : ''}`,
+        }
+      : { label: 'Transaction ID (UPI / UTR)', value: record.payment.transactionId },
     events,
     amountPaid: record.payment.gatePassAmount,
     feePerEvent,
@@ -113,7 +127,6 @@ const COLOR = {
   line: rgb(0.83, 0.84, 0.91),
   violet: rgb(0.35, 0.24, 0.84),
   violetSoft: rgb(0.95, 0.94, 1),
-  pink: rgb(0.82, 0.2, 0.55),
   green: rgb(0.05, 0.52, 0.3),
   greenSoft: rgb(0.89, 0.97, 0.92),
   amber: rgb(0.68, 0.38, 0),
@@ -380,7 +393,7 @@ class PassLayout {
       if (event.subtitle) {
         write(this.page, `  ${event.subtitle}`, columns[1].x + measure(event.name, this.style(10, true)), baseline, this.style(8.5, false, COLOR.muted));
       }
-      write(this.page, CATEGORY_LABEL[event.category], columns[2].x, baseline, this.style(9.5, false, event.category === 'technical' ? COLOR.violet : COLOR.pink));
+      write(this.page, CATEGORY_LABEL[event.category], columns[2].x, baseline, this.style(9.5, false, COLOR.violet));
       writeRight(this.page, rupees(this.data.feePerEvent), feeRight, baseline, this.style(10, true));
       this.y -= rowHeight;
       this.page.drawLine({ start: { x: MARGIN, y: this.y }, end: { x: PAGE.width - MARGIN, y: this.y }, thickness: 0.4, color: COLOR.line });
@@ -459,6 +472,18 @@ class PassLayout {
     this.y = bottom - 18;
   }
 
+  /** A plain paragraph across the page (e.g. how events are chosen at the venue). */
+  paragraph(text: string) {
+    const style = this.style(10);
+    const lines = wrap(text, style, CONTENT - 24);
+    this.ensure(lines.length * 13.5 + 10);
+    for (const line of lines) {
+      write(this.page, line, MARGIN + 12, this.y - 12, style);
+      this.y -= 13.5;
+    }
+    this.y -= 14;
+  }
+
   /** One card per selected event: what it is, where and when. */
   eventDetails() {
     const innerX = MARGIN + 16;
@@ -480,7 +505,7 @@ class PassLayout {
       this.ensure(height + 10);
 
       const bottom = this.y - height;
-      const accent = event.category === 'technical' ? COLOR.violet : COLOR.pink;
+      const accent = COLOR.violet;
       roundedBox(this.page, MARGIN, bottom, CONTENT, height, 7, { border: COLOR.line });
       this.page.drawRectangle({ x: MARGIN + 0.5, y: bottom + 7, width: 3.5, height: height - 14, color: accent });
 
@@ -532,7 +557,7 @@ class PassLayout {
   }
 }
 
-/** Builds the participant pass PDF. `logoJpeg` is the RPSIT crest (public/images/rpsit-logo-pass.jpg). */
+/** Builds the participant pass PDF. `logoJpeg` is the RPSIT crest (server/passLogo.ts). */
 export async function buildPassPdf(data: PassData, logoJpeg: Uint8Array | ArrayBuffer): Promise<Uint8Array> {
   const pdf = await PDFDocument.create();
   pdf.setTitle(`${site.name} ${site.year} Participant Pass - ${data.registrationId}`);
@@ -555,20 +580,29 @@ export async function buildPassPdf(data: PassData, logoJpeg: Uint8Array | ArrayB
   layout.sectionTitle('Participant Details');
   layout.details([
     [['Name', participant.name], ['Registration ID', data.registrationId], ['Year of Study', participant.year]],
-    [['Email', participant.email], ['Phone', participant.phone], ['Transaction ID (UPI / UTR)', data.transactionId]],
+    [['Email', participant.email], ['Phone', participant.phone], [data.paymentDetail.label, data.paymentDetail.value]],
     [['College', participant.college], ['Department', participant.department]],
   ]);
 
-  layout.sectionTitle(`Selected Events (${data.events.length})`);
-  layout.eventTable();
+  if (data.events.length) {
+    layout.sectionTitle(`Selected Events (${data.events.length})`);
+    layout.eventTable();
 
-  layout.sectionTitle('Payment Summary', 110);
-  layout.paymentSummary();
+    layout.sectionTitle('Payment Summary', 110);
+    layout.paymentSummary();
 
-  layout.notice();
+    layout.notice();
 
-  layout.sectionTitle('Event Details', 90);
-  layout.eventDetails();
+    layout.sectionTitle('Event Details', 90);
+    layout.eventDetails();
+  } else {
+    // Registered at the desk with no events yet: they can join any event at its venue.
+    layout.sectionTitle('Events');
+    layout.paragraph(
+      `Choose your events on the ${site.name} ${site.year} website and register for each at its venue: show this pass (Registration ID ${data.registrationId}) to the event coordinator and pay ${rupees(data.feePerEvent)} per event there. Each event's page has a Route map to its venue.`,
+    );
+    layout.notice();
+  }
 
   layout.footers();
   return pdf.save();

@@ -32,22 +32,32 @@ const passFor = (events: string[]) =>
 
 describe('participant pass', () => {
   it('lists only the selected events, with the fee worked out from them', () => {
-    const pass = passFor(['pro-pitch', 'short-film', 'code-flex']);
+    const pass = passFor(['code-flex', 'pro-pitch']);
 
-    expect(pass.events.map((event) => event.name)).toEqual(['PRO-PITCH', 'CODE FLEX', 'SHORT FILM']);
+    expect(pass.events.map((event) => event.name)).toEqual(['PRO-PITCH', 'CODE FLEX']);
     expect(pass.amountPaid).toBe(100);
     expect(pass.feePerEvent).toBe(50);
-    expect(pass.payableAtVenue).toBe(150);
+    expect(pass.payableAtVenue).toBe(100);
     expect(pass.events[0]).toMatchObject({
       date: '17 October 2026',
       timing: '10:30 AM – 12:00 PM',
       type: 'Technical · Individual or team',
       venue: 'Delta Lab',
     });
-    // An event without its own venue or time yet falls back to the college and "To be announced".
-    const shortFilm = pass.events.find((event) => event.id === 'short-film');
-    expect(shortFilm?.venue).toMatch(/R P Sarathy Institute of Technology/);
-    expect(shortFilm?.timing).toBe('To be announced');
+    expect(pass.paymentDetail).toEqual({ label: 'Transaction ID (UPI / UTR)', value: '412345678901' });
+  });
+
+  it('leaves out discontinued events of a registration made before the symposium became technical-only', () => {
+    const pass = passFor(['pro-pitch', 'short-film', 'code-flex']);
+    expect(pass.events.map((event) => event.name)).toEqual(['PRO-PITCH', 'CODE FLEX']);
+    expect(pass.payableAtVenue).toBe(100);
+  });
+
+  it('says how the gate pass was paid at the desk for an on-site registration', () => {
+    const cash = passData({ registrationId: '262001', registeredAt: '2026-10-17T04:00:00.000Z', record: record(['cognix']), eventIds: ['cognix'], gatePass: { method: 'CASH' } });
+    expect(cash.paymentDetail).toEqual({ label: 'Gate pass payment', value: 'Cash at the registration desk' });
+    const upi = passData({ registrationId: '262002', registeredAt: '2026-10-17T04:00:00.000Z', record: record(['cognix']), eventIds: ['cognix'], gatePass: { method: 'UPI', reference: 'UPI123456' } });
+    expect(upi.paymentDetail.value).toBe('UPI at the registration desk (UPI123456)');
   });
 
   it('shows times in IST', () => {
@@ -57,8 +67,8 @@ describe('participant pass', () => {
 
   it.each([
     ['one event', ['cognix']],
-    ['three events', ['pro-pitch', 'short-film', 'code-flex']],
-    ['all ten events', eventCatalog.map((event) => event.id)],
+    ['three events', ['pro-pitch', 'viz-craft', 'code-flex']],
+    ['all five events', eventCatalog.map((event) => event.id)],
   ])('builds a valid A4 PDF for %s', async (label, events) => {
     const bytes = await buildPassPdf(passFor(events), logo);
     const pdf = await PDFDocument.load(bytes);
@@ -72,6 +82,13 @@ describe('participant pass', () => {
     if (process.env.PASS_PREVIEW_DIR) {
       writeFileSync(join(process.env.PASS_PREVIEW_DIR, `pass-${label.replace(/\s+/g, '-')}.pdf`), bytes);
     }
+  });
+
+  it('builds a valid pass for a desk registration with no events yet', async () => {
+    const deskPass = passData({ registrationId: '262001', registeredAt: '2026-10-17T04:00:00.000Z', record: record([]), eventIds: [], gatePass: { method: 'CASH' } });
+    expect(deskPass.events).toEqual([]);
+    const pdf = await PDFDocument.load(await buildPassPdf(deskPass, logo));
+    expect(pdf.getTitle()).toBe('PRAGYA 2026 Participant Pass - 262001');
   });
 
   it('names the file after the Registration ID', () => {

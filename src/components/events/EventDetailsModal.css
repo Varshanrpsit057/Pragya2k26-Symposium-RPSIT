@@ -1,47 +1,24 @@
+/*
+ * The See More window: a clear header (name, coordinators, what it is), a strip of the facts
+ * people look for first, then the event in short sections. Each fact appears once.
+ */
 .event-details {
   display: grid;
-  gap: clamp(1.25rem, 3vw, 1.75rem);
+  gap: clamp(1.15rem, 2.6vw, 1.6rem);
 }
 
-/*
- * The floating close button takes no height here, so the details use the window's full
- * width; only the top lines (category and name) leave room for it.
- */
+/* The floating close button takes no height; only the name leaves room for it. */
 .event-modal .modal__close {
   margin-bottom: calc(0.5rem - var(--icon-link-size, 2.75rem));
 }
 
-.event-details__category,
+.event-details__head {
+  display: grid;
+  gap: 0.55rem;
+}
+
 .event-details__name {
   padding-right: 3rem;
-}
-
-.event-details__intro {
-  display: grid;
-  gap: 0.45rem;
-}
-
-.event-details__category {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.45rem;
-  font-size: var(--step--1);
-  font-weight: 650;
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
-  color: var(--c-text-muted);
-}
-
-.event-details__category::before {
-  content: '';
-  width: 0.45rem;
-  height: 0.45rem;
-  border-radius: 50%;
-  background: var(--accent);
-  box-shadow: 0 0 10px var(--accent);
-}
-
-.event-details__name {
   font-size: var(--step-3);
   font-weight: 800;
   font-stretch: 118%;
@@ -51,32 +28,78 @@
 }
 
 .event-details__subtitle {
+  margin-top: -0.2rem;
   font-weight: 650;
   color: var(--accent);
 }
 
+.event-details__label {
+  font-size: 0.74rem;
+  font-weight: 700;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: var(--c-text-dim);
+}
+
+/* Coordinators straight under the name: the people to ask at the venue */
+.event-details__coordinators {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem 0.5rem;
+}
+
+.event-details__coordinators .event-details__label {
+  margin-right: 0.15rem;
+}
+
+.event-details__chip {
+  padding: 0.22rem 0.7rem;
+  border: 1px solid color-mix(in oklab, var(--accent) 40%, transparent);
+  border-radius: var(--r-pill);
+  font-size: 0.9rem;
+  font-weight: 650;
+  background: color-mix(in oklab, var(--accent) 9%, transparent);
+}
+
 .event-details__description {
-  max-width: 40rem;
+  max-width: 42rem;
   color: var(--c-text-muted);
   text-wrap: pretty;
 }
 
-/* Key facts as tiles */
-.event-details__facts {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(12rem, 1fr));
-  gap: 0.75rem;
+.event-details__muted {
+  color: var(--c-text-dim);
 }
 
-.event-details__facts div {
-  padding: 0.8rem 1rem;
+/* The four facts people look for first */
+.event-details__facts {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(10.5rem, 1fr));
+  gap: 0;
   border: 1px solid var(--c-line);
   border-radius: var(--r-md);
-  background: rgb(255 255 255 / 0.03);
+  overflow: hidden;
+  background: rgb(255 255 255 / 0.025);
+}
+
+.event-details__facts > div {
+  display: grid;
+  align-content: start;
+  gap: 0.2rem;
+  padding: 0.85rem 1rem;
+  border-right: 1px solid var(--c-line);
+}
+
+.event-details__facts > div:last-child {
+  border-right: 0;
 }
 
 .event-details__facts dt {
-  font-size: 0.78rem;
+  font-size: 0.74rem;
+  font-weight: 700;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
   color: var(--c-text-dim);
 }
 
@@ -85,46 +108,65 @@
   line-height: 1.4;
 }
 
-/* Prizes run across the whole row */
-.event-details__facts .event-details__fact--wide {
-  grid-column: 1 / -1;
+.event-details__route {
+  display: inline-flex;
+  align-items: center;
+  justify-self: start;
+  gap: 0.35rem;
+  margin-top: 0.35rem;
+  padding: 0.3rem 0.75rem;
+  border: 1px solid color-mix(in oklab, var(--accent) 55%, transparent);
+  border-radius: var(--r-pill);
+  font: inherit;
+  font-size: 0.86rem;
+  font-weight: 700;
+  color: var(--accent);
+  background: transparent;
+  text-decoration: none;
+  cursor: pointer;
+  transition: background var(--dur-fast) var(--ease-out);
 }
 
-/* The chief guest, set apart as a highlight */
+.event-details__route:hover,
+.event-details__route:focus-visible {
+  background: color-mix(in oklab, var(--accent) 14%, transparent);
+}
+
+.event-details__route-note {
+  margin-top: 0.35rem;
+  font-size: 0.86rem;
+  color: var(--c-text-muted);
+}
+
+/* The chief guest, set apart */
 .event-details__guest {
   display: grid;
   gap: 0.15rem;
-  padding: 0.85rem 1.1rem;
-  border: 1px solid color-mix(in oklab, var(--accent) 35%, transparent);
-  border-radius: var(--r-md);
+  padding: 0.8rem 1.05rem;
+  border-left: 3px solid var(--accent);
+  border-radius: var(--r-sm);
   font-weight: 650;
   background: color-mix(in oklab, var(--accent) 7%, transparent);
-}
-
-.event-details__guest span {
-  font-size: 0.78rem;
-  font-weight: 600;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  color: var(--accent);
 }
 
 .event-details__block {
   display: grid;
   align-content: start;
-  gap: 0.7rem;
+  gap: 0.65rem;
 }
 
-.event-details__block h3 {
+.event-details__block h3,
+.event-details__day h3 {
   font-size: var(--step-1);
   font-weight: 750;
   font-stretch: 112%;
 }
 
-/* Rounds as numbered steps */
+/* Rounds side by side, as steps */
 .event-details__rounds {
   display: grid;
-  gap: 0.6rem;
+  grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr));
+  gap: 0.7rem;
   margin: 0;
   padding: 0;
   list-style: none;
@@ -134,8 +176,9 @@
 .event-details__rounds li {
   position: relative;
   display: grid;
+  align-content: start;
   gap: 0.2rem;
-  padding: 0.85rem 1rem 0.85rem 3.4rem;
+  padding: 0.85rem 1rem 0.9rem 3.3rem;
   border: 1px solid var(--c-line);
   border-radius: var(--r-md);
   background: rgb(255 255 255 / 0.025);
@@ -149,10 +192,10 @@
   left: 1rem;
   display: grid;
   place-items: center;
-  width: 1.65rem;
-  height: 1.65rem;
+  width: 1.6rem;
+  height: 1.6rem;
   border-radius: 50%;
-  font-size: 0.82rem;
+  font-size: 0.8rem;
   font-weight: 800;
   color: var(--c-void);
   background: var(--accent-gradient);
@@ -165,7 +208,7 @@
 .event-details__columns {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 1.5rem 2rem;
+  gap: 1.25rem 2rem;
 }
 
 .event-details__list {
@@ -180,43 +223,82 @@
   color: var(--accent);
 }
 
-.event-details__list--ordered li::marker {
-  font-weight: 700;
-}
-
-.event-details__people {
-  display: grid;
-  gap: 0.4rem;
+/* Judging criteria as tags */
+.event-details__tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
   margin: 0;
   padding: 0;
   list-style: none;
 }
 
-.event-details__people li {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.25rem 0.9rem;
+.event-details__tags li {
+  padding: 0.28rem 0.75rem;
+  border: 1px solid var(--c-line-strong);
+  border-radius: var(--r-pill);
+  font-size: 0.88rem;
+  color: var(--c-text);
 }
 
-.event-details__people a {
-  color: var(--accent);
+/* Prizes as three tiles */
+.event-details__prizes {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(8.5rem, 1fr));
+  gap: 0.6rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
 }
 
-.event-details__person {
-  font-weight: 650;
+.event-details__prizes li {
+  display: grid;
+  gap: 0.1rem;
+  padding: 0.75rem 0.9rem;
+  border: 1px solid var(--c-line);
+  border-radius: var(--r-md);
+  background: rgb(255 255 255 / 0.03);
 }
 
-.event-details__role {
+.event-details__prizes li:first-child {
+  border-color: color-mix(in oklab, var(--c-solar) 55%, transparent);
+  background: color-mix(in oklab, var(--c-solar) 8%, transparent);
+}
+
+.event-details__prizes span {
+  font-size: 0.8rem;
   color: var(--c-text-dim);
 }
 
-.event-details__queries {
+.event-details__prizes strong {
+  font-size: var(--step-1);
+  font-weight: 800;
+}
+
+/* What every participant needs, once, in a quiet panel */
+.event-details__day {
   display: grid;
-  gap: 0.4rem;
-  margin-top: 0.4rem;
-  padding-top: 0.75rem;
-  border-top: 1px dashed var(--c-line);
+  gap: 0.55rem;
+  padding: 0.95rem 1.1rem;
+  border: 1px dashed var(--c-line-strong);
+  border-radius: var(--r-md);
+}
+
+.event-details__day h3 {
+  font-size: 1rem;
+}
+
+.event-details__day ul {
+  display: grid;
+  gap: 0.35rem;
+  margin: 0;
+  padding-left: 1.15rem;
+  font-size: 0.92rem;
   color: var(--c-text-muted);
+}
+
+.event-details__day a {
+  color: var(--accent);
 }
 
 .event-details__foot {
@@ -225,7 +307,7 @@
   align-items: center;
   justify-content: space-between;
   gap: 1rem;
-  padding-top: 1.25rem;
+  padding-top: 1.1rem;
   border-top: 1px solid var(--c-line);
 }
 
@@ -245,21 +327,60 @@
   .event-details__columns {
     grid-template-columns: minmax(0, 1fr);
   }
+
+  /* Facts two to a row */
+  .event-details__facts {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .event-details__facts > div {
+    border-bottom: 1px solid var(--c-line);
+  }
+
+  .event-details__facts > div:nth-child(2n) {
+    border-right: 0;
+  }
 }
 
 @media (max-width: 479px) {
-  .event-details__category,
   .event-details__name {
     padding-right: 2.5rem;
-  }
-
-  /* Two facts to a row on a phone */
-  .event-details__facts {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   .event-details__actions,
   .event-details__actions > * {
     flex: 1 1 100%;
   }
+}
+
+/* The judges' decision and the venue's rules: read before taking part */
+.event-details__notice {
+  display: grid;
+  gap: 0.45rem;
+  padding: 0.9rem 1.1rem;
+  border: 1px solid rgb(255 193 90 / 0.45);
+  border-left: 4px solid var(--c-solar);
+  border-radius: var(--r-md);
+  background: rgb(255 193 90 / 0.08);
+}
+
+.event-details__notice h3 {
+  margin: 0;
+  color: var(--c-solar);
+  font-size: var(--step-0);
+}
+
+.event-details__notice ul {
+  display: grid;
+  gap: 0.3rem;
+  margin: 0;
+  padding-left: 1.1rem;
+}
+
+/* The campus map, opened from Route map */
+.event-details__map {
+  padding: 1rem;
+  border: 1px solid var(--c-line-strong);
+  border-radius: var(--r-md);
+  background: rgb(5 6 26 / 0.6);
 }

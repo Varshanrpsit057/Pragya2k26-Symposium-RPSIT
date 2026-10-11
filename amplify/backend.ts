@@ -45,12 +45,14 @@ if (!branch) for (const port of [5173, 4173]) origins.add(`http://localhost:${po
 const allowedOrigins = [...origins];
 
 // --- DynamoDB: the workflow state ------------------------------------------------------
-// Kept if the stack is ever deleted (registrations are irreplaceable), with point-in-time recovery.
+// Kept if the stack is ever deleted (registrations are irreplaceable), with point-in-time
+// recovery, and protected from being deleted by hand.
 const registrations = new Table(stack, 'Registrations', {
   partitionKey: { name: 'registrationId', type: AttributeType.STRING },
   billingMode: BillingMode.PAY_PER_REQUEST,
   encryption: TableEncryption.AWS_MANAGED,
   pointInTimeRecoverySpecification: { pointInTimeRecoveryEnabled: true },
+  deletionProtection: true,
   removalPolicy: RemovalPolicy.RETAIN,
 });
 registrations.addGlobalSecondaryIndex({
@@ -68,6 +70,7 @@ const control = new Table(stack, 'Control', {
   encryption: TableEncryption.AWS_MANAGED,
   timeToLiveAttribute: 'expiresAtEpoch',
   pointInTimeRecoverySpecification: { pointInTimeRecoveryEnabled: true },
+  deletionProtection: true,
   removalPolicy: RemovalPolicy.RETAIN,
 });
 
@@ -77,11 +80,15 @@ const files = new Bucket(stack, 'PrivateFiles', {
   objectOwnership: ObjectOwnership.BUCKET_OWNER_ENFORCED,
   encryption: BucketEncryption.S3_MANAGED,
   enforceSSL: true,
+  // Every earlier version of a file is kept: an overwritten or deleted screenshot or pass can be restored.
+  versioned: true,
   removalPolicy: RemovalPolicy.RETAIN,
   // The browser uploads the payment screenshot with a presigned POST.
   cors: [{ allowedOrigins, allowedMethods: [HttpMethods.POST], allowedHeaders: ['*'], maxAge: 3000 }],
   // Screenshots uploaded but never registered are removed after a day.
-  lifecycleRules: [{ prefix: 'uploads/', expiration: Duration.days(1), abortIncompleteMultipartUploadAfter: Duration.days(1) }],
+  lifecycleRules: [
+    { prefix: 'uploads/', expiration: Duration.days(1), noncurrentVersionExpiration: Duration.days(1), abortIncompleteMultipartUploadAfter: Duration.days(1) },
+  ],
 });
 
 registrations.grantReadWriteData(lambda);
@@ -124,10 +131,22 @@ const ROUTES: { method: HttpMethod; path: string; rate: number; burst: number }[
   { method: HttpMethod.POST, path: '/api/register', rate: 50, burst: 100 },
   { method: HttpMethod.POST, path: '/api/status', rate: 25, burst: 50 },
   { method: HttpMethod.POST, path: '/api/pass', rate: 10, burst: 20 },
-  // A few admins sign in now and then: a trickle is plenty, and it starves password guessing.
+  // The event-day student page: sign-in (and the check every 30 s while a payment waits for
+  // the desk), the pass, and GPay screenshots. Sized for 30+ students at the same moment.
+  { method: HttpMethod.GET, path: '/api/student/portal', rate: 20, burst: 60 },
+  { method: HttpMethod.POST, path: '/api/student', rate: 30, burst: 90 },
+  { method: HttpMethod.POST, path: '/api/student/pass', rate: 15, burst: 45 },
+  { method: HttpMethod.POST, path: '/api/student/upload', rate: 15, burst: 45 },
+  { method: HttpMethod.POST, path: '/api/student/proof', rate: 15, burst: 45 },
+  // Contact admin (works signed out too) and a staff member's own requests with the answers.
+  { method: HttpMethod.POST, path: '/api/help', rate: 5, burst: 15 },
+  { method: HttpMethod.GET, path: '/api/help/mine', rate: 10, burst: 30 },
+  // Staff sign in now and then: a trickle is plenty, and it starves password guessing.
   { method: HttpMethod.POST, path: '/api/admin/login', rate: 2, burst: 10 },
-  { method: HttpMethod.GET, path: '/api/admin/{proxy+}', rate: 20, burst: 40 },
-  { method: HttpMethod.POST, path: '/api/admin/{proxy+}', rate: 10, burst: 20 },
+  // On the event day about 20 staff devices refresh their lists every 15 seconds and record
+  // fees and attendance: a few requests a second, with room for everyone clicking at once.
+  { method: HttpMethod.GET, path: '/api/admin/{proxy+}', rate: 30, burst: 60 },
+  { method: HttpMethod.POST, path: '/api/admin/{proxy+}', rate: 20, burst: 40 },
 ];
 const routes = ROUTES.flatMap(({ method, path }) => httpApi.addRoutes({ path, methods: [method], integration }));
 

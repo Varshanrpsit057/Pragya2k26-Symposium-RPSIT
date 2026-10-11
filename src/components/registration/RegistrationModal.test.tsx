@@ -34,6 +34,12 @@ const chooseDepartment = (form: HTMLElement, department: string) => {
   fireEvent.click(within(form).getByRole('option', { name: department }));
 };
 
+/** Opens the College dropdown and picks a college. */
+const chooseCollege = (form: HTMLElement, college: string) => {
+  fireEvent.click(within(form).getByRole('button', { name: /^college/i }));
+  fireEvent.click(within(form).getByRole('option', { name: college }));
+};
+
 const optionNames = (form: HTMLElement) =>
   within(within(form).getByRole('listbox')).getAllByRole('option').map((option) => option.textContent);
 
@@ -41,11 +47,11 @@ const fillValidForm = (dialog: HTMLElement) => {
   fill(dialog, /name with initial/i, 'Barath S');
   chooseDepartment(dialog, 'Artificial Intelligence and Data Science (AI & DS)');
   fill(dialog, /year of study/i, '3rd Year');
-  fill(dialog, /^college/i, 'R P Sarathy Institute of Technology');
+  chooseCollege(dialog, 'R P Sarathy Institute of Technology, Salem');
   fill(dialog, /phone number/i, '93449 72274');
   fill(dialog, /email id/i, 'barath@example.com');
+  fireEvent.click(eventBox(dialog, 'CODE FLEX'));
   fireEvent.click(eventBox(dialog, 'COGNIX'));
-  fireEvent.click(eventBox(dialog, 'E-SPORTS'));
   fireEvent.change(within(dialog).getByLabelText(/payment screenshot/i), {
     target: { files: [new File(['png'], 'gpay.png', { type: 'image/png' })] },
   });
@@ -83,26 +89,56 @@ const summaryOf = (form: HTMLElement) => {
   };
 };
 
-const originalClosesAt = site.registration.closesAt;
+const original = { closesAt: site.registration.closesAt, onsite: { ...site.registration.onsite } };
+
+/** Sets the whole schedule, so a test never depends on today's date. */
+const scheduleAt = (closesAt: string, opensAt: string, onsiteClosesAt: string) => {
+  site.registration.closesAt = closesAt;
+  site.registration.onsite.opensAt = opensAt;
+  site.registration.onsite.closesAt = onsiteClosesAt;
+};
 
 // The form tests must not depend on today's date: registration stays open unless a test closes it.
 beforeEach(() => {
-  site.registration.closesAt = '2999-01-01T00:00:00';
+  scheduleAt('2999-01-01T00:00:00', '2999-01-02T00:00:00', '2999-01-03T00:00:00');
 });
 afterEach(() => {
-  site.registration.closesAt = originalClosesAt;
+  site.registration.closesAt = original.closesAt;
+  Object.assign(site.registration.onsite, original.onsite);
   vi.restoreAllMocks();
 });
 
 describe('RegistrationModal', () => {
-  it('says registration is closed, instead of showing the form, after the closing time', () => {
-    site.registration.closesAt = '2020-01-01T17:00:00';
+  it('says registration is closed, instead of showing the form, after the event day', () => {
+    scheduleAt('2020-01-01T17:00:00', '2020-01-02T00:00:00', '2020-01-03T00:00:00');
     renderWithForm();
     fireEvent.click(screen.getByRole('button', { name: 'Register Now' }));
 
     const dialog = screen.getByRole('dialog', { name: 'Registration closed' });
     expect(within(dialog).getByText(/closed on 1 January 2020 · 5:00 PM IST/)).toBeInTheDocument();
     expect(within(dialog).queryByRole('button', { name: 'Submit Registration' })).toBeNull();
+    expect(within(dialog).queryByText(/register on-site/i)).toBeNull();
+  });
+
+  it('sends visitors to the registration desk on the event day, without the online form or the Google Form', () => {
+    scheduleAt('2020-01-01T17:00:00', '2020-01-02T00:00:00', '2999-01-01T00:00:00');
+    renderWithForm();
+    fireEvent.click(screen.getByRole('button', { name: 'Register Now' }));
+
+    const dialog = screen.getByRole('dialog', { name: 'Online registration closed' });
+    expect(within(dialog).getByText('On-site registration is open today')).toBeInTheDocument();
+    expect(within(dialog).getByText(/Pay the ₹100 gate pass there in cash or by UPI, then ₹50 for each event/)).toBeInTheDocument();
+    expect(within(dialog).queryByRole('button', { name: 'Submit Registration' })).toBeNull();
+    expect(within(dialog).queryByRole('link', { name: 'Google Form' })).toBeNull();
+  });
+
+  it('says when the desk opens in the minute between online and on-site registration', () => {
+    scheduleAt('2020-01-01T17:00:00', '2999-01-01T00:00:00', '2999-01-02T00:00:00');
+    renderWithForm();
+    fireEvent.click(screen.getByRole('button', { name: 'Register Now' }));
+
+    const dialog = screen.getByRole('dialog', { name: 'Online registration closed' });
+    expect(within(dialog).getByText(/On-site registration opens on 1 January 2999 · 12:00 AM IST/)).toBeInTheDocument();
   });
 
   it('refuses a submission if registration closes while the form is open', async () => {
@@ -111,7 +147,7 @@ describe('RegistrationModal', () => {
     const dialog = openForm();
     fillValidForm(dialog);
 
-    site.registration.closesAt = '2020-01-01T17:00:00';
+    scheduleAt('2020-01-01T17:00:00', '2020-01-02T00:00:00', '2999-01-01T00:00:00');
     fireEvent.click(within(dialog).getByRole('button', { name: 'Submit Registration' }));
 
     expect(within(dialog).getByRole('alert')).toHaveTextContent('Online registration for PRAGYA 2026 closed');
@@ -130,18 +166,21 @@ describe('RegistrationModal', () => {
       '3Gate Pass Payment',
     ]);
     expect(within(dialog).getByRole('group', { name: /^technical events/i })).toBeInTheDocument();
-    expect(within(dialog).getByRole('group', { name: /^non-technical events/i })).toBeInTheDocument();
+    expect(within(dialog).queryByRole('group', { name: /^non-technical events/i })).toBeNull();
     expect(window.location.hash).toBe('');
   });
 
-  it('lists all ten events as checkboxes, five per track', () => {
+  it('lists exactly the five technical events as checkboxes', () => {
     renderWithForm();
     const dialog = openForm();
 
     const technical = within(dialog).getByRole('group', { name: /^technical events/i });
-    const nonTechnical = within(dialog).getByRole('group', { name: /^non-technical events/i });
     expect(within(technical).getAllByRole('checkbox')).toHaveLength(5);
-    expect(within(nonTechnical).getAllByRole('checkbox')).toHaveLength(5);
+    expect(within(dialog).getAllByRole('checkbox')).toHaveLength(5);
+    for (const name of ['PRO-PITCH', 'VIZ CRAFT', 'PAPER PRESENTATION', 'CODE FLEX', 'COGNIX']) {
+      expect(eventBox(dialog, name)).toBeInTheDocument();
+    }
+    expect(within(dialog).queryByRole('checkbox', { name: /SHORT FILM|E-SPORTS|BRAND IT/ })).toBeNull();
     expect(within(dialog).queryAllByRole('radio')).toHaveLength(0);
   });
 
@@ -156,7 +195,7 @@ describe('RegistrationModal', () => {
 
     fireEvent.click(eventBox(dialog, 'VIZ CRAFT'));
     fireEvent.click(eventBox(dialog, 'CODE FLEX'));
-    fireEvent.click(eventBox(dialog, 'SHORT FILM'));
+    fireEvent.click(eventBox(dialog, 'COGNIX'));
     expect(summaryOf(dialog)).toEqual({ count: '4', fee: '₹50 × 4', eventTotal: '₹200', grandTotal: '= ₹300' });
     expect(within(dialog).getByText(/You have selected 4 events\. The event registration fee is ₹200\. Kindly bring ₹200/)).toBeInTheDocument();
 
@@ -167,7 +206,7 @@ describe('RegistrationModal', () => {
     for (const event of events) {
       if (!(eventBox(dialog, event.name) as HTMLInputElement).checked) fireEvent.click(eventBox(dialog, event.name));
     }
-    expect(summaryOf(dialog)).toEqual({ count: '10', fee: '₹50 × 10', eventTotal: '₹500', grandTotal: '= ₹600' });
+    expect(summaryOf(dialog)).toEqual({ count: '5', fee: '₹50 × 5', eventTotal: '₹250', grandTotal: '= ₹350' });
   });
 
   it('keeps everything typed so far when events are ticked and unticked afterwards', () => {
@@ -178,14 +217,14 @@ describe('RegistrationModal', () => {
 
     fireEvent.click(eventBox(dialog, 'COGNIX'));
     fill(dialog, /phone number/i, '93449 72274');
-    fireEvent.click(eventBox(dialog, 'E-SPORTS'));
+    fireEvent.click(eventBox(dialog, 'VIZ CRAFT'));
     fireEvent.click(eventBox(dialog, 'COGNIX'));
 
     expect(within(dialog).getByLabelText(/name with initial/i)).toHaveValue('Barath S');
     expect(within(dialog).getByLabelText(/email id/i)).toHaveValue('barath@example.com');
     expect(within(dialog).getByLabelText(/phone number/i)).toHaveValue('93449 72274');
     expect(eventBox(dialog, 'COGNIX')).not.toBeChecked();
-    expect(eventBox(dialog, 'E-SPORTS')).toBeChecked();
+    expect(eventBox(dialog, 'VIZ CRAFT')).toBeChecked();
     expect(summaryOf(dialog).count).toBe('1');
   });
 
@@ -231,15 +270,15 @@ describe('RegistrationModal', () => {
   it('pre-selects the event whose Register Now button opened it', () => {
     const { container } = render(
       <SiteModalsProvider>
-        <EventsSection category="non-technical" title="Non-technical events" lead="" />
+        <EventsSection category="technical" title="Technical events" lead="" />
       </SiteModalsProvider>,
     );
 
-    // Open the SHORT FILM panel, then its Register Now.
-    fireEvent.click(container.querySelector('#event-short-film')!);
-    fireEvent.click(screen.getByRole('button', { name: 'Register Now for SHORT FILM' }));
+    // Open the VIZ CRAFT panel, then its Register Now.
+    fireEvent.click(container.querySelector('#event-viz-craft')!);
+    fireEvent.click(screen.getByRole('button', { name: 'Register Now for VIZ CRAFT' }));
     const dialog = screen.getByRole('dialog', { name: 'PRAGYA 2026 Registration' });
-    expect(eventBox(dialog, 'SHORT FILM')).toBeChecked();
+    expect(eventBox(dialog, 'VIZ CRAFT')).toBeChecked();
     expect(summaryOf(dialog).eventTotal).toBe('₹50');
   });
 
@@ -256,11 +295,11 @@ describe('RegistrationModal', () => {
     expect(within(dialog).getByText('PRG26-0042')).toBeInTheDocument();
     expect(within(dialog).getByText('Pending verification')).toBeInTheDocument();
     expect(within(dialog).getByText('Your registration details and payment screenshot have been received.')).toBeInTheDocument();
-    expect(within(dialog).getByText(/confirmed only once it is approved.*participant pass \(PDF\) at barath@example\.com/)).toBeInTheDocument();
-    // New sender addresses can land in spam: say where to look.
-    expect(within(dialog).getByText(/check your Spam folder/)).toBeInTheDocument();
+    // Passes are not emailed for now: the student downloads it from the website once approved.
+    expect(within(dialog).getByText(/Once it is approved, download your participant pass \(PDF\) from this website: open Student login/)).toBeInTheDocument();
+    expect(within(dialog).getByText(/Passes are not sent by email/)).toBeInTheDocument();
     expect(within(dialog).getByText('412345678901')).toBeInTheDocument();
-    expect(within(dialog).getByText('COGNIX · E-SPORTS')).toBeInTheDocument();
+    expect(within(dialog).getByText('CODE FLEX · COGNIX')).toBeInTheDocument();
     expect(within(dialog).getByText(/Kindly bring ₹100 for your 2 events/)).toBeInTheDocument();
     // Nothing to download before an organiser approves; a private link to check later instead.
     expect(within(dialog).queryByRole('button', { name: /download/i })).toBeNull();
@@ -273,7 +312,7 @@ describe('RegistrationModal', () => {
     const body = JSON.parse(String(init.body));
     expect(body.upload).toEqual({ id: '0f8fad5b-d9cb-469f-a165-70867728950e' });
     expect(body.participant.department).toBe('Artificial Intelligence and Data Science (AI & DS)');
-    expect(body.events).toEqual(['cognix', 'e-sports']);
+    expect(body.events).toEqual(['code-flex', 'cognix']);
     expect(body.submissionId).toMatch(/^[0-9a-f]{32}$/);
   });
 
@@ -520,5 +559,51 @@ describe('Registration window lock', () => {
     expect(link).toHaveAttribute('href', String(site.registration.fallbackFormUrl));
     expect(link).toHaveAttribute('target', '_blank');
     expect(link).toHaveAttribute('rel', 'noopener noreferrer');
+  });
+});
+
+describe('College dropdown', () => {
+  it('lists the host college first, then the colleges around Salem, then the rest of Tamil Nadu, with Other last', () => {
+    renderWithForm();
+    const dialog = openForm();
+    fireEvent.click(within(dialog).getByRole('button', { name: /^college/i }));
+    const names = optionNames(dialog);
+    expect(names[0]).toBe('R P Sarathy Institute of Technology, Salem');
+    expect(names.indexOf('Sona College of Technology, Salem')).toBeLessThan(names.indexOf('P.S.G. College of Technology, Coimbatore'));
+    expect(names.indexOf('Kongu Engineering College, Perundurai')).toBeLessThan(names.indexOf('Anna University, College of Engineering Guindy (CEG), Chennai'));
+    expect(names.at(-1)).toBe('Other (type your college)');
+    expect(names.length).toBeGreaterThan(500);
+  });
+
+  it('finds a college from its first few letters or its initials', () => {
+    renderWithForm();
+    const dialog = openForm();
+    fireEvent.click(within(dialog).getByRole('button', { name: /^college/i }));
+    const search = within(dialog).getByRole('combobox', { name: 'Search colleges' });
+
+    fireEvent.change(search, { target: { value: 'kongu' } });
+    expect(optionNames(dialog)[0]).toBe('Kongu Arts and Science College, Erode');
+    expect(optionNames(dialog)).toContain('Kongu Engineering College, Perundurai');
+
+    fireEvent.change(search, { target: { value: 'ksr' } });
+    expect(optionNames(dialog).slice(0, 3).every((name) => /^K\.?\s?S\.?\s?R/i.test(name ?? ''))).toBe(true);
+
+    fireEvent.change(search, { target: { value: 'sona' } });
+    expect(optionNames(dialog)[0]).toBe('Sona College of Technology, Salem');
+  });
+
+  it('lets a college that is not listed be typed in, and sends what was typed', async () => {
+    const fetchSpy = respondWith({ success: true, registrationId: '261051', status: 'PENDING', registeredAt: '2026-10-10T06:30:00.000Z' });
+    renderWithForm();
+    const dialog = openForm();
+    fillValidForm(dialog);
+    chooseCollege(dialog, 'Other (type your college)');
+    const typed = within(dialog).getByLabelText(/type your college name/i);
+    expect(typed).toHaveValue('');
+    fireEvent.change(typed, { target: { value: 'Model Institute of Technology, Erode' } });
+
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Submit Registration' }));
+    await waitFor(() => expect(registerCall(fetchSpy)).toBeDefined());
+    expect(JSON.parse(String(registerCall(fetchSpy)![1].body)).participant.college).toBe('Model Institute of Technology, Erode');
   });
 });

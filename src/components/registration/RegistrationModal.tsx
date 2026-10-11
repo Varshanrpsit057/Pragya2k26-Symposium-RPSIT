@@ -10,9 +10,10 @@ import {
   type FormEvent,
   type ReactNode,
 } from 'react';
+import { COLLEGES, OTHER_COLLEGE } from '../../content/colleges';
 import { events as allEvents, eventsByCategory } from '../../content/events';
 import { site } from '../../content/site';
-import type { EventCategory, SymposiumEvent } from '../../content/types';
+import type { SymposiumEvent } from '../../content/types';
 import {
   DEPARTMENTS,
   EMPTY_REGISTRATION,
@@ -21,7 +22,6 @@ import {
   RegistrationError,
   YEARS_OF_STUDY,
   feeSummary,
-  isRegistrationClosed,
   newSubmissionId,
   rupees,
   validateField,
@@ -33,8 +33,10 @@ import {
 import { API_BASE } from '../../lib/api';
 import { submitRegistration, type OwnRegistration, type RegistrationResult } from '../../lib/registrationClient';
 import { formatIst, parseEventStart } from '../../lib/countdown';
+import { registrationPhase, scheduleOf, type RegistrationPhase } from '../../lib/schedule';
 import { statusLink } from '../../lib/statusLink';
 import { Modal } from '../modal/Modal';
+import { HelpDeskLine } from '../help/HelpDeskLine';
 import { SearchSelect } from '../ui/SearchSelect';
 import { SpecularButton } from '../ui/SpecularButton';
 import './RegistrationModal.css';
@@ -45,8 +47,11 @@ interface RegistrationModalProps {
   event?: SymposiumEvent;
   /** Changes on every opening, so each one can pre-select its event. */
   request?: number;
-  /** Registration had closed when the window was opened. */
-  closed?: boolean;
+  /**
+   * Which registration was open when the window was opened: the form only while 'online';
+   * otherwise where to register on the day, or that registration has closed.
+   */
+  phase?: RegistrationPhase;
   onClose: () => void;
   /** Opens the status window for a registration just made. */
   onCheckStatus?: (own: OwnRegistration) => void;
@@ -76,13 +81,8 @@ const formatBytes = (bytes: number) =>
 
 const plural = (count: number, word: string) => `${count} ${word}${count === 1 ? '' : 's'}`;
 
-const CATEGORY_TITLES: Record<EventCategory, string> = {
-  technical: 'Technical Events',
-  'non-technical': 'Non-Technical Events',
-};
-
 /** Read at the moment it is called (e.g. on submit), not when the form was opened. */
-const registrationClosedNow = () => isRegistrationClosed(site.registration.closesAt, Date.now());
+const registrationClosedNow = () => registrationPhase(scheduleOf(site.registration), Date.now()) !== 'online';
 
 function closedMessage(): string {
   const { closesAt } = site.registration;
@@ -94,7 +94,8 @@ function closedMessage(): string {
 const useIsomorphicLayoutEffect = typeof window === 'undefined' ? useEffect : useLayoutEffect;
 
 /** The one registration form for the whole site, in a window. */
-export function RegistrationModal({ open, event, request = 0, closed = false, onClose, onCheckStatus }: RegistrationModalProps) {
+export function RegistrationModal({ open, event, request = 0, phase = 'online', onClose, onCheckStatus }: RegistrationModalProps) {
+  const closed = phase !== 'online';
   const [values, setValues] = useState<RegistrationInput>(EMPTY_REGISTRATION);
   const [errors, setErrors] = useState<RegistrationErrors>({});
   const [checked, setChecked] = useState<Partial<Record<RegistrationField, boolean>>>({});
@@ -105,6 +106,8 @@ export function RegistrationModal({ open, event, request = 0, closed = false, on
   const [dragging, setDragging] = useState(false);
   const [submitted, setSubmitted] = useState(false);
   const [seenRequest, setSeenRequest] = useState(request);
+  /** The college is typed in (Other) rather than chosen from the list. */
+  const [collegeTyped, setCollegeTyped] = useState(false);
   const formRef = useRef<HTMLFormElement>(null);
   const previewRef = useRef<string | null>(null);
   /** One id per filled-in form, re-sent on every retry so the server never registers it twice. */
@@ -178,6 +181,16 @@ export function RegistrationModal({ open, event, request = 0, closed = false, on
     }));
   };
 
+  // A college from the list is the value itself; Other opens a field to type it instead.
+  const chooseCollege = (college: string) => {
+    const typed = college === OTHER_COLLEGE;
+    setCollegeTyped(typed);
+    const next = { ...values, college: typed ? '' : college };
+    setValues(next);
+    setChecked((current) => ({ ...current, college: !typed }));
+    setErrors((current) => ({ ...current, college: typed ? undefined : validateField('college', next) }));
+  };
+
   // The same function on every render, so the event list is not redrawn on each keystroke.
   const toggleEvent = useCallback((id: string) => {
     const { values: current, checked: wasChecked } = latest.current;
@@ -201,6 +214,7 @@ export function RegistrationModal({ open, event, request = 0, closed = false, on
   const reset = () => {
     chooseScreenshot(null);
     setValues(EMPTY_REGISTRATION);
+    setCollegeTyped(false);
     setErrors({});
     setChecked({});
     setSubmitted(false);
@@ -284,23 +298,7 @@ export function RegistrationModal({ open, event, request = 0, closed = false, on
       className="reg-modal"
     >
       {closed && status !== 'success' ? (
-        <div className="reg-done" role="status">
-          <span className="reg-done__badge reg-done__badge--closed" aria-hidden="true">
-            <svg width="28" height="28" viewBox="0 0 24 24">
-              <g fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <rect x="5" y="11" width="14" height="9" rx="2" />
-                <path d="M8 11V8a4 4 0 0 1 8 0v3" />
-              </g>
-            </svg>
-          </span>
-          <h2 id="registration-title" className="reg__title">
-            Registration closed
-          </h2>
-          <p className="reg__lead">{closedMessage()} Thank you for your interest.</p>
-          <div className="reg-done__actions">
-            <SpecularButton onClick={close}>Close</SpecularButton>
-          </div>
-        </div>
+        <ClosedNotice phase={phase} onClose={close} />
       ) : status === 'success' && result ? (
         <div className="reg-done" role="status">
           <span className="reg-done__badge" aria-hidden="true">
@@ -320,7 +318,9 @@ export function RegistrationModal({ open, event, request = 0, closed = false, on
           <p className="reg-done__mail">
             {result.duplicate
               ? 'You were already registered with this email and transaction ID, so no second registration was made.'
-              : `The organisers will now verify your payment. Your registration is confirmed only once it is approved: you will then receive a confirmation email with your participant pass (PDF) at ${values.email.trim()}. If it is not in your inbox, check your Spam folder.`}
+              : site.registration.passByEmail
+                ? `The organisers will now verify your payment. Your registration is confirmed only once it is approved: you will then receive a confirmation email with your participant pass (PDF) at ${values.email.trim()}. If it is not in your inbox, check your Spam folder.`
+                : 'The organisers will now verify your payment. Once it is approved, download your participant pass (PDF) from this website: open Student login and sign in with your Registration ID and phone number, or use your private status link below. Passes are not sent by email.'}
           </p>
           <dl className="reg-done__summary">
             <div>
@@ -414,9 +414,29 @@ export function RegistrationModal({ open, event, request = 0, closed = false, on
                     ))}
                   </select>
                 </Field>
-                <Field field="college" label="College" error={errors.college} wide>
-                  <input {...inputProps('college')} type="text" autoComplete="organization" placeholder="Your college name" />
-                </Field>
+                <div className="reg-field-stack reg-field--wide">
+                  <Field field="college" label="College" labelId="reg-college-label" error={collegeTyped ? undefined : errors.college} wide>
+                    <SearchSelect
+                      id={collegeTyped ? 'reg-college-choice' : fieldId('college')}
+                      labelId="reg-college-label"
+                      options={COLLEGES}
+                      bestFirst
+                      value={collegeTyped ? OTHER_COLLEGE : values.college}
+                      onChange={chooseCollege}
+                      placeholder="Select your college"
+                      searchPlaceholder="Type the first letters of your college..."
+                      searchLabel="Search colleges"
+                      emptyText={(query) => `No college matches “${query}”. Choose ${OTHER_COLLEGE} to type it.`}
+                      invalid={!collegeTyped && Boolean(errors.college)}
+                      describedBy={!collegeTyped && errors.college ? `${fieldId('college')}-error` : undefined}
+                    />
+                  </Field>
+                  {collegeTyped && (
+                    <Field field="college" label="Type your college name" error={errors.college} wide>
+                      <input {...inputProps('college')} type="text" autoComplete="organization" placeholder="Your college name and town" />
+                    </Field>
+                  )}
+                </div>
                 <Field field="phone" label="Phone number" error={errors.phone}>
                   <input {...inputProps('phone')} type="tel" inputMode="tel" autoComplete="tel" placeholder="10-digit mobile number" />
                 </Field>
@@ -582,6 +602,7 @@ export function RegistrationModal({ open, event, request = 0, closed = false, on
               </SpecularButton>
             </div>
 
+            <HelpDeskLine />
             {fallbackFormUrl && (
               <p className="reg__fallback">
                 If the website gives you any trouble, you can register on this{' '}
@@ -637,10 +658,10 @@ const EventPicker = memo(function EventPicker({ selected, error, onToggle }: Eve
       </p>
 
       <div className="reg-events">
-        {(['technical', 'non-technical'] as const).map((category, groupIndex) => (
+        {(['technical'] as const).map((category) => (
           <div key={category} className="reg-events__group" role="group" aria-labelledby={`reg-events-${category}`} data-category={category}>
             <h3 id={`reg-events-${category}`} className="reg-events__title">
-              {CATEGORY_TITLES[category]}
+              Technical Events
               <span className="reg-events__count">
                 {eventsByCategory(category).filter((item) => selected.includes(item.id)).length} selected
               </span>
@@ -654,7 +675,7 @@ const EventPicker = memo(function EventPicker({ selected, error, onToggle }: Eve
                     <label className={`reg-event${isSelected ? ' is-selected' : ''}`}>
                       <input
                         // The first box carries the section's id, so a failed submit can focus it.
-                        id={groupIndex === 0 && index === 0 ? fieldId('events') : undefined}
+                        id={index === 0 ? fieldId('events') : undefined}
                         className="reg-event__input"
                         type="checkbox"
                         name="events"
@@ -732,6 +753,50 @@ const EventPicker = memo(function EventPicker({ selected, error, onToggle }: Eve
     </fieldset>
   );
 });
+
+/**
+ * Instead of the form once online registration has closed: on the event day, where to
+ * register on-site; after it, that registration has closed.
+ */
+function ClosedNotice({ phase, onClose }: { phase: RegistrationPhase; onClose: () => void }) {
+  const { gatePassFee, eventFee, onsite } = site.registration;
+  const opens = onsite.opensAt ? parseEventStart(onsite.opensAt) : null;
+  const onsiteAhead = phase === 'between' || phase === 'onsite';
+  return (
+    <div className="reg-done" role="status">
+      <span className="reg-done__badge reg-done__badge--closed" aria-hidden="true">
+        <svg width="28" height="28" viewBox="0 0 24 24">
+          <g fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <rect x="5" y="11" width="14" height="9" rx="2" />
+            <path d="M8 11V8a4 4 0 0 1 8 0v3" />
+          </g>
+        </svg>
+      </span>
+      <h2 id="registration-title" className="reg__title">
+        {onsiteAhead ? 'Online registration closed' : 'Registration closed'}
+      </h2>
+      <p className="reg__lead">
+        {closedMessage()}
+        {onsiteAhead ? '' : ' On-site registration ended with the event day. Thank you for your interest.'}
+      </p>
+      {onsiteAhead && (
+        <div className="reg-note" role="note">
+          <p className="reg-note__title">{phase === 'onsite' ? 'On-site registration is open today' : 'Register on-site on the event day'}</p>
+          <p>
+            {phase === 'onsite'
+              ? `Come to ${onsite.desk} today, until the end of the day.`
+              : `On-site registration opens ${opens ? `on ${formatIst(opens)}` : 'on the event day'} at ${onsite.desk}.`}{' '}
+            Pay the {rupees(gatePassFee)} gate pass there in cash or by UPI, then {rupees(eventFee)} for each event to its
+            coordinator. Bring your college ID card.
+          </p>
+        </div>
+      )}
+      <div className="reg-done__actions">
+        <SpecularButton onClick={onClose}>Close</SpecularButton>
+      </div>
+    </div>
+  );
+}
 
 function Field({ field, label, labelId, error, hint, wide, children }: FieldProps) {
   const id = fieldId(field);

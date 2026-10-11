@@ -23,7 +23,9 @@ export function confirmationEmail(pass: PassData): { subject: string; text: stri
   const college = `${site.college.name}, Salem`;
   const details = [
     `Registration ID: ${pass.registrationId}`,
-    `Events: ${pass.events.map((item) => titleCase(item.name)).join(', ')}`,
+    pass.events.length
+      ? `Events: ${pass.events.map((item) => titleCase(item.name)).join(', ')}`
+      : 'Events: choose them on the website and register for each at its venue',
     site.dates && `Date: ${site.dates}`,
     `Venue: ${site.venue ?? college}`,
   ].filter(Boolean);

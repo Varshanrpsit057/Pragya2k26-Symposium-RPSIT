@@ -5,7 +5,7 @@
  */
 import type { OwnRegistration } from './registrationClient';
 
-const STATUS_HASH = /^#status=(PRG26-\d{4,6})\.([A-Za-z0-9_-]{32,64})$/;
+const STATUS_HASH = /^#status=(26[12]\d{3,4}|PRG26-\d{4,6})\.([A-Za-z0-9_-]{32,64})$/;
 
 export const statusHash = ({ registrationId, key }: OwnRegistration) => `#status=${registrationId}.${key}`;
 

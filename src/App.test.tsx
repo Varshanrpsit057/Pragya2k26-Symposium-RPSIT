@@ -46,11 +46,11 @@ describe('App', () => {
     expect(within(hero).queryByText('When')).toBeNull();
   });
 
-  it('shows every event as a panel in its track, two galleries of five', () => {
+  it('shows the five technical events as panels, and no non-technical track', () => {
     render(<App />);
-    for (const title of ['Technical events', 'Non-technical events']) {
-      expect(within(screen.getByRole('list', { name: title })).getAllByRole('listitem')).toHaveLength(5);
-    }
+    expect(within(screen.getByRole('list', { name: 'Technical events' })).getAllByRole('listitem')).toHaveLength(5);
+    expect(screen.queryByRole('list', { name: 'Non-technical events' })).toBeNull();
+    expect(document.getElementById('non-technical')).toBeNull();
   });
 
   it('has every section the navigation points to', () => {

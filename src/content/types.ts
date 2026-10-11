@@ -1,16 +1,7 @@
-export type EventCategory = 'technical' | 'non-technical';
+/** PRAGYA 2026 runs technical events only. */
+export type EventCategory = 'technical';
 
-export type EventIconName =
-  | 'prompt'
-  | 'chart'
-  | 'paper'
-  | 'code'
-  | 'quiz'
-  | 'vector'
-  | 'film'
-  | 'eye'
-  | 'tag'
-  | 'gamepad';
+export type EventIconName = 'prompt' | 'chart' | 'paper' | 'code' | 'quiz';
 
 export interface Person {
   name: string;
@@ -43,8 +34,19 @@ export interface SymposiumEvent {
   /** e.g. ['1st prize: ₹1,000', …] */
   prizes?: string[];
   chiefGuest?: string;
-  /** Staff and student coordinators; an event with coordinators counts as confirmed. */
+  /** The student coordinators; an event with coordinators counts as confirmed. */
   coordinators?: Person[];
+  /**
+   * Teams allowed: participants may enter as a team (each member still pays the event fee).
+   * `maxSize` is the most members a team may have; null when the rules give no limit.
+   * Missing: an individual event.
+   */
+  teams?: { maxSize: number | null };
+  /**
+   * A link that shows the way to the venue (e.g. a Google My Maps pin or a campus map image).
+   * Null until it is set: the event's Route map button then says the map is coming.
+   */
+  routeMap?: string | null;
 }
 
 export interface EventRound {
@@ -58,10 +60,11 @@ export interface EventInfo {
   type: string;
   team: string;
   rounds: EventRound[];
+  /** How it works, beyond what the rounds already say. */
   procedure: string[];
+  /** Rules beyond the rounds and the procedure. */
   rules: string[];
   judging: string[];
-  instructions: string[];
 }
 
 export interface RegistrationSettings {
@@ -77,6 +80,17 @@ export interface RegistrationSettings {
    */
   closesAt: string | null;
   deadline: string | null;
+  /**
+   * The event day's registration desk: from `opensAt` until `closesAt` (IST) only the desk
+   * registers, and after `closesAt` all registration is closed. The switch is automatic (the
+   * API checks the clock on every request); see src/lib/schedule.ts.
+   */
+  onsite: {
+    opensAt: string | null;
+    closesAt: string | null;
+    /** Where to go on the day, e.g. 'the registration desk at the main entrance'. */
+    desk: string;
+  };
   note: string | null;
   /** Gate pass fee per person, paid online with registration (₹). */
   gatePassFee: number;
@@ -90,6 +104,20 @@ export interface RegistrationSettings {
   };
   /** Google Form to fall back to if this site's own form ever fails. Null hides the offer. */
   fallbackFormUrl: string | null;
+  /**
+   * Whether the pass is emailed when a registration is approved. Off: students download it
+   * themselves from the website (their status link or Student login).
+   */
+  passByEmail: boolean;
+}
+
+/** The help desk students call for any help; its numbers show across the website. */
+export interface HelpDesk {
+  /** As dialled, with the country code, e.g. '+91 73582 13736'. */
+  phones: { label: string; phone: string }[];
+  /** Where it is on the day. */
+  where: string;
+  hours: string;
 }
 
 export type CrewLinkKind = 'linkedin' | 'github' | 'portfolio';
@@ -161,6 +189,7 @@ export interface SiteInfo {
   dates: string | null;
   venue: string | null;
   registration: RegistrationSettings;
+  helpDesk: HelpDesk;
   contacts: Person[];
   email: string | null;
   socials: SocialLink[];

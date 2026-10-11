@@ -13,7 +13,7 @@ describe('EventOrbit', () => {
 
     expect(SHOWCASE_EVENTS).toHaveLength(events.length);
     SHOWCASE_EVENTS.forEach((event, index) => {
-      const slide = screen.getByRole('group', { name: `${event.name}, ${index + 1} of 10` });
+      const slide = screen.getByRole('group', { name: `${event.name}, ${index + 1} of 5` });
       const image = slide.querySelector('img');
       expect(image).toHaveAttribute('src', event.poster);
       expect(image).toHaveAttribute('loading', 'lazy');
@@ -23,7 +23,7 @@ describe('EventOrbit', () => {
   it('links the details button to the front event', () => {
     render(<EventOrbit />);
 
-    expect(screen.getByText('1 / 10')).toBeInTheDocument();
+    expect(screen.getByText('1 / 5')).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'View details' })).toHaveAttribute(
       'href',
       '#event-pro-pitch',

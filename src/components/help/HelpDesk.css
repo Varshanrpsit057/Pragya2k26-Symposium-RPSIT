@@ -1,0 +1,162 @@
+/* The help desk: one line wherever help may be needed, and its own section */
+.help-line {
+  margin: 0;
+  color: var(--c-text-muted);
+  font-size: var(--step--1);
+}
+
+.help-line__lead {
+  color: var(--c-text);
+  font-weight: 600;
+}
+
+.help-line a {
+  color: var(--c-synapse);
+  font-weight: 600;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.help-line a:hover {
+  text-decoration: underline;
+}
+
+.help-line__wa {
+  margin-left: 0.15rem;
+  font-weight: 500 !important;
+}
+
+.help-desk {
+  padding-block: clamp(3.5rem, 7vw, 5.5rem);
+}
+
+.help-desk__inner {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 22rem), 1fr));
+  gap: clamp(1rem, 3vw, 2rem);
+  align-items: start;
+}
+
+.help-desk__card,
+.help-desk__faq {
+  display: grid;
+  gap: 1rem;
+  padding: clamp(1.25rem, 3vw, 2rem);
+  border: 1px solid var(--c-line-strong);
+  border-radius: var(--r-lg);
+  background: rgb(11 13 43 / 0.82);
+}
+
+.help-desk__eyebrow {
+  margin: 0;
+  color: var(--c-synapse);
+  font-size: var(--step--1);
+  font-weight: 700;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+}
+
+.help-desk__title {
+  margin: 0;
+}
+
+.help-desk__lead {
+  margin: 0;
+  color: var(--c-text-muted);
+}
+
+.help-desk__phones {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.help-desk__phone {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem 1rem;
+  align-items: center;
+  padding: 0.9rem 1rem;
+  border-radius: var(--r-md);
+  background: rgb(69 227 255 / 0.08);
+}
+
+.help-desk__label {
+  flex-basis: 100%;
+  color: var(--c-text-muted);
+  font-size: var(--step--1);
+}
+
+.help-desk__number {
+  color: var(--c-text);
+  font-size: var(--step-2);
+  font-weight: 800;
+  letter-spacing: 0.03em;
+  text-decoration: none;
+}
+
+.help-desk__actions {
+  display: inline-flex;
+  gap: 0.5rem;
+  margin-left: auto;
+}
+
+.help-desk__button {
+  padding: 0.45rem 1rem;
+  border-radius: var(--r-pill);
+  color: var(--c-void);
+  font-weight: 700;
+  text-decoration: none;
+  background: var(--g-technical);
+}
+
+.help-desk__button--wa {
+  color: var(--c-text);
+  background: transparent;
+  box-shadow: inset 0 0 0 1px var(--c-line-strong);
+}
+
+.help-desk__facts {
+  display: grid;
+  gap: 0.5rem;
+  margin: 0;
+}
+
+.help-desk__facts div {
+  display: grid;
+  grid-template-columns: 4.5rem 1fr;
+  gap: 0.75rem;
+}
+
+.help-desk__facts dt {
+  color: var(--c-text-dim);
+}
+
+.help-desk__facts dd {
+  margin: 0;
+}
+
+.help-desk__student {
+  color: var(--c-synapse);
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.help-desk__faq-title {
+  margin: 0;
+  font-size: var(--step-1);
+}
+
+.help-desk__q {
+  padding: 0.75rem 0;
+  border-top: 1px solid var(--c-line);
+}
+
+.help-desk__q summary {
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.help-desk__q p {
+  margin: 0.5rem 0 0;
+  color: var(--c-text-muted);
+}

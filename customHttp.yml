@@ -28,8 +28,9 @@ customHeaders:
     headers:
       - key: 'Cache-Control'
         value: 'public, max-age=86400, must-revalidate'
-  # The admin dashboard: never framed, cached or indexed; only this site's own code may run,
-  # and it may talk only to the AWS API and the private S3 links the API hands out.
+  # The admin dashboard and the student page: never framed, cached or indexed; only this site's
+  # own code may run, and it may talk only to the AWS API and the private S3 links the API hands
+  # out. blob: images are the screenshot a student (or the map editor) picked, previewed before upload.
   - pattern: '/landing/**'
     headers:
       - key: 'Cache-Control'
@@ -41,4 +42,4 @@ customHeaders:
       - key: 'Referrer-Policy'
         value: 'no-referrer'
       - key: 'Content-Security-Policy'
-        value: "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data: https://*.amazonaws.com; connect-src 'self' https://*.amazonaws.com; font-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'; object-src 'none'"
+        value: "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data: blob: https://*.amazonaws.com; connect-src 'self' https://*.amazonaws.com; font-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'; object-src 'none'"

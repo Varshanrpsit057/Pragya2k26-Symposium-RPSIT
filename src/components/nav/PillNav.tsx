@@ -20,6 +20,8 @@ interface PillNavProps {
   sectionIds: readonly string[];
   brandLabel: string;
   cta: NavItem;
+  /** Where the CTA goes instead of its section (e.g. the student page on the event day). */
+  ctaHref?: string;
   /** Run instead of following the CTA's link (it opens the registration form). */
   onCtaClick?: () => void;
   /** Opens the Dev Crew: an incognito button right after the last link (Contact). */
@@ -29,7 +31,7 @@ interface PillNavProps {
 // Runs before paint in the browser; harmless no-op during server rendering.
 const useIsomorphicLayoutEffect = typeof window === 'undefined' ? useEffect : useLayoutEffect;
 
-export function PillNav({ items, sectionIds, brandLabel, cta, onCtaClick, onCrewClick }: PillNavProps) {
+export function PillNav({ items, sectionIds, brandLabel, cta, ctaHref, onCtaClick, onCrewClick }: PillNavProps) {
   const activeId = useScrollSpy(sectionIds);
   const [menuOpen, setMenuOpen] = useState(false);
   const listRef = useRef<HTMLUListElement>(null);
@@ -103,11 +105,11 @@ export function PillNav({ items, sectionIds, brandLabel, cta, onCtaClick, onCrew
     <header className="nav-shell">
       <nav className="pill-nav" aria-label="Primary">
         <a className="pill-nav__brand" href="#home" title={`${brandLabel} 2026`} onClick={closeMenu}>
-          {/* The crest is decorative: the college name beside it labels the link */}
-          <img className="pill-nav__logo" src="/images/rpsit-logo-sm.webp" alt="" width="73" height="120" />
+          {/* The college's logo lockup: the crest is decorative, the name beside it labels the link */}
+          <img className="pill-nav__logo" src="/images/rpsit-crest.webp" alt="" width="153" height="240" />
           <span className="pill-nav__college">
-            <span className="pill-nav__college-name">R P Sarathy</span>
-            <span className="pill-nav__college-type">Institute of Technology</span>
+            <span className="pill-nav__college-name">R P Sarathy Institute of Technology</span>
+            <span className="pill-nav__college-type">An Autonomous Institution</span>
           </span>
         </a>
 
@@ -148,7 +150,7 @@ export function PillNav({ items, sectionIds, brandLabel, cta, onCtaClick, onCrew
 
         <a
           className="pill-nav__cta"
-          href={`#${cta.id}`}
+          href={ctaHref ?? `#${cta.id}`}
           aria-current={activeId === cta.id ? 'true' : undefined}
           aria-haspopup={onCtaClick ? 'dialog' : undefined}
           onClick={handleCtaClick}
@@ -203,7 +205,7 @@ export function PillNav({ items, sectionIds, brandLabel, cta, onCtaClick, onCrew
           )}
           <li>
             <a
-              href={`#${cta.id}`}
+              href={ctaHref ?? `#${cta.id}`}
               aria-current={activeId === cta.id ? 'true' : undefined}
               aria-haspopup={onCtaClick ? 'dialog' : undefined}
               onClick={handleCtaClick}

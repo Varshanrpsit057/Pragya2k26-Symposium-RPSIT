@@ -1,7 +1,7 @@
 /*
  * Design tokens for PRAGYA 2026.
- * Cool hues (synapse → cortex) mark the technical track; warm hues (flare → solar)
- * mark the non-technical track. The full spectrum belongs to the symposium itself.
+ * Cool hues (synapse → cortex) mark the technical events; the warm hues (flare → solar)
+ * finish the full spectrum, which belongs to the symposium itself.
  */
 
 @property --spec-angle {
@@ -36,13 +36,16 @@
   --c-text-dim: #7d83ad;
 
   --c-synapse: #45e3ff;
+  /* The college's name beside its crest (header lockup and footer) */
+  --c-college: #ffffff;
+  /* "An Autonomous Institution" under it: the logo's slate, lightened for the dark page */
+  --c-college-sub: #a9b8cf;
   --c-cortex: #8c6cff;
   --c-flare: #ff5cc8;
   --c-solar: #ffc15a;
 
   --g-spectrum: linear-gradient(100deg, var(--c-synapse), var(--c-cortex) 48%, var(--c-flare));
   --g-technical: linear-gradient(135deg, var(--c-synapse), var(--c-cortex));
-  --g-creative: linear-gradient(135deg, var(--c-flare), var(--c-solar));
 
   /* Type: one variable family; width and weight carry the hierarchy */
   --font: 'Mona Sans', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
@@ -75,10 +78,4 @@
   --accent: var(--c-synapse);
   --accent-2: var(--c-cortex);
   --accent-gradient: var(--g-technical);
-}
-
-[data-category='non-technical'] {
-  --accent: var(--c-flare);
-  --accent-2: var(--c-solar);
-  --accent-gradient: var(--g-creative);
 }

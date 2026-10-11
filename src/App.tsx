@@ -2,6 +2,7 @@ import { SkyBackdrop } from './components/background/SkyBackdrop';
 import { BrandEmblem } from './components/brand/BrandEmblem';
 import { EventOrbit } from './components/events/EventOrbit';
 import { EventsSection } from './components/events/EventsSection';
+import { HelpDeskSection } from './components/help/HelpDeskSection';
 import { Hero } from './components/hero/Hero';
 import { SiteModalsProvider } from './components/modal/SiteModals';
 import { useSiteModals } from './components/modal/siteModalsContext';
@@ -9,33 +10,37 @@ import { PillNav, type NavItem } from './components/nav/PillNav';
 import { Footer } from './components/sections/Footer';
 import { RegisterCTA } from './components/sections/RegisterCTA';
 import { site } from './content/site';
+import { useEventDay } from './hooks/useEventDay';
 import { useRevealOnScroll } from './hooks/useRevealOnScroll';
+import { STUDENT_PAGE } from './lib/student';
 
 const NAV_ITEMS: readonly NavItem[] = [
   { id: 'home', label: 'Home' },
   { id: 'events', label: 'About' },
-  { id: 'technical', label: 'Technical' },
-  { id: 'non-technical', label: 'Non-technical' },
+  { id: 'technical', label: 'Events' },
+  { id: 'help', label: 'Help desk' },
   { id: 'contact', label: 'Contact' },
 ];
 
 const REGISTER_ITEM: NavItem = { id: 'register', label: 'Register' };
+/** On the event day the CTA goes to the student page (pass and events) instead. */
+const STUDENT_ITEM: NavItem = { id: 'student', label: 'Student login' };
 
 /** Every section in page order, for the nav's scroll tracking. */
 const SECTION_IDS = [
   'home',
   'events',
   'technical',
-  'non-technical',
   'register',
+  'help',
   'contact',
 ] as const;
 
 const FOOTER_LINKS: readonly NavItem[] = [
   { id: 'events', label: 'All events' },
   { id: 'technical', label: 'Technical events' },
-  { id: 'non-technical', label: 'Non-technical events' },
   { id: 'register', label: 'Register' },
+  { id: 'help', label: 'Help desk' },
 ];
 
 export function App() {
@@ -50,6 +55,7 @@ export function App() {
 
 function Page() {
   const { openRegistration, openDevCrew } = useSiteModals();
+  const eventDay = useEventDay();
 
   return (
     <>
@@ -62,8 +68,9 @@ function Page() {
         items={NAV_ITEMS}
         sectionIds={SECTION_IDS}
         brandLabel={site.name}
-        cta={REGISTER_ITEM}
-        onCtaClick={() => openRegistration()}
+        cta={eventDay ? STUDENT_ITEM : REGISTER_ITEM}
+        ctaHref={eventDay ? STUDENT_PAGE : undefined}
+        onCtaClick={eventDay ? undefined : () => openRegistration()}
         onCrewClick={openDevCrew}
       />
 
@@ -75,12 +82,8 @@ function Page() {
           title="Technical events"
           lead="Five events on AI, code and data: build from a prompt, visualize, present, code and quiz."
         />
-        <EventsSection
-          category="non-technical"
-          title="Non-technical events"
-          lead="Five events on design, film, observation, branding and gaming."
-        />
         <RegisterCTA />
+        <HelpDeskSection />
       </main>
 
       <Footer links={FOOTER_LINKS} />

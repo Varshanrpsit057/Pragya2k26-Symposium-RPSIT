@@ -4,7 +4,7 @@ import { passData } from './pass';
 import { buildRegistrationRecord } from '../src/lib/registration';
 import { confirmationEmail } from './emailTemplate';
 
-const events = ['pro-pitch', 'short-film'];
+const events = ['pro-pitch', 'code-flex'];
 const pass = passData({
   registrationId: 'PRG26-0042',
   registeredAt: '2026-10-06T14:05:00.000Z',
@@ -38,7 +38,7 @@ describe('confirmation email', () => {
     expect(email.text).toContain('Dear Varshan C,');
     expect(email.text).toMatch(/registration for PRAGYA 2026.*is confirmed/);
     expect(email.text).toContain('Registration ID: PRG26-0042');
-    expect(email.text).toContain('Events: Pro-Pitch, Short Film');
+    expect(email.text).toContain('Events: Pro-Pitch, Code Flex');
     expect(email.text).toContain('Date: 17 October 2026');
     expect(email.text).toContain('Department of Artificial Intelligence and Data Science');
     expect(email.text).toContain('R P Sarathy Institute of Technology');
@@ -58,5 +58,13 @@ describe('confirmation email', () => {
       // No shouting: no long words in capitals other than the symposium's name.
       expect((body.match(/\b[A-Z]{5,}\b/g) ?? []).filter((word) => word !== 'PRAGYA')).toEqual([]);
     }
+  });
+});
+
+describe('confirmation email for a registration made at the desk (no events yet)', () => {
+  it('says events are registered at each venue', () => {
+    const text = confirmationEmail({ ...pass, registrationId: '262001', events: [] }).text;
+    expect(text).toContain('Registration ID: 262001');
+    expect(text).toContain('Events: choose them on the website and register for each at its venue');
   });
 });

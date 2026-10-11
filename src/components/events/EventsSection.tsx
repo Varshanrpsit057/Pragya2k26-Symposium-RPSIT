@@ -17,7 +17,7 @@ interface EventsSectionProps {
 }
 
 /** The track's colour for the caption bar and focus ring (tokens.css: synapse / flare). */
-const ACCENTS: Record<EventCategory, string> = { technical: '#45e3ff', 'non-technical': '#ff5cc8' };
+const ACCENTS: Record<EventCategory, string> = { technical: '#45e3ff' };
 
 /**
  * One track's five events as React Bits' Accordion Gallery. All five rest side by side until
