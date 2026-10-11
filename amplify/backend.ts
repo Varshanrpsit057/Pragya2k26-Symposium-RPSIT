@@ -127,6 +127,8 @@ const integration = new HttpLambdaIntegration('ApiIntegration', lambda);
  */
 const ROUTES: { method: HttpMethod; path: string; rate: number; burst: number }[] = [
   { method: HttpMethod.GET, path: '/api/health', rate: 5, burst: 10 },
+  // The schedule the website follows (a test timeline can change it): once per page load.
+  { method: HttpMethod.GET, path: '/api/schedule', rate: 50, burst: 100 },
   { method: HttpMethod.POST, path: '/api/uploads', rate: 50, burst: 100 },
   { method: HttpMethod.POST, path: '/api/register', rate: 50, burst: 100 },
   { method: HttpMethod.POST, path: '/api/status', rate: 25, burst: 50 },

@@ -13,6 +13,8 @@ export interface HelpDeskDeps {
   store: Store;
   now: () => number;
   log: (message: string, details?: Record<string, unknown>) => void;
+  /** True while a test session is on: requests sent then are test data. */
+  testing?: () => Promise<boolean>;
 }
 
 /** Per network address (the desks share the college's), and for everyone together. */
@@ -61,6 +63,7 @@ export class HelpDesk {
       registrationId: registrationId || null,
       page: line(body, 'page', 80) || null,
       status: 'OPEN',
+      ...((await this.deps.testing?.()) && { test: true }),
     };
     await this.deps.store.saveHelpRequest(request);
     this.deps.log('Help request', { id: request.id, category, by: request.username ?? 'signed out' });

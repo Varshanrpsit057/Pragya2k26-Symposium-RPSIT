@@ -53,12 +53,12 @@ describe('dashboard of the student coordinators', () => {
   it.each([
     [
       'ADMIN',
-      ['Registration desk', 'Online payments', 'Events', 'Results & certificates', 'Help requests', 'System status', 'Campus map', 'Student coordinators', 'Reports', 'Roles'],
+      ['Registration desk', 'Online payments', 'Events', 'Results & certificates', 'Help requests', 'System status', 'Deleted', 'Campus map', 'Student coordinators', 'Reports', 'Testing', 'Roles'],
     ],
     ['DESK', ['Registration desk', 'Roles']],
     ['COORDINATOR', ['Events', 'Results & certificates', 'Roles']],
     ['CERTIFICATE', ['Results & certificates', 'Roles']],
-    ['SUPPORT', ['Registrations', 'Help requests', 'System status', 'Campus map', 'Roles']],
+    ['SUPPORT', ['Registrations', 'Help requests', 'System status', 'Deleted', 'Campus map', 'Roles']],
   ] as const)('shows %s only its own sections', async (role, expected) => {
     signedInAs(session(role, role === 'COORDINATOR' ? ['code-flex'] : []));
     render(<AdminApp />);
@@ -84,7 +84,7 @@ describe('dashboard of the student coordinators', () => {
     expect(within(coordinator).getByText(/enter them in the event \(individual or team\) with the ₹50 fee, mark attendance.*\(assigned events only\)/)).toBeInTheDocument();
     expect(within(coordinator).getByText(/Verify a ₹100 gate pass paid online by GPay/)).toBeInTheDocument();
     const desk = within(panel).getByRole('heading', { name: 'Registration desk' }).closest('article') as HTMLElement;
-    expect(within(desk).getByText(/register students \(individual or team\) with the events they choose and take the ₹100 gate pass/)).toBeInTheDocument();
+    expect(within(desk).getByText(/register students at the desk \(individual or team\) with the events they choose and take the ₹100 gate pass/i)).toBeInTheDocument();
     expect(within(panel).getByText(/A QR scan, screenshot or transaction ID alone is never proof/)).toBeInTheDocument();
   });
 

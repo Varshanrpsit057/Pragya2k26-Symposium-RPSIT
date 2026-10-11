@@ -33,6 +33,7 @@ import {
   formatOnlineId,
   formatOnsiteId,
   normalisePhone,
+  normaliseRegistrationId,
   onlineSerial,
   resolvedDepartment,
   splitDepartment,
@@ -46,7 +47,7 @@ import {
   type UploadTicket,
 } from '../src/lib/registration';
 import { PLACES, type AdminRegistration } from '../src/lib/admin';
-import type { SystemProblem, SystemStatus } from '../src/lib/help';
+import type { AuditEntry, SystemProblem, SystemStatus } from '../src/lib/help';
 import { proofLabel } from '../src/lib/student';
 import { eventDayStarted, registrationPhase, scheduleOf, type RegistrationPhase, type RegistrationSchedule } from '../src/lib/schedule';
 import { MAX_DESK_NUMBER, readDeskNumber, ROLE_PERMISSIONS, type SessionInfo, type SignedInView } from '../src/lib/staff';
@@ -81,6 +82,8 @@ import { StudentPortal } from './studentPortal';
 import { claimsOf, type AdminSession, type Registration, type RegistrationChanges, type RegistrationStatus, type Store } from './store';
 import { checkScreenshot, validateOnsitePayload, validatePayload } from './validate';
 import { RECORD_FOLDER_NAME, recordFileName, studentRecord, type Deletion } from './studentRecord';
+import { TestTools } from './testTools';
+import type { DeletedView } from '../src/lib/testTools';
 
 export { ApiError } from './errors';
 
@@ -88,7 +91,7 @@ export interface ServiceDeps {
   store: Store;
   files: FileStore;
   sheets: Pick<SheetsStore, 'ready' | 'ids' | 'append' | 'update'>;
-  drive: Pick<DriveStore, 'upload' | 'replace' | 'findByProperties' | 'ensureFolder' | 'parentOf'>;
+  drive: Pick<DriveStore, 'upload' | 'replace' | 'findByProperties' | 'ensureFolder' | 'parentOf' | 'trash'>;
   sendMail: (mime: string) => Promise<string>;
   /** The RPSIT crest (JPEG) for the participant pass. */
   logo: Uint8Array;
@@ -153,12 +156,22 @@ const reasonOf = (body: unknown) => field(body, 'reason', 300).replace(/\p{Cc}+/
 
 const cancelledError = () => new ApiError(409, 'ALREADY_CANCELLED', 'This registration was cancelled.');
 
+/** The record kept with a deletion (null when unreadable). */
+function snapshotOf(entry: AuditEntry): Registration | null {
+  try {
+    return entry.snapshot ? (JSON.parse(entry.snapshot) as Registration) : null;
+  } catch {
+    return null;
+  }
+}
+
 const GATE_PASS_LABEL = { ONLINE_UPI: 'Online UPI', CASH: 'Cash at desk', UPI: 'UPI at desk' } as const;
 
 export class Service {
   private readonly fees: Fees;
   /** Passes are emailed on approval (off for now: students download them from the website). */
   readonly passByEmail: boolean;
+  /** The schedule in force: the real one, or a test timeline (changed in place by `testing`). */
   readonly schedule: RegistrationSchedule;
   private readonly now: () => number;
   private readonly log: (message: string, details?: Record<string, unknown>) => void;
@@ -173,11 +186,14 @@ export class Service {
   readonly students: StudentPortal;
   /** Help requests sent with Contact admin. */
   readonly help: HelpDesk;
+  /** Test sessions: the timeline, the TEST marks and deleting test data. */
+  readonly testing: TestTools;
 
   constructor(private readonly deps: ServiceDeps) {
     this.fees = deps.fees ?? { gatePass: site.registration.gatePassFee, perEvent: site.registration.eventFee };
     this.passByEmail = deps.mail.passByEmail ?? site.registration.passByEmail;
-    this.schedule = deps.schedule ?? scheduleOf(site.registration);
+    const standard = { ...(deps.schedule ?? scheduleOf(site.registration)) };
+    this.schedule = { ...standard };
     this.now = deps.now ?? Date.now;
     this.log = deps.log ?? ((message, details) => console.log(JSON.stringify({ message, ...details })));
     this.staff = new StaffAccounts({ store: deps.store, ownerUsername: deps.admin.username, now: this.now, log: this.log });
@@ -198,11 +214,27 @@ export class Service {
       log: this.log,
       mutate: (registrationId, change) => this.mutate(registrationId, change),
     });
-    this.help = new HelpDesk({ store: deps.store, now: this.now, log: this.log });
+    this.testing = new TestTools({
+      store: deps.store,
+      files: deps.files,
+      drive: deps.drive,
+      sheets: deps.sheets,
+      now: this.now,
+      log: this.log,
+      standard,
+      schedule: this.schedule,
+      sheetRow: (registration) => this.sheetRow(registration),
+    });
+    this.help = new HelpDesk({ store: deps.store, now: this.now, log: this.log, testing: async () => (await this.testing.activeSession()) !== null });
   }
 
   private iso() {
     return new Date(this.now()).toISOString();
+  }
+
+  /** Brings the timeline and the test session up to date (every request; cached for seconds). */
+  async syncSettings() {
+    await this.testing.sync();
   }
 
   private phase(): RegistrationPhase {
@@ -314,6 +346,7 @@ export class Service {
       version: 1,
       sheetVersion: 0,
       syncAttempts: 0,
+      ...(await this.testing.markNow()),
     };
     const created = await store.createRegistration(registration).catch(async (error: unknown) => {
       // Not stored: the screenshot copy belongs to no one (the upload itself stays for a retry).
@@ -552,7 +585,8 @@ export class Service {
       serverTime: new Date(now).toISOString(),
       phase: registrationPhase(this.schedule, now),
       eventDayStarted: eventDayStarted(this.schedule, now),
-      schedule: this.schedule,
+      schedule: { ...this.schedule },
+      testing: this.testing.status(),
       fees: this.fees,
       passByEmail: this.passByEmail,
       deskNumber: actor.deskNumber,
@@ -815,6 +849,68 @@ export class Service {
     return { success: true as const, deleted: id };
   }
 
+  /** The latest deletion or restore of each record, newest first. */
+  private async lastDeletions() {
+    const latest = new Map<string, AuditEntry>();
+    for (const entry of await this.deps.store.listAuditEntries()) {
+      if ((entry.action === 'DELETED' || entry.action === 'RESTORED') && !latest.has(entry.registrationId)) latest.set(entry.registrationId, entry);
+    }
+    return latest;
+  }
+
+  /** Deleted students (web assistant team and admins): every record deleted and not restored. */
+  async listDeleted(): Promise<{ success: true; deleted: DeletedView[] }> {
+    const deleted: DeletedView[] = [];
+    for (const entry of (await this.lastDeletions()).values()) {
+      if (entry.action !== 'DELETED' || (await this.deps.store.getRegistration(entry.registrationId))) continue;
+      const snapshot = snapshotOf(entry);
+      const participant = snapshot?.record.participant;
+      deleted.push({
+        registrationId: entry.registrationId,
+        name: entry.name,
+        phone: participant?.phone ?? '',
+        email: participant?.email ?? '',
+        college: participant?.college ?? '',
+        source: snapshot ? sourceOf(snapshot) : 'ONLINE',
+        status: snapshot?.status ?? '',
+        deletedAt: entry.at,
+        deletedBy: entry.by,
+        reason: entry.reason,
+      });
+    }
+    return { success: true, deleted };
+  }
+
+  /**
+   * Brings a deleted record back, as it was (its files were kept). Refused when its phone,
+   * email or payment reference has since been used by another registration.
+   */
+  async restoreDeleted(actor: Actor, registrationId: string) {
+    const id = normaliseRegistrationId(registrationId);
+    const entry = (await this.lastDeletions()).get(id);
+    const snapshot = entry?.action === 'DELETED' ? snapshotOf(entry) : null;
+    if (!entry || !snapshot) throw new ApiError(404, 'NOT_FOUND', `${id} is not in the Deleted list.`);
+    if (await this.deps.store.getRegistration(id)) throw new ApiError(409, 'EXISTS', `${id} is already back in the list.`);
+    const { leaseUntil: _until, leaseId: _lease, ...kept } = snapshot;
+    void _until;
+    void _lease;
+    // A new version, so the Google Sheet row and the Drive record are written again.
+    const registration: Registration = { ...kept, version: snapshot.version + 1, syncAttempts: 0, recordAttempts: 0 };
+    const created = await this.deps.store.createRegistration(registration);
+    if (!created.ok) {
+      if (!created.conflicts.length) throw new ApiError(409, 'EXISTS', `The ID ${id} is now used by another registration.`);
+      const kind = created.conflicts[0];
+      const key = kind === 'email' ? snapshot.emailKey : kind === 'phone' ? snapshot.phoneKey : kind === 'transaction' ? snapshot.transactionKey : snapshot.submissionHash;
+      const holder = key ? await this.deps.store.findClaim(kind, key) : null;
+      const what = { email: 'email', phone: 'phone number', transaction: 'payment reference', submission: 'form' }[kind];
+      throw new ApiError(409, 'CONFLICT', `${id} cannot come back: its ${what} is now used by ${holder ?? 'another registration'}. Change or delete that one first.`);
+    }
+    await this.deps.store.addAuditEntry({ at: this.iso(), action: 'RESTORED', registrationId: id, name: registration.record.participant.name, by: actor.username, reason: 'Restored from the Deleted list' });
+    this.log('Registration restored', { registrationId: id, by: actor.username });
+    await this.saveStudentRecord(id).catch(() => false);
+    return { success: true as const, registration: this.adminView(registration) };
+  }
+
   /**
    * Corrects a student's details (desk, web assistant team, admins): name, department, year,
    * college, phone and email, with the same rules as the form. A new email or phone is
@@ -940,10 +1036,13 @@ export class Service {
       counts,
       problems: problems.sort((a, b) => a.registrationId.localeCompare(b.registrationId)).slice(0, 100),
       openHelp: help.filter((request) => request.status === 'OPEN').length,
-      deleted: audit.slice(0, 20).map(({ snapshot: _snapshot, ...entry }) => {
-        void _snapshot;
-        return entry;
-      }),
+      deleted: audit
+        .filter((entry) => entry.action === 'DELETED')
+        .slice(0, 20)
+        .map(({ snapshot: _snapshot, ...entry }) => {
+          void _snapshot;
+          return entry;
+        }),
     };
   }
 
@@ -1002,15 +1101,8 @@ export class Service {
    * used, is refused with the registration that holds it.
    */
   async registerOnsite(actor: Actor, body: unknown) {
+    // The desk registers on any day: its accounts are staff only.
     requirePermission(actor, 'registrations.onsite');
-    const phase = this.phase();
-    if (phase !== 'onsite') {
-      const message =
-        phase === 'closed'
-          ? 'Registration has closed for the day.'
-          : `On-site registration opens on ${this.schedule.onsiteOpensAt ? formatIst(parseEventStart(this.schedule.onsiteOpensAt)!) : 'the event day'}.`;
-      throw new ApiError(403, 'ONSITE_CLOSED', message);
-    }
     const checked = validateOnsitePayload(body, this.fees);
     if (!checked.ok) throw new ApiError(400, 'INVALID', checked.error, checked.fieldErrors);
     const form = checked.value;
@@ -1082,6 +1174,7 @@ export class Service {
       version: 1,
       sheetVersion: 0,
       syncAttempts: 0,
+      ...(await this.testing.markNow()),
     };
 
     let registration: Registration | null = null;
@@ -1142,10 +1235,8 @@ export class Service {
    * event. A team event added for someone who came as a team takes the gate team.
    */
   async changeEvents(actor: Actor, registrationId: string, body: unknown) {
+    // The desk changes events on any day, like it registers.
     requirePermission(actor, 'registrations.events');
-    if (actor.role !== 'ADMIN' && !eventDayStarted(this.schedule, this.now())) {
-      throw new ApiError(403, 'EVENT_NOT_STARTED', 'Events can be changed at the desk from the event day.');
-    }
     const list = (name: 'add' | 'remove') => (isObject(body) && Array.isArray(body[name]) ? body[name].filter((id): id is string => typeof id === 'string') : []);
     const add = list('add');
     const remove = list('remove');

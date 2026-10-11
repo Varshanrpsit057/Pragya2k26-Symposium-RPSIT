@@ -5,6 +5,7 @@ import { site } from '../../content/site';
 import { DEPARTMENTS } from '../../lib/registration';
 import { EventsSection } from '../events/EventsSection';
 import { SiteModalsProvider } from '../modal/SiteModals';
+import { useSiteModals } from '../modal/siteModalsContext';
 import { RegisterButton } from '../ui/RegisterButton';
 
 const renderWithForm = () =>
@@ -13,6 +14,16 @@ const renderWithForm = () =>
       <RegisterButton />
     </SiteModalsProvider>,
   );
+
+/** Opens the form from anywhere (as an event's Register button does). */
+function OpenFormButton() {
+  const { openRegistration } = useSiteModals();
+  return (
+    <button type="button" onClick={() => openRegistration()}>
+      Open the form
+    </button>
+  );
+}
 
 const openForm = () => {
   fireEvent.click(screen.getByRole('button', { name: 'Register Now' }));
@@ -122,8 +133,16 @@ describe('RegistrationModal', () => {
 
   it('sends visitors to the registration desk on the event day, without the online form or the Google Form', () => {
     scheduleAt('2020-01-01T17:00:00', '2020-01-02T00:00:00', '2999-01-01T00:00:00');
-    renderWithForm();
-    fireEvent.click(screen.getByRole('button', { name: 'Register Now' }));
+    // On the event day Register Now becomes Student login; a form opened another way says where to go.
+    const { unmount } = renderWithForm();
+    expect(screen.getByRole('link', { name: 'Student login' })).toBeInTheDocument();
+    unmount();
+    render(
+      <SiteModalsProvider>
+        <OpenFormButton />
+      </SiteModalsProvider>,
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Open the form' }));
 
     const dialog = screen.getByRole('dialog', { name: 'Online registration closed' });
     expect(within(dialog).getByText('On-site registration is open today')).toBeInTheDocument();

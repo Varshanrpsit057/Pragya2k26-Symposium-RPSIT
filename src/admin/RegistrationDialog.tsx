@@ -370,7 +370,7 @@ export function RegistrationDialog({ registration: item, token, session, onChang
       show: session.passByEmail && item.emailStatus === 'UNKNOWN' && can('registrations.retry'),
     },
     { view: 'cancel', label: 'Cancel registration', tone: 'danger', show: item.status === 'APPROVED' && can('registrations.remove') },
-    { view: 'delete', label: 'Delete record', tone: 'danger', show: can('registrations.remove') },
+    { view: 'delete', label: 'Delete record', tone: 'danger', show: can('registrations.delete') },
   ];
 
   const back = (
@@ -488,12 +488,12 @@ export function RegistrationDialog({ registration: item, token, session, onChang
       {view === 'delete' && (
         <Step title="Delete this record" back={back}>
           <ReasonForm
-            intro={`Deleting takes ${item.registrationId} (${item.participant.name}) off every list and frees their email and phone: use it for a test entry or a duplicate. Nothing is lost: the whole record is kept in the log with your name and the reason, its screenshots and pass stay, and its Google Sheet row and Drive record file are marked DELETED. To keep it on the lists, cancel instead.`}
+            intro={`Deleting takes ${item.registrationId} (${item.participant.name}) off every list and frees their email and phone: use it for a duplicate or a mistake. Nothing is lost: it goes to the Deleted list (web assistant team and admins), where it can be restored, with your name and the reason; its screenshots and pass stay, and its Google Sheet row and Drive record file are marked DELETED.`}
             paidEvents={item.events.filter((event) => event.fee.status === 'PAID').map((event) => event.name)}
             label="Reason (required, kept in the log)"
             confirm="Delete record"
             busyLabel="Deleting…"
-            acknowledge="I understand it leaves every list and cannot be brought back from the dashboard."
+            acknowledge="I understand it leaves every list (it can be restored from the Deleted list)."
             onSubmit={async (reason) => {
               await deleteRegistration(token, item.registrationId, reason);
               onDeleted(item.registrationId);

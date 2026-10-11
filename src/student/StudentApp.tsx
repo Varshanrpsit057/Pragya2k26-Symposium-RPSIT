@@ -13,6 +13,7 @@ import { GroupedId } from '../components/ui/GroupedId';
 import { campusMap } from '../content/campusMap';
 import { site } from '../content/site';
 import { venueOf } from '../lib/campusMap';
+import { useSchedule } from '../lib/liveSchedule';
 import { normaliseRegistrationId, rupees } from '../lib/registration';
 import { credentialsProblem, type StudentCredentials, type StudentView } from '../lib/student';
 import { studentAlerts, timedEvents } from './alerts';
@@ -20,7 +21,8 @@ import { StudentApiError, passUrl, portalState, signIn, uploadProof } from './st
 
 const SAVED = 'pragya-student';
 /** The event day ('2026-10-17'), for the event times. */
-const DAY = (site.registration.onsite.opensAt ?? '2026-10-17').slice(0, 10);
+/** The event day's date (a test timeline moves it), for the event times and alerts. */
+const dayOf = (onsiteOpensAt: string | null) => (onsiteOpensAt ?? site.registration.onsite.opensAt ?? '2026-10-17').slice(0, 10);
 const PAUSED =
   'Student login is paused for a few minutes so the registration desks stay fast. Please try again soon, or ask at the help desk. At each venue, just tell the coordinator your Registration ID.';
 const tel = (phone: string) => `tel:${phone.replace(/[^\d+]/g, '')}`;
@@ -251,8 +253,9 @@ function Home({ view, credentials, updatedAt, onUpdate, onPaused, onSignOut }: H
     }
   };
 
-  const alerts = studentAlerts(view, now, DAY);
-  const events = timedEvents(view, DAY);
+  const day = dayOf(useSchedule().onsiteOpensAt);
+  const alerts = studentAlerts(view, now, day);
+  const events = timedEvents(view, day);
   const showEvents = view.status === 'APPROVED' || (view.status === 'PENDING' && !view.payAtLogin);
   const time = new Date(updatedAt).toLocaleTimeString('en-IN', { hour: 'numeric', minute: '2-digit', timeZone: 'Asia/Kolkata' });
 
@@ -586,7 +589,7 @@ function DeskPayment({ view, credentials, onUpdate, onPaused }: DeskPaymentProps
 
 /** The student's details as registered (the pass shows them), with their events. */
 function DetailsList({ view }: { view: StudentView }) {
-  const events = timedEvents(view, DAY);
+  const events = timedEvents(view, dayOf(useSchedule().onsiteOpensAt));
   return (
       <dl className="stu-details">
         <dt>Name</dt>

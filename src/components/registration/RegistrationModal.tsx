@@ -33,7 +33,8 @@ import {
 import { API_BASE } from '../../lib/api';
 import { submitRegistration, type OwnRegistration, type RegistrationResult } from '../../lib/registrationClient';
 import { formatIst, parseEventStart } from '../../lib/countdown';
-import { registrationPhase, scheduleOf, type RegistrationPhase } from '../../lib/schedule';
+import { currentSchedule } from '../../lib/liveSchedule';
+import { registrationPhase, type RegistrationPhase } from '../../lib/schedule';
 import { statusLink } from '../../lib/statusLink';
 import { Modal } from '../modal/Modal';
 import { HelpDeskLine } from '../help/HelpDeskLine';
@@ -82,10 +83,10 @@ const formatBytes = (bytes: number) =>
 const plural = (count: number, word: string) => `${count} ${word}${count === 1 ? '' : 's'}`;
 
 /** Read at the moment it is called (e.g. on submit), not when the form was opened. */
-const registrationClosedNow = () => registrationPhase(scheduleOf(site.registration), Date.now()) !== 'online';
+const registrationClosedNow = () => registrationPhase(currentSchedule(), Date.now()) !== 'online';
 
 function closedMessage(): string {
-  const { closesAt } = site.registration;
+  const closesAt = currentSchedule().onlineClosesAt;
   const end = closesAt ? parseEventStart(closesAt) : null;
   return `Online registration for ${site.name} ${site.year} closed${end ? ` on ${formatIst(end)}` : ''}.`;
 }

@@ -18,6 +18,7 @@ import type { HelpCategory, HelpRequest, SystemStatus } from '../lib/help';
 import type { RegistrationErrors } from '../lib/registration';
 import type { StudentPortalState } from '../lib/student';
 import type { SessionInfo, SignedInView, StaffAccountView, StaffRole } from '../lib/staff';
+import { CLEAR_PHRASE, type ClearResult, type DeletedView, type TestSessionView, type TestingState, type TimelineMode, type TimelineView } from '../lib/testTools';
 
 const TOKEN_KEY = 'pragya-admin-session';
 
@@ -129,6 +130,28 @@ export const retry = (token: string, id: string, resendEmail = false) => action(
 /** Admins: cancel an approved registration, with the reason the student sees. */
 export const cancelRegistration = (token: string, id: string, reason: string) => action(token, id, 'cancel', { reason });
 /** Admins: delete a record for good, with the reason (kept in the audit log). */
+/** The Deleted list (web assistant team and admins), and bringing a record back. */
+export const listDeleted = (token: string) => request<{ deleted: DeletedView[] }>('/api/admin/deleted', { token }).then((data) => data.deleted);
+export const restoreDeleted = (token: string, id: string) =>
+  request<{ registration: AdminRegistration }>(`/api/admin/deleted/${encodeURIComponent(id)}/restore`, { method: 'POST', body: {}, token }).then((data) => data.registration);
+
+/** Test sessions (admins). */
+export const testingState = (token: string) => request<TestingState>('/api/admin/testing', { token });
+export interface TimelineRequest {
+  mode: TimelineMode;
+  hours?: number;
+  schedule?: { onlineClosesAt: string; onsiteOpensAt: string; onsiteClosesAt: string };
+}
+export const setTimeline = (token: string, change: TimelineRequest) =>
+  request<{ timeline: TimelineView }>('/api/admin/testing/timeline', { method: 'POST', body: change, token }).then((data) => data.timeline);
+export const startTestSession = (token: string, label: string) =>
+  request<{ session: TestSessionView }>('/api/admin/testing/session', { method: 'POST', body: { action: 'start', label }, token }).then((data) => data.session);
+export const stopTestSession = (token: string) => request<object>('/api/admin/testing/session', { method: 'POST', body: { action: 'stop' }, token });
+export const markTest = (token: string, id: string, test: boolean) =>
+  request<object>(`/api/admin/testing/records/${encodeURIComponent(id)}`, { method: 'POST', body: { test }, token });
+export const clearTestData = (token: string, options: { results: boolean; helpRequests: boolean; restartDeskIds: boolean }) =>
+  request<ClearResult>('/api/admin/testing/clear', { method: 'POST', body: { confirm: CLEAR_PHRASE, ...options }, token });
+
 export const deleteRegistration = (token: string, id: string, reason: string) =>
   request<{ deleted: string }>(`/api/admin/registrations/${encodeURIComponent(id)}/delete`, { method: 'POST', body: { reason }, token }).then((data) => data.deleted);
 

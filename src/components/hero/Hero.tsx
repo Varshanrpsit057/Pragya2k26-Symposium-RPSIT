@@ -1,5 +1,6 @@
 import { site } from '../../content/site';
 import { useRegistrationPhase } from '../../hooks/useRegistrationPhase';
+import { useSchedule } from '../../lib/liveSchedule';
 import { EMBLEM_SLOT_ID } from '../brand/BrandEmblem';
 import { RegisterButton } from '../ui/RegisterButton';
 import { SpecularButton } from '../ui/SpecularButton';
@@ -18,10 +19,9 @@ const PHASE_NOTES = {
 /** The countdown while online registration is open; then where registration stands. */
 function HeroRegistration() {
   const phase = useRegistrationPhase();
+  const { onlineClosesAt } = useSchedule();
   if (phase === 'online') {
-    return site.registration.closesAt ? (
-      <Countdown target={site.registration.closesAt} label="Registration closes in" endedLabel="Registration closed" />
-    ) : null;
+    return onlineClosesAt ? <Countdown target={onlineClosesAt} label="Registration closes in" endedLabel="Registration closed" /> : null;
   }
   return (
     <p className="countdown countdown--ended" role="status">

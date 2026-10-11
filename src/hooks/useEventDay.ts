@@ -1,9 +1,8 @@
 import { useEffect, useState } from 'react';
-import { site } from '../content/site';
 import { parseEventStart } from '../lib/countdown';
-import { registrationPhase, scheduleOf } from '../lib/schedule';
+import { useSchedule } from '../lib/liveSchedule';
+import { registrationPhase } from '../lib/schedule';
 
-const schedule = scheduleOf(site.registration);
 /** setTimeout's longest wait (about 24.8 days); a longer one is re-checked then. */
 const MAX_WAIT = 2 ** 31 - 1;
 
@@ -14,6 +13,7 @@ const MAX_WAIT = 2 ** 31 - 1;
  * re-renders only when the day starts or ends, so large components may use it.
  */
 export function useEventDay(): boolean {
+  const schedule = useSchedule();
   const [eventDay, setEventDay] = useState(false);
   useEffect(() => {
     let timer = 0;
@@ -27,6 +27,6 @@ export function useEventDay(): boolean {
     };
     check();
     return () => window.clearTimeout(timer);
-  }, []);
+  }, [schedule]);
   return eventDay;
 }

@@ -101,7 +101,10 @@ export const STAFF_ROUTES: readonly StaffRoute[] = [
   { method: 'POST', path: route_(`/registrations/${ID}/reject`), permission: 'registrations.approve', run: (s, { actor, body, params: [id] }) => s.reject(id, actor, body) },
   { method: 'POST', path: route_(`/registrations/${ID}/retry`), permission: 'registrations.retry', run: (s, { actor, body, params: [id] }) => s.retry(id, actor, body) },
   { method: 'POST', path: route_(`/registrations/${ID}/cancel`), permission: 'registrations.remove', run: (s, { actor, body, params: [id] }) => s.cancel(id, actor, body) },
-  { method: 'POST', path: route_(`/registrations/${ID}/delete`), permission: 'registrations.remove', run: (s, { actor, body, params: [id] }) => s.deleteRegistration(id, actor, body) },
+  { method: 'POST', path: route_(`/registrations/${ID}/delete`), permission: 'registrations.delete', run: (s, { actor, body, params: [id] }) => s.deleteRegistration(id, actor, body) },
+  // The Deleted list (web assistant team and admins): deleted students, and bringing one back.
+  { method: 'GET', path: route_('/deleted'), permission: 'registrations.delete', run: (s) => s.listDeleted() },
+  { method: 'POST', path: route_(`/deleted/${ID}/restore`), permission: 'registrations.delete', run: (s, { actor, params: [id] }) => s.restoreDeleted(actor, id) },
   { method: 'POST', path: route_(`/registrations/${ID}/details`), permission: 'registrations.edit', run: (s, { actor, body, params: [id] }) => s.editDetails(actor, id, body) },
   { method: 'POST', path: route_(`/registrations/${ID}/events`), permission: 'registrations.events', run: (s, { actor, body, params: [id] }) => s.changeEvents(actor, id, body) },
   { method: 'POST', path: route_('/onsite'), permission: 'registrations.onsite', run: (s, { actor, body }) => s.registerOnsite(actor, body) },
@@ -155,7 +158,26 @@ export const STAFF_ROUTES: readonly StaffRoute[] = [
   { method: 'POST', path: route_('/help/([a-z0-9-]{6,40})'), permission: 'help.manage', run: (s, { actor, body, params: [id] }) => s.help.update(actor, id, body) },
   { method: 'GET', path: route_('/system'), permission: 'system.view', run: (s) => s.systemStatus() },
   { method: 'POST', path: route_('/student-portal'), permission: 'portal.manage', run: (s, { actor, body }) => s.students.set(actor, body) },
+
+  // Test sessions (admins): the timeline, the session, the TEST marks and deleting test data.
+  { method: 'GET', path: route_('/testing'), permission: 'system.testing', run: (s) => s.testing.state() },
+  { method: 'POST', path: route_('/testing/timeline'), permission: 'system.testing', run: (s, { actor, body }) => s.testing.setTimeline(actor, body) },
+  {
+    method: 'POST',
+    path: route_('/testing/session'),
+    permission: 'system.testing',
+    run: (s, { actor, body }) => (isObject(body) && body.action === 'stop' ? s.testing.stopSession(actor) : s.testing.startSession(actor, body)),
+  },
+  {
+    method: 'POST',
+    path: route_(`/testing/records/${ID}`),
+    permission: 'system.testing',
+    run: (s, { actor, body, params: [id] }) => s.testing.setMark(actor, id, !(isObject(body) && body.test === false)),
+  },
+  { method: 'POST', path: route_('/testing/clear'), permission: 'system.testing', run: (s, { actor, body }) => s.testing.clear(actor, body) },
 ];
+
+const isObject = (value: unknown): value is Record<string, unknown> => typeof value === 'object' && value !== null && !Array.isArray(value);
 
 /**
  * Answers one request. `service` is null when the API is not configured yet (missing
@@ -181,10 +203,16 @@ export async function route(
       return handler();
     };
 
+    // The timeline and the test session (a test timeline changes what is open).
+    await service.syncSettings();
+
     let result: unknown;
     switch (path) {
       case '/api/health':
         result = await get(async () => ({ success: true, status: 'ready' }));
+        break;
+      case '/api/schedule':
+        result = await get(async () => service.testing.publicSchedule());
         break;
       case '/api/uploads':
         result = await post((body) => service.createUpload(body, request.ip));

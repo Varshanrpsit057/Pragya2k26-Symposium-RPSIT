@@ -145,6 +145,12 @@ export class FakeDrive {
   async parentOf() {
     return 'root';
   }
+  /** Ids of files moved to the trash. */
+  readonly trashed: string[] = [];
+  async trash(fileId: string) {
+    this.check();
+    this.trashed.push(fileId);
+  }
 }
 
 export interface Participant {

@@ -31,6 +31,8 @@ export interface HelpRequest {
   /** Where it happened (the dashboard section), for the web assistant team. */
   page: string | null;
   status: 'OPEN' | 'RESOLVED';
+  /** Sent during a test session: deleted with the test data. */
+  test?: boolean;
   resolvedBy?: string;
   resolvedAt?: string;
   /** Answers from the web assistant team or an admin, oldest first: the sender sees them. */
@@ -46,7 +48,8 @@ export interface HelpReply {
 /** A record an admin deleted: kept so there is always a name against the deletion. */
 export interface AuditEntry {
   at: string;
-  action: 'DELETED';
+  /** DELETED: a record deleted (kept here whole); RESTORED: brought back; TEST_CLEARED: test data deleted. */
+  action: 'DELETED' | 'RESTORED' | 'TEST_CLEARED';
   registrationId: string;
   name: string;
   by: string;
