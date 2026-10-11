@@ -9,7 +9,7 @@ import { useEffect, useRef, useState, type ChangeEvent } from 'react';
 import mapCss from '../components/map/CampusMap.css?raw';
 import { CampusMap, CampusOverview, FloorPlan } from '../components/map/CampusMap';
 import { campusMap as published } from '../content/campusMap';
-import { ROOM_KINDS, mapProblem, photoUrl, type CampusMap as CampusMapData, type PhotoSpot, type RoomKind } from '../lib/campusMap';
+import { CAMPUS, ROOM_KINDS, mapProblem, photoUrl, type CampusMap as CampusMapData, type PhotoSpot, type RoomKind } from '../lib/campusMap';
 import { saveFile } from './ui';
 
 const DRAFT = 'pragya-campus-map-draft';
@@ -77,7 +77,8 @@ export function MapEditor() {
   const makeVenue = (venueName: string) =>
     update((draft) => {
       for (const venue of draft.venues) {
-        if (venue.name === venueName) Object.assign(venue, { floorId: floor!.id, roomId: room!.id });
+        // Moved to another room: the way drawn to the old room no longer fits, so it is dropped.
+        if (venue.name === venueName && venue.roomId !== room!.id) Object.assign(venue, { floorId: floor!.id, roomId: room!.id, route: undefined });
       }
       const target = draft.floors.find((item) => item.id === floor!.id)!.rooms.find((item) => item.id === room!.id)!;
       if (/^Room /.test(target.label)) target.label = venueName;
@@ -188,6 +189,7 @@ export function MapEditor() {
           <div ref={planBox} className="adm-map-editor__plan">
             {floor ? (
               <FloorPlan
+                plan={map.plan}
                 floor={floor}
                 highlight={map.venues.filter((venue) => venue.floorId === floor.id).map((venue) => venue.roomId)}
                 selected={selected?.id ?? null}
@@ -201,7 +203,7 @@ export function MapEditor() {
                 if (!placing) return;
                 const svg = event.currentTarget.querySelector('svg')!;
                 const box = svg.getBoundingClientRect();
-                placeAt({ x: Math.round(((event.clientX - box.left) / box.width) * 1000), y: Math.round(((event.clientY - box.top) / box.height) * 760) });
+                placeAt({ x: Math.round(((event.clientX - box.left) / box.width) * CAMPUS.width), y: Math.round(((event.clientY - box.top) / box.height) * CAMPUS.height) });
               }}>
                 <CampusOverview photos={map.campusPhotos} onPhoto={(item) => setSelected({ type: 'photo', id: item.id })} />
               </div>

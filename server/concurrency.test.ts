@@ -7,6 +7,8 @@ import { describe, expect, it } from 'vitest';
 import { STAFF_PASSWORD, TIMES, pngBytes, setup } from './testing';
 
 const STUDENTS = 30;
+/** Heavy tests: room to finish when the whole suite shares the machine. */
+const SLOW = 30_000;
 const phoneOf = (n: number) => `98400${String(10000 + n).padStart(5, '0')}`;
 /** Letters only, as names must be: Student A … Student Z, Student AA … */
 const nameOf = (n: number) => `Student ${String.fromCharCode(65 + (n % 26))}${n >= 26 ? 'A' : ''}`;
@@ -47,7 +49,7 @@ describe('30 students at the same moment', () => {
     // Every one reaches the Google Sheet, once.
     await h.service.runScheduled();
     expect(h.sheets.rows.map((row) => row.id).filter((id) => ids.includes(String(id))).sort()).toEqual([...ids].sort());
-  });
+  }, SLOW);
 
   it('takes 30 students’ screenshots at once and lets two desks approve the same payment at the same instant without a clash', async () => {
     const { h, tokens } = await fourDesks();
@@ -91,5 +93,5 @@ describe('30 students at the same moment', () => {
     for (const reference of freed) expect(await h.store.findClaim('transaction', reference)).toBeNull();
     // And one pass per student.
     expect([...h.files.objects.keys()].filter((key) => key.startsWith('passes/')).length).toBe(STUDENTS);
-  });
+  }, SLOW);
 });

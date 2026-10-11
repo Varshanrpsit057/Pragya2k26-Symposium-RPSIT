@@ -72,6 +72,9 @@ export function Hero() {
           <SpecularButton href="#technical" variant="ghost" size="lg">
             Explore the events
           </SpecularButton>
+          <SpecularButton href="#route-map" variant="ghost" size="lg" aria-haspopup="dialog">
+            Route map
+          </SpecularButton>
         </div>
 
         {hasFacts && (
