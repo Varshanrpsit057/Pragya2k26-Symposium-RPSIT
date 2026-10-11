@@ -40,7 +40,7 @@ describe('participant pass', () => {
     expect(pass.payableAtVenue).toBe(100);
     expect(pass.events[0]).toMatchObject({
       date: '17 October 2026',
-      timing: '10:30 AM – 12:00 PM',
+      timing: 'Round 1: 10:30 AM – 11:30 AM · Round 2: 12:00 PM – 1:00 PM',
       type: 'Technical · Individual or team',
       venue: 'Delta Lab',
     });

@@ -62,13 +62,14 @@ describe('gate desk: the gate pass and the events chosen, individual or team', (
     expect((await change(soloId, { remove: ['cognix'] })).body.registration.eventCount).toBe(0);
   });
 
-  it('gives the participant a pass and an email that say events are registered at each venue', async () => {
+  it('gives a desk registration no pass and no email: the Registration ID is enough', async () => {
     const h = setup({ at: TIMES.eventDay });
     const desk = await h.staff('DESK');
     const registration = (await h.onsite(desk.token)).body.registration;
-    expect(registration.pdfStatus).toBe('GENERATED');
-    expect(registration.emailStatus).toBe('SENT');
-    expect(h.sendMail).toHaveBeenCalledTimes(1);
+    await h.service.runScheduled();
+    expect((await h.store.getRegistration(registration.registrationId))?.pdfStatus).toBe('NOT_STARTED');
+    expect(h.sendMail).not.toHaveBeenCalled();
+    expect([...h.files.objects.keys()].some((key) => key.startsWith('passes/'))).toBe(false);
   });
 });
 

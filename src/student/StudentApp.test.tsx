@@ -78,16 +78,16 @@ describe('student page', () => {
 
     // Timing alerts for the two events chosen: next, the clash, and the fee still due.
     const alerts = screen.getByRole('heading', { name: 'Timing alerts' }).closest('section')!;
-    expect(alerts).toHaveTextContent('Next: VIZ CRAFT at 10:30 AM in Theta Lab (in 1 h 30 min). Be there by 10:00 AM.');
-    expect(alerts).toHaveTextContent('VIZ CRAFT (10:30 AM–11:40 AM) and PRO-PITCH (10:30 AM–12:00 PM) overlap. Both run for a while, so attend VIZ CRAFT first, then move to PRO-PITCH');
+    expect(alerts).toHaveTextContent('Next: VIZ CRAFT (Round 1) at 10:30 AM in Theta Lab (in 1 h 30 min). Be there by 10:00 AM.');
+    expect(alerts).toHaveTextContent('VIZ CRAFT and PRO-PITCH run at the same time (Round 1 10:30 AM–11:30 AM, Round 2 12:00 PM–1:00 PM). Attend one first, then move to the other if time allows');
     expect(alerts).toHaveTextContent('Pay ₹50 for VIZ CRAFT: by GPay on this page (below), or in cash to the coordinator at the venue.');
 
     const events = screen.getByRole('heading', { name: 'Your events (2)' }).closest('section')!;
-    expect(events).toHaveTextContent('VIZ CRAFT10:30 AM – 11:40 AM · Theta LabTeam Pixel Pair₹50 to pay (GPay below, or cash at the venue)');
+    expect(events).toHaveTextContent('VIZ CRAFTRound 1: 10:30 AM – 11:30 AM · Round 2: 12:00 PM – 1:00 PM · Theta LabTeam Pixel Pair₹50 to pay (GPay below, or cash at the venue)');
     // Their details, after approval too.
     fireEvent.click(screen.getByText('Your details'));
     expect(screen.getByText('nila@example.com')).toBeVisible();
-    expect(events).toHaveTextContent('PRO-PITCH10:30 AM – 12:00 PM · Delta Lab₹50 paid');
+    expect(events).toHaveTextContent('PRO-PITCHRound 1: 10:30 AM – 11:30 AM · Round 2: 12:00 PM – 1:00 PM · Delta Lab₹50 paid');
 
     // The sign-in stays for this tab only, and the pass link is fetched when asked for.
     expect(JSON.parse(sessionStorage.getItem('pragya-student')!)).toEqual({ registrationId: '262001', phone: '9840012345' });

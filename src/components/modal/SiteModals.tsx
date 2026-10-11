@@ -1,15 +1,18 @@
-import { useCallback, useMemo, useState, useSyncExternalStore, type ReactNode } from 'react';
+import { Suspense, lazy, useCallback, useMemo, useState, useSyncExternalStore, type ReactNode } from 'react';
 import type { SymposiumEvent } from '../../content/types';
 import { currentSchedule } from '../../lib/liveSchedule';
 import { registrationPhase, type RegistrationPhase } from '../../lib/schedule';
 import type { OwnRegistration } from '../../lib/registrationClient';
 import { parseStatusHash, statusHash } from '../../lib/statusLink';
 import { EventDetailsModal } from '../events/EventDetailsModal';
-import { RouteMapModal, parseRouteHash } from '../map/RouteMapModal';
+import { parseRouteHash } from '../map/routeHash';
 import { RegistrationModal } from '../registration/RegistrationModal';
 import { StatusModal } from '../registration/StatusModal';
 import { DevCrewModal } from '../sections/DevCrew';
 import { SiteModalsContext } from './siteModalsContext';
+
+/** The Route map window and the campus map in it: downloaded the first time it is opened. */
+const RouteMapModal = lazy(() => import('../map/RouteMapModal').then((module) => ({ default: module.RouteMapModal })));
 
 /** The page address's #fragment, kept in step with the browser (empty while prerendering). */
 const subscribeToHash = (onChange: () => void) => {
@@ -39,6 +42,9 @@ export function SiteModalsProvider({ children }: { children: ReactNode }) {
   const hash = useSyncExternalStore(subscribeToHash, readHash, noHash);
   const statusOf = useMemo(() => parseStatusHash(hash), [hash]);
   const routeOf = useMemo(() => parseRouteHash(hash), [hash]);
+  // Once opened, the Route map window stays mounted, so it can close smoothly and reopen at once.
+  const [routeLoaded, setRouteLoaded] = useState(false);
+  if (routeOf && !routeLoaded) setRouteLoaded(true);
 
   const openRegistration = useCallback((event?: SymposiumEvent) => {
     setDetailsEvent(null);
@@ -79,7 +85,11 @@ export function SiteModalsProvider({ children }: { children: ReactNode }) {
         onCheckStatus={openStatus}
       />
       <StatusModal own={statusOf} onClose={closeStatus} />
-      <RouteMapModal open={routeOf !== null} eventId={routeOf?.eventId ?? null} onClose={closeStatus} />
+      {routeLoaded && (
+        <Suspense fallback={null}>
+          <RouteMapModal open={routeOf !== null} eventId={routeOf?.eventId ?? null} onClose={closeStatus} />
+        </Suspense>
+      )}
       <DevCrewModal open={crewOpen} onClose={closeDevCrew} />
     </SiteModalsContext.Provider>
   );

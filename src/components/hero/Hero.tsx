@@ -10,11 +10,12 @@ import './Hero.css';
 /** 'PRAGYA' and '2026' → the edition mark '2K26'. */
 const edition = `${site.year.slice(0, 1)}K${site.year.slice(-2)}`;
 
-const PHASE_NOTES = {
-  between: `Online registration closed · On-site registration on ${site.dates ?? 'the event day'}`,
-  onsite: 'On-site registration is open today at the registration desk',
-  closed: 'Registration closed',
-} as const;
+/** Where registration stands: a short title, and when the desk closes under it. */
+const PHASE_NOTES: Record<'between' | 'onsite' | 'closed', { title: string; sub?: string }> = {
+  between: { title: 'On-site registration only', sub: `At the desk on ${site.dates ?? 'the event day'}, until 11:59 AM` },
+  onsite: { title: 'On-site registration open', sub: 'Closes today at 11:59 AM' },
+  closed: { title: 'Registration closed' },
+};
 
 /** The countdown while online registration is open; then where registration stands. */
 function HeroRegistration() {
@@ -23,10 +24,14 @@ function HeroRegistration() {
   if (phase === 'online') {
     return onlineClosesAt ? <Countdown target={onlineClosesAt} label="Registration closes in" endedLabel="Registration closed" /> : null;
   }
+  const note = PHASE_NOTES[phase];
   return (
     <p className="countdown countdown--ended" role="status">
       <span className="countdown__ended-dot" aria-hidden="true" />
-      {PHASE_NOTES[phase]}
+      <span className="countdown__ended-text">
+        <span className="countdown__ended-title">{note.title}</span>
+        {note.sub && <span className="countdown__ended-sub">{note.sub}</span>}
+      </span>
     </p>
   );
 }

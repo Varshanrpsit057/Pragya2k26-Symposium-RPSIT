@@ -5,10 +5,8 @@ import type { SymposiumEvent } from '../../content/types';
 import { useEventDay } from '../../hooks/useEventDay';
 import { rupees } from '../../lib/registration';
 import { STUDENT_PAGE } from '../../lib/student';
-import { campusMap } from '../../content/campusMap';
-import { venueOf } from '../../lib/campusMap';
 import { HelpDeskLine } from '../help/HelpDeskLine';
-import { CampusMap } from '../map/CampusMap';
+import { LazyCampusMap } from '../map/LazyCampusMap';
 import { Modal } from '../modal/Modal';
 import { SpecularButton } from '../ui/SpecularButton';
 import './EventDetailsModal.css';
@@ -99,7 +97,7 @@ export function EventDetailsModal({ event, onClose, onRegister }: EventDetailsMo
 
           {showMap && event.venue && (
             <section className="event-details__map" aria-label={`Map to ${event.venue}`}>
-              <CampusMap map={campusMap} venue={event.venue} footer={<HelpDeskLine lead="Lost? Call the help desk" />} />
+              <LazyCampusMap venue={event.venue} footer={<HelpDeskLine lead="Lost? Call the help desk" />} />
             </section>
           )}
 
@@ -219,12 +217,10 @@ export function EventDetailsModal({ event, onClose, onRegister }: EventDetailsMo
 }
 
 /**
- * The way to the venue. With a link set (eventCatalog.ts, routeMap) it opens it; until then
- * the button says the map is coming, so the place for it is already there.
+ * The way to the venue: a map link when one is set (eventCatalog.ts, routeMap), otherwise the
+ * campus map in this window with the venue lit up (every venue is on it: CampusMap.test.tsx).
  */
-/** A map link when one is set, otherwise the campus map (in this window) with the venue lit up. */
 function RouteMap({ venue, url, expanded, onToggle }: { venue: string; url: string | null; expanded: boolean; onToggle: () => void }) {
-  const [asked, setAsked] = useState(false);
   if (url) {
     return (
       <a className="event-details__route" href={url} target="_blank" rel="noopener noreferrer" aria-label={`Route map to ${venue} (opens in a new tab)`}>
@@ -233,26 +229,11 @@ function RouteMap({ venue, url, expanded, onToggle }: { venue: string; url: stri
       </a>
     );
   }
-  if (venueOf(campusMap, venue)) {
-    return (
-      <button type="button" className="event-details__route" aria-expanded={expanded} onClick={onToggle}>
-        <RouteIcon />
-        {expanded ? 'Hide map' : 'Route map'}
-      </button>
-    );
-  }
   return (
-    <>
-      <button type="button" className="event-details__route" aria-expanded={asked} onClick={() => setAsked(!asked)}>
-        <RouteIcon />
-        Route map
-      </button>
-      {asked && (
-        <p className="event-details__route-note" role="status">
-          The route map to {venue} is coming soon. On the day, volunteers at the gate will show you the way.
-        </p>
-      )}
-    </>
+    <button type="button" className="event-details__route" aria-expanded={expanded} onClick={onToggle}>
+      <RouteIcon />
+      {expanded ? 'Hide map' : 'Route map'}
+    </button>
   );
 }
 

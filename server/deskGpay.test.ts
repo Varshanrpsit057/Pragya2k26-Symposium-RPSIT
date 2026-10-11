@@ -50,7 +50,8 @@ describe('desk GPay paid by the student from Student login', () => {
       payAtLogin: { amount: 100, screenshotSent: false },
       passAvailable: false,
     });
-    expect((await h.call('POST', '/api/student/pass', credentials)).body.code).toBe('PASS_NOT_AVAILABLE');
+    // Registered at the desk: no pass, ever (the Registration ID is enough).
+    expect((await h.call('POST', '/api/student/pass', credentials)).body.code).toBe('NO_PASS');
 
     // Paid and uploaded: submitted for approval.
     const uploaded = await upload('UTR 4455 6677'.replace(/\s/g, ''));
@@ -69,15 +70,15 @@ describe('desk GPay paid by the student from Student login', () => {
     expect(approved.body.registration).toMatchObject({
       status: 'APPROVED',
       reviewedBy: desk.username,
-      pdfStatus: 'GENERATED',
+      pdfStatus: 'NOT_STARTED',
       payment: { amount: 100, transactionId: 'UTR44556677' },
       gatePass: { status: 'VERIFIED', method: 'UPI', amount: 100, reference: 'UTR44556677', verifiedBy: desk.username },
     });
 
-    // The student's page moves on: the pass, the events, no payment step.
+    // The student's page moves on: the events, no payment step, and no pass (the ID is enough).
     const after = (await h.call('POST', '/api/student', credentials)).body;
-    expect(after).toMatchObject({ status: 'APPROVED', payAtLogin: null, passAvailable: true });
-    expect((await h.call('POST', '/api/student/pass', credentials)).status).toBe(200);
+    expect(after).toMatchObject({ status: 'APPROVED', payAtLogin: null, passAvailable: false });
+    expect((await h.call('POST', '/api/student/pass', credentials)).status).toBe(404);
 
     // Counted as GPay at the desk, for the desk member who approved it.
     const report = (await h.asOwner('GET', '/api/admin/reports')).body.report;

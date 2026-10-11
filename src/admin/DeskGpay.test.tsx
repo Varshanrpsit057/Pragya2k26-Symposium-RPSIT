@@ -167,7 +167,7 @@ describe('a desk GPay paid from Student login', () => {
 
     const done = await screen.findByRole('dialog', { name: 'Registered' });
     expect(done.querySelector('.adm-success__id')).toHaveTextContent(/^262005$/);
-    expect(within(done).getByText(/The student downloads their pass on their own phone/)).toBeInTheDocument();
+    expect(within(done).getByText(/No pass for desk registrations: the student shows this Registration ID at each event/)).toBeInTheDocument();
     expect(within(done).queryByRole('button', { name: /Download pass/ })).toBeNull();
     expect(within(done).getByRole('button', { name: 'Register the next student' })).toBeInTheDocument();
   });

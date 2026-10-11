@@ -109,7 +109,7 @@ describe('the student’s record in Google Drive and the Google Sheet', () => {
     await upload('GATE_PASS', 'UTR12121212');
     await h.service.runScheduled();
     const filesBefore = [...h.files.objects.keys()].filter((key) => key.includes(id));
-    expect(filesBefore.length).toBeGreaterThanOrEqual(2);
+    expect(filesBefore.length).toBeGreaterThanOrEqual(1);
 
     expect((await h.asOwner('POST', `/api/admin/registrations/${id}/delete`, { reason: 'Test entry' })).status).toBe(200);
     // The whole record, as it was, in the log.

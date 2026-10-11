@@ -9,10 +9,145 @@
   margin: 0;
 }
 
+.map__walk {
+  opacity: 0.8;
+  white-space: nowrap;
+}
+
+/* Where am I, where to: two big choices, a swap button, and the places students look for most */
+.map-finder {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  gap: 0.5rem;
+  align-items: end;
+}
+
+.map-finder__field {
+  display: grid;
+  gap: 0.25rem;
+  min-width: 0;
+  font-size: 0.85rem;
+  font-weight: 700;
+}
+
+.map-finder__field select {
+  width: 100%;
+  min-height: 2.75rem;
+  padding: 0.5rem 0.65rem;
+  border: 1px solid rgb(127 137 190 / 0.55);
+  border-radius: 10px;
+  color: inherit;
+  font: inherit;
+  font-size: 1rem;
+  font-weight: 600;
+  background: rgb(127 137 190 / 0.12);
+}
+
+.map-finder__field select:focus-visible,
+.map-finder__swap:focus-visible,
+.map-finder__quick button:focus-visible {
+  outline: 3px solid #6c5ce7;
+  outline-offset: 2px;
+}
+
+/* The list itself is drawn by the system: dark text on light, on the dark site too */
+.map-finder__field option,
+.map-finder__field optgroup {
+  color: #1f2433;
+  background: #ffffff;
+}
+
+.map-finder__swap {
+  width: 2.75rem;
+  height: 2.75rem;
+  border: 1px solid rgb(127 137 190 / 0.55);
+  border-radius: 50%;
+  color: inherit;
+  font: inherit;
+  font-size: 1.2rem;
+  background: transparent;
+  cursor: pointer;
+}
+
+.map-finder__swap:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+
+.map-finder__quick {
+  display: flex;
+  flex-wrap: wrap;
+  grid-column: 1 / -1;
+  gap: 0.4rem;
+}
+
+.map-finder__quick button {
+  min-height: 2.25rem;
+  padding: 0.35rem 0.8rem;
+  border: 1px solid rgb(127 137 190 / 0.45);
+  border-radius: 999px;
+  color: inherit;
+  font: inherit;
+  font-size: 0.88rem;
+  font-weight: 600;
+  background: transparent;
+  cursor: pointer;
+}
+
+.map-finder__quick button[aria-pressed='true'] {
+  border-color: #ff3db8;
+  color: #fff;
+  background: #c2268f;
+}
+
+/* Phones: one choice under the other, the swap button between them on the right */
+@media (max-width: 560px) {
+  .map-finder {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+
+  .map-finder__field--to {
+    grid-column: 1;
+  }
+
+  .map-finder__swap {
+    grid-row: 1 / span 2;
+    grid-column: 2;
+    align-self: center;
+  }
+
+  .map-finder__quick {
+    flex-wrap: nowrap;
+    margin-inline: -0.25rem;
+    padding: 0 0.25rem 0.25rem;
+    overflow-x: auto;
+    scrollbar-width: thin;
+  }
+
+  .map-finder__quick button {
+    flex: none;
+  }
+}
+
 .map__tabs {
   display: flex;
   flex-wrap: wrap;
   gap: 0.4rem;
+}
+
+/* Phones: the floors in one row that scrolls sideways */
+@media (max-width: 560px) {
+  .map__tabs {
+    flex-wrap: nowrap;
+    margin-inline: -0.25rem;
+    padding: 0 0.25rem 0.25rem;
+    overflow-x: auto;
+    scrollbar-width: thin;
+  }
+
+  .map__tab {
+    flex: none;
+  }
 }
 
 .map__tab {
@@ -51,21 +186,58 @@
   border-radius: 14px;
 }
 
-/* Tall plans stay on screen; on a phone the plan keeps a readable size and scrolls sideways */
+/* Tall plans stay on screen */
 .map__canvas .map-plan {
-  max-height: 82vh;
+  max-height: 78vh;
+  margin-inline: auto;
 }
 
-@media (max-width: 560px) {
-  .map__canvas {
-    overflow-x: auto;
-    -webkit-overflow-scrolling: touch;
-  }
+/* The zoomable view: the page scrolls past it until it is zoomed in, then a finger moves the plan */
+.map-viewport {
+  position: relative;
+  touch-action: pan-y;
+}
 
-  .map__canvas .map-plan {
-    min-width: 520px;
-    max-height: none;
-  }
+.map-viewport.is-zoomed {
+  touch-action: none;
+  cursor: grab;
+}
+
+.map-viewport.is-zoomed:active {
+  cursor: grabbing;
+}
+
+.map-viewport__controls {
+  position: absolute;
+  right: 0.5rem;
+  bottom: 0.5rem;
+  display: grid;
+  gap: 0.3rem;
+}
+
+.map-viewport__controls button {
+  width: 2.5rem;
+  height: 2.5rem;
+  border: 1px solid #b9b2a3;
+  border-radius: 10px;
+  color: #1f2433;
+  font: inherit;
+  font-size: 1.15rem;
+  font-weight: 800;
+  line-height: 1;
+  background: rgb(255 255 255 / 0.94);
+  box-shadow: 0 2px 6px rgb(0 0 0 / 0.18);
+  cursor: pointer;
+}
+
+.map-viewport__controls button:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.map-viewport__controls button:focus-visible {
+  outline: 3px solid #6c5ce7;
+  outline-offset: 1px;
 }
 
 .map__tapped {
@@ -139,7 +311,59 @@
   display: grid;
   gap: 0.35rem;
   margin: 0;
-  padding-left: 1.3rem;
+  padding-left: 1.6rem;
+}
+
+.map__steps li::marker {
+  font-weight: 800;
+}
+
+/* Each step is a button: it opens the floor it happens on */
+.map__steps button {
+  display: flex;
+  gap: 0.6rem;
+  align-items: baseline;
+  justify-content: space-between;
+  width: 100%;
+  padding: 0.35rem 0.55rem;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  background: transparent;
+  cursor: pointer;
+}
+
+.map__steps button:hover,
+.map__steps button:focus-visible {
+  border-color: rgb(127 137 190 / 0.45);
+}
+
+.map__steps li.is-here button {
+  background: rgb(108 92 231 / 0.14);
+}
+
+.map__step-floor {
+  flex: none;
+  padding: 0.05rem 0.5rem;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  font-weight: 700;
+  background: rgb(127 137 190 / 0.2);
+}
+
+/* Phones: the floor above the first step on it, the text across the whole width */
+@media (max-width: 560px) {
+  .map__steps button {
+    flex-direction: column;
+    gap: 0.2rem;
+    align-items: flex-start;
+  }
+
+  .map__step-floor {
+    order: -1;
+  }
 }
 
 /* The plan itself */
@@ -303,6 +527,13 @@
   stroke-width: 4;
 }
 
+/* Where the student starts */
+.map-room.is-start rect {
+  fill: #dcf5f5;
+  stroke: #0f8b8d;
+  stroke-width: 4;
+}
+
 .map-room.is-venue rect {
   fill: #ff5cc8;
   stroke: #a3157a;
@@ -460,6 +691,30 @@
   fill: #ff3db8;
   stroke: #ffffff;
   stroke-width: 3;
+}
+
+/* The end of the way outside (a pin), and where stairs go (a badge) */
+.map-route__pin path {
+  fill: #ff3db8;
+  stroke: #ffffff;
+  stroke-width: 2.5;
+}
+
+.map-route__pin circle {
+  fill: #ffffff;
+}
+
+.map-route__badge rect {
+  fill: #a3157a;
+  stroke: #ffffff;
+  stroke-width: 2;
+}
+
+.map-route__badge text {
+  fill: #ffffff;
+  font-size: 13px;
+  font-weight: 800;
+  text-anchor: middle;
 }
 
 .map-route__label {

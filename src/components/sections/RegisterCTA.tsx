@@ -12,7 +12,7 @@ import './RegisterCTA.css';
 function RegistrationStatus() {
   const phase = useRegistrationPhase();
   if (phase === 'closed') return <span className="register__status is-closed">Registration closed</span>;
-  if (phase === 'onsite') return <span className="register__status is-open">On-site registration open today</span>;
+  if (phase === 'onsite') return <span className="register__status is-open">On-site registration open today until 11:59 AM</span>;
   if (phase === 'between') return <span className="register__status">On-site registration on {site.dates ?? 'the event day'}</span>;
   return site.registration.endpoint ? (
     <span className="register__status is-open">Registration is open</span>
@@ -35,7 +35,7 @@ function RegistrationLead() {
           Online registration has closed. Register on-site at {onsite.desk}.
           {phase === 'onsite' && ' Already registered? Use Student login with your Registration ID and phone number to get your pass and your event timings.'}
         </p>
-        <p className="register__deadline">{phase === 'onsite' ? 'On-site registration is open today, until the end of the day' : `On-site registration: ${site.dates ?? 'the event day'}`}</p>
+        <p className="register__deadline">{phase === 'onsite' ? 'On-site registration is open today, until 11:59 AM' : `On-site registration: ${site.dates ?? 'the event day'}, until 11:59 AM`}</p>
       </>
     );
   }

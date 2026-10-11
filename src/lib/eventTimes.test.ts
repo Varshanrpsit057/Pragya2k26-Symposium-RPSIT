@@ -24,23 +24,24 @@ describe('event times', () => {
 
   it('finds the events that overlap', () => {
     const names = (pairs: ReturnType<typeof clashes>) => pairs.map(([a, b]) => `${a.name} + ${b.name}`);
-    expect(names(clashes([timed('pro-pitch'), timed('viz-craft'), timed('cognix')]))).toEqual(['PRO-PITCH + VIZ CRAFT']);
-    // Code Flex round 1 (12:15–1:00) overlaps Cognix (12:00–1:00) and the end of Paper Presentation.
+    // Every event runs from 10:30 AM (the department's list): they all overlap.
+    expect(names(clashes([timed('pro-pitch'), timed('viz-craft'), timed('cognix')]))).toEqual(['PRO-PITCH + VIZ CRAFT', 'PRO-PITCH + COGNIX', 'VIZ CRAFT + COGNIX']);
     expect(names(clashes([timed('code-flex'), timed('cognix'), timed('paper-presentation')]))).toEqual([
       'CODE FLEX + COGNIX',
       'CODE FLEX + PAPER PRESENTATION',
       'COGNIX + PAPER PRESENTATION',
     ]);
-    // Back to back is not a clash: Viz Craft ends 11:40, Cognix starts 12:00.
-    expect(clashes([timed('viz-craft'), timed('cognix')])).toEqual([]);
+    // Back to back is not a clash: one ends 11:40, the other starts 12:00.
+    const slot = (id: string, schedule: string) => ({ id, name: id, slots: eventSlots(schedule, DAY) });
+    expect(clashes([slot('a', '10:30 AM – 11:40 AM'), slot('b', '12:00 PM – 1:00 PM')])).toEqual([]);
   });
 
   it('says what is on now or next, and formats times', () => {
     const { slots } = timed('code-flex');
-    expect(currentOrNext(slots, at('11:00'))).toEqual({ slot: slots[0], live: false });
-    expect(currentOrNext(slots, at('12:30'))).toEqual({ slot: slots[0], live: true });
-    expect(currentOrNext(slots, at('13:30'))).toEqual({ slot: slots[1], live: false });
-    expect(currentOrNext(slots, at('15:00'))).toBeNull();
+    expect(currentOrNext(slots, at('10:00'))).toEqual({ slot: slots[0], live: false });
+    expect(currentOrNext(slots, at('11:00'))).toEqual({ slot: slots[0], live: true });
+    expect(currentOrNext(slots, at('11:40'))).toEqual({ slot: slots[1], live: false });
+    expect(currentOrNext(slots, at('13:30'))).toBeNull();
     expect(istTime(at('09:05'))).toBe('9:05 AM');
     expect(istTime(at('12:15'))).toBe('12:15 PM');
     expect(istTime(at('00:30'))).toBe('12:30 AM');

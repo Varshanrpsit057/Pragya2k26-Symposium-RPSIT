@@ -5,12 +5,15 @@
  * Plain SVG: no map service, and the photos load only when a dot is tapped, so it is light on
  * the campus network. The main entrance is at the bottom, as students see the building.
  */
-import { useId, useState, type KeyboardEvent, type MouseEvent, type ReactNode } from 'react';
+import { useEffect, useId, useMemo, useRef, useState, useSyncExternalStore, type KeyboardEvent, type MouseEvent, type PointerEvent, type ReactNode } from 'react';
+import { eventCatalog } from '../../content/eventCatalog';
+import { choicesOf, findRoute, venueChoice, type Choice } from '../../lib/navigation';
 import {
   CAMPUS,
   ROOM_KINDS,
   photoUrl,
   venueOf,
+  type Box,
   type BuildingPlan,
   type CampusMap as CampusMapData,
   type Floor,
@@ -18,7 +21,6 @@ import {
   type PhotoSpot,
   type Room,
   type RouteLeg,
-  type Venue,
 } from '../../lib/campusMap';
 import './CampusMap.css';
 
@@ -83,14 +85,14 @@ const activate = (handler: () => void) => ({
 
 const points = (list: [number, number][]) => list.map(([x, y]) => `${x},${y}`).join(' ');
 
-function roomClass(room: Room, isVenue: boolean, isSelected = false) {
-  return `map-room map-room--${room.kind}${isVenue ? ' is-venue' : ''}${isSelected ? ' is-selected' : ''}`;
+function roomClass(room: Room, isVenue: boolean, isSelected = false, isStart = false) {
+  return `map-room map-room--${room.kind}${isVenue ? ' is-venue' : ''}${isSelected ? ' is-selected' : ''}${isStart ? ' is-start' : ''}`;
 }
 
-function RoomBox({ room, isVenue, isSelected, onRoom }: { room: Room; isVenue: boolean; isSelected: boolean; onRoom?: (room: Room) => void }) {
+function RoomBox({ room, isVenue, isSelected, isStart = false, onRoom }: { room: Room; isVenue: boolean; isSelected: boolean; isStart?: boolean; onRoom?: (room: Room) => void }) {
   return (
     <g
-      className={roomClass(room, isVenue, isSelected)}
+      className={roomClass(room, isVenue, isSelected, isStart)}
       {...(onRoom && { role: 'button', tabIndex: 0, 'aria-label': `${room.label} (${ROOM_KINDS[room.kind]})`, ...activate(() => onRoom(room)) })}
     >
       <title>{`${room.label} · ${ROOM_KINDS[room.kind]}`}</title>
@@ -209,15 +211,29 @@ function MarkShape({ mark }: { mark: Mark }) {
   }
 }
 
-function Route({ leg, marker }: { leg: RouteLeg; marker: string }) {
+function Route({ leg, marker, endPin = false, badge }: { leg: RouteLeg; marker: string; endPin?: boolean; badge?: string }) {
   if (leg.points.length < 2) return null;
   const [start] = leg.points;
   const end = leg.points[leg.points.length - 1];
   return (
     <g className="map-route" aria-hidden="true">
       <polyline className="map-route__casing" points={points(leg.points)} />
-      <polyline className="map-route__line" points={points(leg.points)} markerEnd={`url(#${marker})`} />
+      <polyline className="map-route__line" points={points(leg.points)} markerEnd={endPin || badge ? undefined : `url(#${marker})`} />
       <circle className="map-route__start" cx={start[0]} cy={start[1]} r="7" />
+      {endPin && (
+        <g className="map-route__pin" transform={`translate(${end[0]} ${end[1]})`}>
+          <path d="M0 0 C-4 -9 -11 -13 -11 -21 a11 11 0 0 1 22 0 C11 -13 4 -9 0 0Z" />
+          <circle cx="0" cy="-21" r="4.5" />
+        </g>
+      )}
+      {badge && (
+        <g className="map-route__badge" transform={`translate(${end[0]} ${end[1]})`}>
+          <rect x="-24" y="-31" width="48" height="22" rx="11" />
+          <text x="0" y="-15.5">
+            {badge}
+          </text>
+        </g>
+      )}
       {leg.from && (
         <text className="map-route__label" x={leg.fromAt?.[0] ?? start[0]} y={leg.fromAt?.[1] ?? start[1] + 24} style={{ textAnchor: leg.fromAt ? 'start' : 'middle' }}>
           {leg.from}
@@ -249,8 +265,12 @@ interface FloorPlanProps {
   highlight?: string | string[] | null;
   /** In the editor: the room or spot being edited; for students, the room tapped. */
   selected?: string | null;
-  /** The way to the venue on this floor. */
-  route?: RouteLeg[];
+  /** The way on this floor (each leg may end in a badge, e.g. the floor its stairs go to). */
+  route?: (RouteLeg & { badge?: string; endPin?: boolean })[];
+  /** The room the student starts from: outlined. */
+  start?: string | null;
+  /** The part of the plan shown (zoomed in); the whole plan by default. */
+  viewBox?: string;
   onRoom?: (room: Room) => void;
   onPhoto?: (photo: PhotoSpot, index: number) => void;
   /** In the editor: a click on the plan itself (to place a photo spot), in plan coordinates. */
@@ -259,7 +279,7 @@ interface FloorPlanProps {
 }
 
 /** One floor of the main building: the ring of rooms round the courtyard, main entrance at the bottom. */
-export function FloorPlan({ plan, floor, highlight, selected, route = [], onRoom, onPhoto, onPlan, title }: FloorPlanProps) {
+export function FloorPlan({ plan, floor, highlight, selected, route = [], start = null, viewBox, onRoom, onPhoto, onPlan, title }: FloorPlanProps) {
   const marker = `map-arrow-${useId().replace(/:/g, '')}`;
   const planClick = (event: MouseEvent<SVGSVGElement>) => {
     if (!onPlan) return;
@@ -267,11 +287,12 @@ export function FloorPlan({ plan, floor, highlight, selected, route = [], onRoom
     onPlan({ x: Math.round(((event.clientX - box.left) / box.width) * plan.width), y: Math.round(((event.clientY - box.top) / box.height) * plan.height) });
   };
   const ground = floor.id === 'ground';
+  const shown = viewBox ?? `0 0 ${plan.width} ${plan.height}`;
   const { outline, court, amphitheatre: amphi, fountain } = plan;
   const isVenue = (room: Room) => (Array.isArray(highlight) ? highlight.includes(room.id) : room.id === highlight);
   const steps = { left: [-1, 0], right: [1, 0], top: [0, -1], bottom: [0, 1] } as const;
   return (
-    <svg className={`map-plan${onPlan ? ' is-placing' : ''}`} viewBox={`0 0 ${plan.width} ${plan.height}`} role="img" aria-label={title ?? `${floor.name} of the main building`} onClick={planClick}>
+    <svg className={`map-plan${onPlan ? ' is-placing' : ''}`} viewBox={shown} role="img" aria-label={title ?? `${floor.name} of the main building`} onClick={planClick}>
       <RouteMarker id={marker} />
       <rect className="map-plan__paper" x="0" y="0" width={plan.width} height={plan.height} rx="18" />
       {/* The building: its floor is the corridor and the hallways; rooms stand on it */}
@@ -302,7 +323,7 @@ export function FloorPlan({ plan, floor, highlight, selected, route = [], onRoom
         </text>
       </g>
       {floor.rooms.map((room) => (
-        <RoomBox key={room.id} room={room} isVenue={isVenue(room)} isSelected={room.id === selected} onRoom={onRoom} />
+        <RoomBox key={room.id} room={room} isVenue={isVenue(room)} isSelected={room.id === selected} isStart={room.id === start} onRoom={onRoom} />
       ))}
       {(floor.marks ?? []).map((mark) => (
         <MarkShape key={mark.id} mark={mark} />
@@ -320,7 +341,7 @@ export function FloorPlan({ plan, floor, highlight, selected, route = [], onRoom
         </text>
       )}
       {route.map((leg, index) => (
-        <Route key={index} leg={leg} marker={marker} />
+        <Route key={index} leg={leg} marker={marker} badge={leg.badge} endPin={leg.endPin} />
       ))}
       <g aria-hidden="true">
         {floor.rooms.map((room) => (
@@ -345,21 +366,6 @@ function PhotoDot({ photo, index, selected, onOpen }: { photo: PhotoSpot; index:
   );
 }
 
-/** The way in on the campus: from the main gate (registration) up the road, to the door to use. */
-const CAMPUS_ROUTES: Record<NonNullable<Venue['entrance']>, [number, number][]> = {
-  main: [
-    [395, 748],
-    [395, 336],
-  ],
-  'side-1': [
-    [395, 748],
-    [395, 400],
-    [230, 400],
-    [230, 285],
-    [298, 285],
-  ],
-};
-
 /** Text in lines, centred on (x, y). */
 function Lines({ x, y, lines, className, step = 14 }: { x: number; y: number; lines: string[]; className: string; step?: number }) {
   return (
@@ -374,11 +380,21 @@ function Lines({ x, y, lines, className, step = 14 }: { x: number; y: number; li
 }
 
 /** From the main gate to the main building (drawn from the campus map board, main entrance at the bottom). */
-export function CampusOverview({ photos, entrance = 'main', onPhoto }: { photos: PhotoSpot[]; entrance?: Venue['entrance']; onPhoto?: (photo: PhotoSpot, index: number) => void }) {
+export function CampusOverview({
+  photos,
+  route = [],
+  viewBox,
+  onPhoto,
+}: {
+  photos: PhotoSpot[];
+  /** The way on the campus (it may end at a pin: a place outside). */
+  route?: (RouteLeg & { endPin?: boolean })[];
+  viewBox?: string;
+  onPhoto?: (photo: PhotoSpot, index: number) => void;
+}) {
   const marker = `map-arrow-${useId().replace(/:/g, '')}`;
-  const route = CAMPUS_ROUTES[entrance ?? 'main'];
   return (
-    <svg className="map-plan map-campus" viewBox={`0 0 ${CAMPUS.width} ${CAMPUS.height}`} role="img" aria-label="Campus: from the main gate up the road to the main building">
+    <svg className="map-plan map-campus" viewBox={viewBox ?? `0 0 ${CAMPUS.width} ${CAMPUS.height}`} role="img" aria-label="Campus: from the main gate up the road to the main building">
       <RouteMarker id={marker} />
       <rect className="map-campus__ground" x="0" y="0" width={CAMPUS.width} height={CAMPUS.height} rx="18" />
       {/* The road in front of the main building (it ends at the building's front corner on the right)
@@ -456,10 +472,9 @@ export function CampusOverview({ photos, entrance = 'main', onPhoto }: { photos:
       <text className="map-campus__label map-campus__label--small" x="395" y="814">
         You start here
       </text>
-      <g className="map-route" aria-hidden="true">
-        <polyline className="map-route__casing" points={points(route)} />
-        <polyline className="map-route__line" points={points(route)} markerEnd={`url(#${marker})`} />
-      </g>
+      {route.map((leg, index) => (
+        <Route key={index} leg={leg} marker={marker} endPin={leg.endPin} />
+      ))}
       {photos.map((photo, index) => (
         <PhotoDot key={photo.id} photo={photo} index={index} onOpen={onPhoto} />
       ))}
@@ -486,55 +501,353 @@ function PhotoViewer({ photo, number, onClose }: { photo: PhotoSpot; number: num
 
 interface CampusMapProps {
   map: CampusMapData;
-  /** The venue to show (its name as in the event catalog, e.g. 'Delta Lab'). */
+  /** The venue to show (its name as in the event catalog, e.g. 'Delta Lab'): where the way goes first. */
   venue?: string | null;
   /** Extra content under the directions (e.g. a help desk line). */
   footer?: ReactNode;
 }
 
-/** The map with tabs (campus, then each floor), the venue lit up, the way there, and how to get there. */
+/** 'Delta Lab: PRO-PITCH, CODE FLEX': each venue with its events, for the choices. */
+const VENUE_LABELS: Record<string, string> = eventCatalog.reduce<Record<string, string>>((labels, event) => {
+  if (!event.venue) return labels;
+  labels[event.venue] = labels[event.venue] ? `${labels[event.venue]}, ${event.name}` : `${event.venue}: ${event.name}`;
+  return labels;
+}, {});
+
+/** Quick choices under the finder: what students look for most. */
+const QUICK = ['restroom-ladies', 'restroom-gents', 'water', 'canteen', 'mess', 'auditorium'];
+const QUICK_LABEL: Record<string, string> = {
+  'restroom-ladies': 'Girls restroom',
+  'restroom-gents': 'Boys restroom',
+  water: 'Drinking water',
+  canteen: 'Canteen',
+  mess: 'Mess',
+  auditorium: 'Main auditorium',
+};
+
+const SMALL = '(max-width: 600px)';
+const subscribeSmall = (onChange: () => void) => {
+  if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return () => undefined;
+  const query = window.matchMedia(SMALL);
+  query.addEventListener('change', onChange);
+  return () => query.removeEventListener('change', onChange);
+};
+const readSmall = () => typeof window !== 'undefined' && typeof window.matchMedia === 'function' && window.matchMedia(SMALL).matches;
+
+function grouped(choices: Choice[]) {
+  const groups = new Map<string, Choice[]>();
+  for (const choice of choices) groups.set(choice.group, [...(groups.get(choice.group) ?? []), choice]);
+  return [...groups.entries()];
+}
+
+/** A view of the drawing with its shape, around `focus` (padded), inside the drawing. */
+function viewAround(full: { width: number; height: number }, focus: Box | null): Box {
+  if (!focus) return { x: 0, y: 0, w: full.width, h: full.height };
+  const ratio = full.height / full.width;
+  const pad = 56;
+  const w = Math.min(full.width, Math.max(focus.w + pad * 2, (focus.h + pad * 2) / ratio, 260));
+  const h = w * ratio;
+  return clampView(full, { x: focus.x + focus.w / 2 - w / 2, y: focus.y + focus.h / 2 - h / 2, w, h });
+}
+
+function clampView(full: { width: number; height: number }, view: Box): Box {
+  const w = Math.min(full.width, Math.max(160, view.w));
+  const h = (w * full.height) / full.width;
+  return { x: Math.min(Math.max(view.x, 0), full.width - w), y: Math.min(Math.max(view.y, 0), full.height - h), w, h };
+}
+
+/**
+ * The drawing, zoomable: + and − buttons, the whole floor, back to the way; drag to move it
+ * (a mouse, or one finger once zoomed in), pinch with two fingers. On a phone it opens zoomed
+ * in on the way, so the room names are readable.
+ */
+function MapViewport({ full, focus, focusKey, children }: { full: { width: number; height: number }; focus: Box | null; focusKey: string; children: (viewBox: string) => ReactNode }) {
+  const small = useSyncExternalStore(subscribeSmall, readSmall, () => false);
+  const key = `${focusKey}|${small}`;
+  const [state, setState] = useState(() => ({ key, view: viewAround(full, small ? focus : null) }));
+  if (state.key !== key) setState({ key, view: viewAround(full, small ? focus : null) });
+  const view = state.view;
+  const setView = (next: Box) => setState((current) => ({ ...current, view: clampView(full, next) }));
+  const box = useRef<HTMLDivElement>(null);
+  const pointers = useRef(new Map<number, { x: number; y: number }>());
+  const moved = useRef(0);
+  const zoomed = view.w < full.width - 1;
+
+  const zoom = (factor: number, cx = view.x + view.w / 2, cy = view.y + view.h / 2) => {
+    const w = Math.min(full.width, Math.max(160, view.w * factor));
+    const scale = w / view.w;
+    setView({ x: cx - (cx - view.x) * scale, y: cy - (cy - view.y) * scale, w, h: view.h * scale });
+  };
+
+  // Ctrl (or ⌘) and the wheel zoom too; the wheel alone scrolls the page.
+  const latest = useRef({ view, zoom });
+  useEffect(() => {
+    latest.current = { view, zoom };
+  });
+  useEffect(() => {
+    const element = box.current;
+    if (!element) return undefined;
+    const onWheel = (event: WheelEvent) => {
+      if (!event.ctrlKey && !event.metaKey) return;
+      event.preventDefault();
+      const rect = element.getBoundingClientRect();
+      const { view: current, zoom: zoomBy } = latest.current;
+      zoomBy(event.deltaY > 0 ? 1.15 : 1 / 1.15, current.x + ((event.clientX - rect.left) / rect.width) * current.w, current.y + ((event.clientY - rect.top) / rect.height) * current.h);
+    };
+    element.addEventListener('wheel', onWheel, { passive: false });
+    return () => element.removeEventListener('wheel', onWheel);
+  }, []);
+
+  const unitsPerPixel = () => view.w / (box.current?.clientWidth || view.w);
+  const onPointerDown = (event: PointerEvent<HTMLDivElement>) => {
+    if ((event.target as Element).closest('.map-viewport__controls')) return;
+    pointers.current.set(event.pointerId, { x: event.clientX, y: event.clientY });
+    moved.current = 0;
+  };
+  const onPointerMove = (event: PointerEvent<HTMLDivElement>) => {
+    const before = pointers.current.get(event.pointerId);
+    if (!before) return;
+    const all = [...pointers.current.entries()];
+    if (all.length === 1 && (event.pointerType === 'mouse' ? event.buttons === 1 : zoomed)) {
+      const scale = unitsPerPixel();
+      moved.current += Math.abs(event.clientX - before.x) + Math.abs(event.clientY - before.y);
+      setView({ ...view, x: view.x - (event.clientX - before.x) * scale, y: view.y - (event.clientY - before.y) * scale });
+    } else if (all.length === 2) {
+      const other = all.find(([id]) => id !== event.pointerId)![1];
+      const apart = (a: { x: number; y: number }, b: { x: number; y: number }) => Math.hypot(a.x - b.x, a.y - b.y) || 1;
+      const rect = box.current!.getBoundingClientRect();
+      const mid = { x: (event.clientX + other.x) / 2, y: (event.clientY + other.y) / 2 };
+      const factor = apart(before, other) / apart({ x: event.clientX, y: event.clientY }, other);
+      moved.current += 10;
+      zoom(factor, view.x + ((mid.x - rect.left) / rect.width) * view.w, view.y + ((mid.y - rect.top) / rect.height) * view.h);
+    }
+    pointers.current.set(event.pointerId, { x: event.clientX, y: event.clientY });
+  };
+  const onPointerEnd = (event: PointerEvent<HTMLDivElement>) => pointers.current.delete(event.pointerId);
+
+  return (
+    <div
+      ref={box}
+      className={`map-viewport${zoomed ? ' is-zoomed' : ''}`}
+      onPointerDown={onPointerDown}
+      onPointerMove={onPointerMove}
+      onPointerUp={onPointerEnd}
+      onPointerCancel={onPointerEnd}
+      onPointerLeave={onPointerEnd}
+      // A drag is not a tap on a room.
+      onClickCapture={(event) => {
+        if (moved.current > 8) {
+          event.stopPropagation();
+          moved.current = 0;
+        }
+      }}
+    >
+      {children(`${view.x} ${view.y} ${view.w} ${view.h}`)}
+      <div className="map-viewport__controls">
+        <button type="button" aria-label="Zoom in" onClick={() => zoom(0.7)}>
+          +
+        </button>
+        <button type="button" aria-label="Zoom out" onClick={() => zoom(1 / 0.7)} disabled={!zoomed}>
+          −
+        </button>
+        <button type="button" aria-label="Show the whole map" onClick={() => setView({ x: 0, y: 0, w: full.width, h: full.height })} disabled={!zoomed}>
+          ⤢
+        </button>
+        {focus && (
+          <button type="button" aria-label="Show the way" onClick={() => setView(viewAround(full, focus))}>
+            ◎
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/** The box around some points and rooms. */
+function boxAround(points: [number, number][], rooms: Box[]): Box | null {
+  const xs = [...points.map(([x]) => x), ...rooms.flatMap((room) => [room.x, room.x + room.w])];
+  const ys = [...points.map(([, y]) => y), ...rooms.flatMap((room) => [room.y, room.y + room.h])];
+  if (!xs.length) return null;
+  const x = Math.min(...xs);
+  const y = Math.min(...ys);
+  return { x, y, w: Math.max(...xs) - x, h: Math.max(...ys) - y };
+}
+
+/**
+ * The map: where are you, where do you want to go, then the way, drawn on each floor and told
+ * step by step (a step opens its floor). The campus and every floor are tabs; a dot marks the
+ * floors on the way, a pink one the destination.
+ */
 export function CampusMap({ map, venue: venueName, footer }: CampusMapProps) {
   const venue = venueOf(map, venueName);
-  const [tab, setTab] = useState<string>(venue?.floorId ?? 'campus');
+  const choices = useMemo(() => choicesOf(map, VENUE_LABELS), [map]);
+  const [from, setFrom] = useState('main-gate');
+  const [to, setTo] = useState(() => venueChoice(map, venueName) ?? '');
+  // Another event picked outside the map: go there, from where the student already said they are.
+  const [venueSeen, setVenueSeen] = useState(venueName);
+  if (venueSeen !== venueName) {
+    setVenueSeen(venueName);
+    const next = venueChoice(map, venueName);
+    if (next) setTo(next);
+  }
+  const route = useMemo(() => (to ? findRoute(map, from, to) : null), [map, from, to]);
+  const destinationFloor = route?.destination.floorId ?? venue?.floorId ?? 'campus';
+  const routeKey = `${from}>${to}`;
+  const [tabState, setTabState] = useState({ key: routeKey, tab: destinationFloor });
+  if (tabState.key !== routeKey) setTabState({ key: routeKey, tab: destinationFloor });
+  const tab = tabState.tab;
   const [photo, setPhoto] = useState<{ spot: PhotoSpot; number: number } | null>(null);
   const [tapped, setTapped] = useState<Room | null>(null);
+  const fieldId = useId();
+  const mapRef = useRef<HTMLDivElement>(null);
   const floor = map.floors.find((item) => item.id === tab);
-  const venueFloor = map.floors.find((item) => item.id === venue?.floorId);
   const open = (spot: PhotoSpot, index: number) => setPhoto({ spot, number: index + 1 });
-  const legsHere = (venue?.route ?? []).filter((leg) => leg.floorId === tab);
-  const routeFloors = new Set((venue?.route ?? []).map((leg) => leg.floorId));
+  const showFloor = (floorId: string) => {
+    setTabState((current) => ({ ...current, tab: floorId }));
+    setTapped(null);
+  };
+
+  const floorName = (floorId: string) => (floorId === 'campus' ? 'Campus' : (map.floors.find((item) => item.id === floorId)?.name ?? floorId));
+  const shortFloor = (floorId: string) => (floorId === 'campus' ? 'Campus' : floorName(floorId).replace(' floor', ''));
+  const legs = (route?.legs ?? []).map((leg, index, all) => {
+    const next = all[index + 1];
+    const stairs = next && next.floorId !== 'campus' && leg.floorId !== 'campus';
+    return {
+      ...leg,
+      ...(stairs && { badge: `${map.floors.findIndex((item) => item.id === next.floorId) > map.floors.findIndex((item) => item.id === leg.floorId) ? '↑' : '↓'} ${shortFloor(next.floorId)}` }),
+      ...(index === all.length - 1 && !route?.destination.roomId && { endPin: true }),
+    };
+  });
+  const legsHere = legs.filter((leg) => leg.floorId === tab);
+  const routeFloors = new Set(legs.map((leg) => leg.floorId));
+  const fromRoom = route?.nodes[0]?.roomId ?? (from.startsWith('room:') ? from.split(':')[2] : null);
+  const roomBox = (floorId: string, roomId: string | null | undefined) => {
+    const room = roomId ? map.floors.find((item) => item.id === floorId)?.rooms.find((item) => item.id === roomId) : undefined;
+    return room ? [room] : [];
+  };
+  const focus = boxAround(
+    legsHere.flatMap((leg) => leg.points),
+    [...(route?.destination.floorId === tab ? roomBox(tab, route.destination.roomId) : []), ...(fromRoom ? roomBox(tab, fromRoom) : [])],
+  );
+  const destinationLabel = route?.destination.label ?? choices.to.find((choice) => choice.id === to)?.label ?? '';
+  const swapable = choices.from.some((choice) => choice.id === to);
 
   return (
     <div className="map">
-      {venue && (
+      <div className="map-finder" role="group" aria-label="Find your way">
+        <div className="map-finder__field">
+          <label htmlFor={`${fieldId}-from`}>I am at</label>
+          <select id={`${fieldId}-from`} value={from} onChange={(event) => setFrom(event.target.value)}>
+            {grouped(choices.from).map(([group, items]) => (
+              <optgroup key={group} label={group}>
+                {items.map((choice) => (
+                  <option key={choice.id} value={choice.id}>
+                    {choice.label}
+                  </option>
+                ))}
+              </optgroup>
+            ))}
+          </select>
+        </div>
+        <button
+          type="button"
+          className="map-finder__swap"
+          aria-label="Swap: go back the other way"
+          title="Go back the other way"
+          disabled={!swapable}
+          onClick={() => {
+            setFrom(to);
+            setTo(from);
+          }}
+        >
+          ⇅
+        </button>
+        <div className="map-finder__field map-finder__field--to">
+          <label htmlFor={`${fieldId}-to`}>Take me to</label>
+          <select id={`${fieldId}-to`} value={to} onChange={(event) => setTo(event.target.value)}>
+            <option value="">Choose a place…</option>
+            {grouped(choices.to).map(([group, items]) => (
+              <optgroup key={group} label={group}>
+                {items.map((choice) => (
+                  <option key={choice.id} value={choice.id}>
+                    {choice.label}
+                  </option>
+                ))}
+              </optgroup>
+            ))}
+          </select>
+        </div>
+        <div className="map-finder__quick" role="group" aria-label="Quick choices">
+          {venue && (
+            <button type="button" aria-pressed={to === `venue:${venue.name}`} onClick={() => setTo(`venue:${venue.name}`)}>
+              {venue.name}
+            </button>
+          )}
+          {QUICK.map((id) => (
+            <button key={id} type="button" aria-pressed={to === id} onClick={() => setTo(id)}>
+              {QUICK_LABEL[id]}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {route ? (
         <p className="map__where">
-          <strong>{venue.name}</strong> is on the <strong>{venueFloor?.name.toLowerCase() ?? 'map'}</strong> of the main building.
+          {route.destination.roomId ? (
+            <>
+              <strong>{destinationLabel}</strong> is on the <strong>{floorName(route.destination.floorId).toLowerCase()}</strong> of the main building.
+            </>
+          ) : (
+            <>
+              <strong>{destinationLabel}</strong>: outside the main building (see Campus).
+            </>
+          )}{' '}
+          <span className="map__walk">About {route.minutes} min walk ({route.metres} m).</span>
         </p>
+      ) : to ? (
+        <p className="map__where">There is no way for students to {destinationLabel || 'that place'}: it is closed off. Ask a volunteer.</p>
+      ) : (
+        <p className="map__where">Choose where you want to go: an event, a restroom, drinking water, the canteen and more.</p>
       )}
+
       <div className="map__tabs" role="tablist" aria-label="Map">
         {[{ id: 'campus', name: 'Campus' }, ...map.floors].map((item) => (
-          <button
-            key={item.id}
-            type="button"
-            role="tab"
-            aria-selected={tab === item.id}
-            className="map__tab"
-            onClick={() => {
-              setTab(item.id);
-              setTapped(null);
-            }}
-          >
+          <button key={item.id} type="button" role="tab" aria-selected={tab === item.id} className="map__tab" onClick={() => showFloor(item.id)}>
             {item.name}
-            {item.id === venue?.floorId ? <span className="map__tab-dot" aria-label=" (your venue)" /> : routeFloors.has(item.id) && <span className="map__tab-dot map__tab-dot--route" aria-label=" (on your way)" />}
+            {item.id === destinationFloor && route ? (
+              <span className="map__tab-dot">
+                <span className="sr-only"> (your destination)</span>
+              </span>
+            ) : (
+              routeFloors.has(item.id) && (
+                <span className="map__tab-dot map__tab-dot--route">
+                  <span className="sr-only"> (on your way)</span>
+                </span>
+              )
+            )}
           </button>
         ))}
       </div>
-      <div className="map__canvas">
-        {floor ? (
-          <FloorPlan plan={map.plan} floor={floor} highlight={venue?.roomId} selected={tapped?.id} route={legsHere} onRoom={setTapped} onPhoto={open} />
-        ) : (
-          <CampusOverview photos={map.campusPhotos} entrance={venue?.entrance} onPhoto={open} />
-        )}
+      <div className="map__canvas" ref={mapRef}>
+        <MapViewport full={floor ? map.plan : CAMPUS} focus={legsHere.length ? focus : null} focusKey={`${routeKey}|${tab}`}>
+          {(viewBox) =>
+            floor ? (
+              <FloorPlan
+                plan={map.plan}
+                floor={floor}
+                highlight={route?.destination.floorId === floor.id ? (route.destination.roomId ?? null) : !route && venue?.floorId === floor.id ? venue.roomId : null}
+                start={fromRoom}
+                selected={tapped?.id}
+                route={legsHere}
+                viewBox={viewBox}
+                onRoom={setTapped}
+                onPhoto={open}
+              />
+            ) : (
+              <CampusOverview photos={map.campusPhotos} route={legsHere} viewBox={viewBox} onPhoto={open} />
+            )
+          }
+        </MapViewport>
       </div>
       <p className="map__tapped" aria-live="polite">
         {tapped ? (
@@ -542,21 +855,32 @@ export function CampusMap({ map, venue: venueName, footer }: CampusMapProps) {
             <strong>{tapped.label}</strong> · {ROOM_KINDS[tapped.kind]}
           </>
         ) : (
-          'Tap a room to see its name.'
+          'Tap a room to see its name. Pinch or use + and − to zoom.'
         )}
       </p>
-      <p className="map__legend">
-        <span className="map__key map__key--venue" /> Your venue <span className="map__key map__key--route" /> The way <span className="map__key map__key--water" /> Drinking water{' '}
-        <span className="map__key map__key--glass" /> Glass door (no entry) <span className="map__key map__key--stairs" /> Stairs (lift: staff only) <span className="map__key map__key--dot">1</span> Photo from that spot
-      </p>
-      {!map.confirmed && <p className="map__note">The layout is being checked. Volunteers on every floor will guide you.</p>}
-      {venue && venue.steps.length > 0 && (
-        <ol className="map__steps" aria-label={`How to get to ${venue.name}`}>
-          {venue.steps.map((step) => (
-            <li key={step}>{step}</li>
+      {route && route.steps.length > 0 && (
+        <ol className="map__steps" aria-label={`How to get to ${destinationLabel}`}>
+          {route.steps.map((step, index) => (
+            <li key={`${index}-${step.text}`} className={step.floorId === tab ? 'is-here' : undefined}>
+              <button
+                type="button"
+                onClick={() => {
+                  showFloor(step.floorId);
+                  mapRef.current?.scrollIntoView?.({ block: 'nearest', behavior: 'smooth' });
+                }}
+              >
+                <span className="map__step-text">{step.text}</span>
+                {(index === 0 || route.steps[index - 1].floorId !== step.floorId) && <span className="map__step-floor">{shortFloor(step.floorId)}</span>}
+              </button>
+            </li>
           ))}
         </ol>
       )}
+      <p className="map__legend">
+        <span className="map__key map__key--venue" /> Where you are going <span className="map__key map__key--route" /> The way <span className="map__key map__key--water" /> Drinking water{' '}
+        <span className="map__key map__key--glass" /> Glass door (no entry) <span className="map__key map__key--stairs" /> Stairs (lift: staff only) <span className="map__key map__key--dot">1</span> Photo from that spot
+      </p>
+      {!map.confirmed && <p className="map__note">The layout is being checked. Volunteers on every floor will guide you.</p>}
       {footer}
       {photo && <PhotoViewer photo={photo.spot} number={photo.number} onClose={() => setPhoto(null)} />}
     </div>

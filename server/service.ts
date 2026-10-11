@@ -57,6 +57,7 @@ import { confirmationEmail } from './emailTemplate';
 import { ApiError } from './errors';
 import { EventDesk } from './events';
 import type { FileStore } from './files';
+import { makePreview, previewKey } from './preview';
 import { buildMime } from './gmail';
 import { GoogleApiError, describeError } from './google';
 import {
@@ -67,6 +68,7 @@ import {
   paymentRecords,
   isFeePaid,
   isPresent,
+  hasPass,
   participationOf,
   recordWithEvents,
   sourceOf,
@@ -86,6 +88,13 @@ import { TestTools } from './testTools';
 import type { DeletedView } from '../src/lib/testTools';
 
 export { ApiError } from './errors';
+
+/** Links to a screenshot: its small copy to show, and the original. */
+export interface ScreenshotLinks {
+  success: true;
+  url: string;
+  originalUrl: string;
+}
 
 export interface ServiceDeps {
   store: Store;
@@ -421,7 +430,7 @@ export class Service {
       registrationId: registration.registrationId,
       status: registration.status,
       registeredAt: registration.submittedAt,
-      passAvailable: registration.status === 'APPROVED' && registration.pdfStatus === 'GENERATED',
+      passAvailable: hasPass(registration) && registration.status === 'APPROVED' && registration.pdfStatus === 'GENERATED',
       ...(registration.status === 'REJECTED' && registration.rejectionReason && { reason: registration.rejectionReason }),
       ...(registration.status === 'CANCELLED' && registration.cancellationReason && { reason: registration.cancellationReason }),
     };
@@ -616,21 +625,43 @@ export class Service {
     return { success: true as const, registration: this.adminView(await this.required(registrationId)) };
   }
 
-  /** A five-minute link to a GPay screenshot the student uploaded from the student page. */
-  async proofUrl(registrationId: string, proofId: string, actor?: Actor): Promise<{ success: true; url: string }> {
+  /**
+   * Five-minute links to a screenshot: `url` to its small copy (made the first time staff open
+   * it, then kept next to it) and `originalUrl` to the file as uploaded (also in Google Drive).
+   * When no small copy can be made, `url` is the original too.
+   */
+  private async screenshotLinks(key: string): Promise<ScreenshotLinks> {
+    const { files } = this.deps;
+    const originalUrl = await files.signedUrl(key, { expiresInSeconds: 300 });
+    const small = previewKey(key);
+    try {
+      if (!(await files.exists(small))) {
+        const preview = makePreview(await files.get(key));
+        if (!preview) return { success: true, url: originalUrl, originalUrl };
+        await files.put(small, preview, 'image/jpeg');
+      }
+      return { success: true, url: await files.signedUrl(small, { expiresInSeconds: 300 }), originalUrl };
+    } catch (error) {
+      console.warn('Screenshot preview not made; showing the original.', error instanceof Error ? error.message : error);
+      return { success: true, url: originalUrl, originalUrl };
+    }
+  }
+
+  /** Links to a GPay screenshot the student uploaded from the student page (see screenshotLinks). */
+  async proofUrl(registrationId: string, proofId: string, actor?: Actor): Promise<ScreenshotLinks> {
     const proof = (await this.required(registrationId)).proofs?.find((item) => item.id === proofId);
     if (!proof) throw new ApiError(404, 'NOT_FOUND', 'There is no such screenshot.');
     if (actor?.role === 'COORDINATOR' && proof.kind !== 'GATE_PASS' && !actor.eventIds.includes(proof.kind)) {
       throw new ApiError(403, 'EVENT_NOT_ASSIGNED', 'This screenshot is for an event that is not assigned to your account.');
     }
-    return { success: true, url: await this.deps.files.signedUrl(proof.key, { expiresInSeconds: 300 }) };
+    return this.screenshotLinks(proof.key);
   }
 
-  /** A five-minute link to the payment screenshot, for checking the payment. */
-  async adminScreenshot(registrationId: string): Promise<{ success: true; url: string }> {
+  /** Links to the payment screenshot, for checking the payment (see screenshotLinks). */
+  async adminScreenshot(registrationId: string): Promise<ScreenshotLinks> {
     const registration = await this.required(registrationId);
     if (!registration.screenshot) throw new ApiError(404, 'NO_SCREENSHOT', 'This registration was made at the desk, so it has no payment screenshot.');
-    return { success: true, url: await this.deps.files.signedUrl(registration.screenshot.key, { expiresInSeconds: 300 }) };
+    return this.screenshotLinks(registration.screenshot.key);
   }
 
   async adminPass(registrationId: string): Promise<{ success: true; url: string }> {
@@ -992,7 +1023,7 @@ export class Service {
     const problems: SystemProblem[] = [];
     for (const registration of all) {
       const found: string[] = [];
-      if (registration.pdfStatus === 'FAILED') {
+      if (registration.pdfStatus === 'FAILED' && hasPass(registration)) {
         counts.passFailed += 1;
         found.push(`Pass failed: ${registration.pdfError ?? 'unknown error'}`);
       }
@@ -1101,8 +1132,12 @@ export class Service {
    * used, is refused with the registration that holds it.
    */
   async registerOnsite(actor: Actor, body: unknown) {
-    // The desk registers on any day: its accounts are staff only.
+    // The desk registers on any day until on-site registration closes (11:59 AM on the event day).
     requirePermission(actor, 'registrations.onsite');
+    if (this.phase() === 'closed') {
+      const closes = this.schedule.onsiteClosesAt ? parseEventStart(this.schedule.onsiteClosesAt) : null;
+      throw new ApiError(403, 'ONSITE_CLOSED', `On-site registration closed${closes ? ` at ${formatIst(closes)}` : ''}.`);
+    }
     const checked = validateOnsitePayload(body, this.fees);
     if (!checked.ok) throw new ApiError(400, 'INVALID', checked.error, checked.fieldErrors);
     const form = checked.value;
@@ -1295,7 +1330,8 @@ export class Service {
     if (!leaseId) return;
     try {
       let registration = await store.getRegistration(registrationId);
-      if (!registration || registration.status !== 'APPROVED') return;
+      // Desk registrations have no pass (nor its email or Drive copy): the Registration ID is enough.
+      if (!registration || registration.status !== 'APPROVED' || !hasPass(registration)) return;
       const pass = () =>
         passData({
           registrationId,
@@ -1665,6 +1701,7 @@ export class Service {
       const leaseFree = registration.leaseUntil === undefined || registration.leaseUntil < now;
       const needsCompletion =
         registration.status === 'APPROVED' &&
+        hasPass(registration) &&
         leaseFree &&
         (registration.pdfStatus !== 'GENERATED' ||
           (this.passByEmail &&

@@ -93,11 +93,11 @@ export const ROLE_INFO: Record<StaffRole, { label: string; summary: string }> = 
   },
   DESK: {
     label: 'Registration desk',
-    summary: 'Register students at the desk (individual or team) with the events they choose and take the ₹100 gate pass (cash, or GPay the student pays from Student login); verify GPay payments; correct details. Students download their own pass. Event fees are paid at each venue.',
+    summary: 'Register students at the desk (individual or team) with the events they choose and take the ₹100 gate pass (cash, or GPay the student pays from Student login); verify GPay payments; correct details. Desk registrations get no pass: the Registration ID is enough. Event fees are paid at each venue.',
   },
   COORDINATOR: {
     label: 'Event coordinator',
-    summary: 'Assigned events only: find the student by the ID on their pass (verifying a GPay payment made online if needed), enter them (individual or team) with the ₹50 fee, mark attendance, enter winners and submit results.',
+    summary: 'Assigned events only: find the student by their Registration ID (verifying a GPay payment made online if needed), enter them (individual or team) with the ₹50 fee, mark attendance, enter winners and submit results.',
   },
   CERTIFICATE: {
     label: 'Certificate team',

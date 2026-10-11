@@ -49,7 +49,13 @@ function start() {
   if (started || !enabled || typeof window === 'undefined') return;
   started = true;
   void refreshSchedule();
-  window.setInterval(() => void refreshSchedule(), REFRESH_MS);
+  // Tabs in the background wait: hundreds of open pages should not keep asking.
+  window.setInterval(() => {
+    if (document.visibilityState !== 'hidden') void refreshSchedule();
+  }, REFRESH_MS);
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible') void refreshSchedule();
+  });
 }
 
 /** The schedule now (for code that runs at a moment, e.g. opening the form). */

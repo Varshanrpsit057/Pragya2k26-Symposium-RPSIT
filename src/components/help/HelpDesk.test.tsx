@@ -13,7 +13,8 @@ describe('the help desk', () => {
     expect(within(section).getByRole('link', { name: 'WhatsApp' })).toHaveAttribute('href', `https://wa.me/${phone.replace(/\D/g, '')}`);
     expect(section).toHaveTextContent(site.helpDesk.where);
     expect(within(section).getByText('Where do I get my participant pass?')).toBeInTheDocument();
-    expect(section).toHaveTextContent('Passes are not emailed');
+    expect(section).toHaveTextContent('passes are not emailed');
+    expect(section).toHaveTextContent('If you register at the desk on the event day, there is no pass');
     expect(within(section).getByRole('link', { name: /Student login/ })).toHaveAttribute('href', '/landing/student/');
   });
 

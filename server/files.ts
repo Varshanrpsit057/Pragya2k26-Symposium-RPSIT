@@ -4,12 +4,13 @@
  *   uploads/<uuid>          a payment screenshot the browser just uploaded (deleted after a day)
  *   payments/<id>.<ext>     the screenshot of a stored registration
  *   passes/<id>.pdf         the participant pass, made only after approval
+ *   previews/payments/...   small JPEG copies of the screenshots, for the dashboard
  *
  * The browser never gets a lasting address for any of them: uploads go through a presigned
  * POST limited to one key, one image type and 5 MB; downloads through presigned links that
  * expire within minutes and are handed out only after the API has checked who is asking.
  */
-import { DeleteObjectCommand, GetObjectCommand, PutObjectCommand, S3Client } from '@aws-sdk/client-s3';
+import { DeleteObjectCommand, GetObjectCommand, HeadObjectCommand, PutObjectCommand, S3Client } from '@aws-sdk/client-s3';
 import { createPresignedPost } from '@aws-sdk/s3-presigned-post';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import type { UploadTicket } from '../src/lib/registration';
@@ -22,6 +23,8 @@ export interface FileStore {
   deleteUpload(uploadId: string): Promise<void>;
   put(key: string, bytes: Uint8Array, contentType: string): Promise<void>;
   get(key: string): Promise<Uint8Array>;
+  /** Whether the file is there (without downloading it). */
+  exists(key: string): Promise<boolean>;
   delete(key: string): Promise<void>;
   /** A link that works for `expiresInSeconds`; `downloadName` makes the browser save the file. */
   signedUrl(key: string, options: { expiresInSeconds: number; downloadName?: string }): Promise<string>;
@@ -79,6 +82,16 @@ export class S3Files implements FileStore {
     const object = await this.s3.send(new GetObjectCommand({ Bucket: this.bucket, Key: key }));
     if (!object.Body) throw new Error(`S3 object ${key} is empty`);
     return object.Body.transformToByteArray();
+  }
+
+  async exists(key: string) {
+    try {
+      await this.s3.send(new HeadObjectCommand({ Bucket: this.bucket, Key: key }));
+      return true;
+    } catch (error) {
+      if (isMissing(error)) return false;
+      throw error;
+    }
   }
 
   async delete(key: string) {

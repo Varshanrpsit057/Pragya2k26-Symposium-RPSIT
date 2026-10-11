@@ -2,6 +2,7 @@ import { SkyBackdrop } from './components/background/SkyBackdrop';
 import { BrandEmblem } from './components/brand/BrandEmblem';
 import { EventOrbit } from './components/events/EventOrbit';
 import { EventsSection } from './components/events/EventsSection';
+import { EventDayBar } from './components/help/EventDayBar';
 import { HelpDeskSection } from './components/help/HelpDeskSection';
 import { Hero } from './components/hero/Hero';
 import { SiteModalsProvider } from './components/modal/SiteModals';
@@ -78,6 +79,8 @@ function Page() {
 
       <main id="main">
         <Hero />
+        {/* On the event day the help desk comes first, right after the hero */}
+        {eventDay && <HelpDeskSection />}
         <EventOrbit />
         <EventsSection
           category="technical"
@@ -85,10 +88,11 @@ function Page() {
           lead="Five events on AI, code and data: build from a prompt, visualize, present, code and quiz."
         />
         <RegisterCTA />
-        <HelpDeskSection />
+        {!eventDay && <HelpDeskSection />}
       </main>
 
       <Footer links={FOOTER_LINKS} />
+      {eventDay && <EventDayBar />}
     </>
   );
 }

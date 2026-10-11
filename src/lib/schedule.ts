@@ -46,6 +46,25 @@ export function eventDayStarted(schedule: RegistrationSchedule, now: number): bo
   return onsiteOpens === null || now >= onsiteOpens;
 }
 
+/**
+ * The event day: from the moment on-site registration opens until the end of that day (IST),
+ * or until on-site registration closes if that is later. The website offers Student login
+ * instead of Register Now all day, after on-site registration closes at 11:59 AM too.
+ */
+export function eventDayWindow(schedule: RegistrationSchedule): { start: number; end: number } | null {
+  const opens = at(schedule.onsiteOpensAt);
+  if (opens === null) return null;
+  const IST = 5.5 * 3_600_000;
+  const dayEnd = Math.floor((opens + IST) / 86_400_000) * 86_400_000 + 86_400_000 - IST;
+  const closes = at(schedule.onsiteClosesAt);
+  return { start: opens, end: Math.max(dayEnd, closes ?? dayEnd) };
+}
+
+export function isEventDay(schedule: RegistrationSchedule, now: number): boolean {
+  const day = eventDayWindow(schedule);
+  return day !== null && now >= day.start && now < day.end;
+}
+
 /** Checks a schedule: every time readable, and in order. Returns what is wrong, or null. */
 export function scheduleProblem(schedule: RegistrationSchedule): string | null {
   const entries = Object.entries(schedule) as [keyof RegistrationSchedule, string | null][];

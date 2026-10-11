@@ -7,7 +7,7 @@ import './HelpDesk.css';
 const QUESTIONS: { q: string; a: string }[] = [
   {
     q: 'Where do I get my participant pass?',
-    a: 'Passes are not emailed. Once your registration is approved, open Student login on this website and sign in with your Registration ID and phone number to download it.',
+    a: 'If you registered online: once your registration is approved, open Student login on this website and sign in with your Registration ID and phone number to download it (passes are not emailed). If you register at the desk on the event day, there is no pass: your Registration ID is enough.',
   },
   {
     q: 'I paid, but my registration still says pending.',

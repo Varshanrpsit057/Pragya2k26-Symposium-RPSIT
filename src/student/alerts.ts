@@ -83,7 +83,16 @@ export function studentAlerts(view: StudentView, now: number, day: string): Stud
   const upcoming = events.filter((event) => ahead.some((item) => item.event.id === event.id));
   // The events run for a while: take the one that ends first, then move to the other.
   const endOf = (event: { slots: TimeSlot[] }) => Math.max(...event.slots.map((slot) => slot.end));
+  const sameTimes = (a: { slots: TimeSlot[] }, b: { slots: TimeSlot[] }) =>
+    a.slots.length === b.slots.length && a.slots.every((slot, index) => slot.start === b.slots[index].start && slot.end === b.slots[index].end);
   for (const [a, b] of clashes(upcoming)) {
+    if (sameTimes(a, b)) {
+      alerts.push({
+        tone: 'clash',
+        text: `${a.name} and ${b.name} run at the same time (${times(a.slots)}). Attend one first, then move to the other if time allows: tell both coordinators.`,
+      });
+      continue;
+    }
     const [first, second] = endOf(a) <= endOf(b) ? [a, b] : [b, a];
     alerts.push({
       tone: 'clash',
