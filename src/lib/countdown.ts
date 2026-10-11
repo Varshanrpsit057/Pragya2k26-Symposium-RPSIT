@@ -58,6 +58,13 @@ const MONTHS = [
  * '30 October 2026 · 9:00 AM IST'. Built by hand rather than with Intl so the
  * prerendered page and the browser always produce exactly the same text.
  */
+/** '11:59 AM': the time of day in IST. */
+export function clockIst(target: number): string {
+  const ist = new Date(target + IST_OFFSET_MS);
+  const hours = ist.getUTCHours();
+  return `${hours % 12 || 12}:${String(ist.getUTCMinutes()).padStart(2, '0')} ${hours < 12 ? 'AM' : 'PM'}`;
+}
+
 export function formatIst(target: number): string {
   const ist = new Date(target + IST_OFFSET_MS);
   const hours = ist.getUTCHours();

@@ -1,0 +1,63 @@
+/* The organisers' notice: amber, so it reads as news on the dark site and the light student page */
+.site-notice {
+  position: relative;
+  z-index: 2;
+  display: flex;
+  gap: 0.6rem;
+  align-items: flex-start;
+  width: min(100%, 44rem);
+  margin: 0 auto;
+  padding: 0.7rem 2.75rem 0.7rem 0.9rem;
+  border: 1px solid #ffc15a;
+  border-radius: 14px;
+  color: #2b1d00;
+  text-align: left;
+  background: #ffe6b0;
+  box-shadow: 0 10px 30px -18px rgb(0 0 0 / 0.7);
+}
+
+.site-notice__label {
+  flex: none;
+  padding: 0.1rem 0.5rem;
+  border-radius: 999px;
+  color: #ffe6b0;
+  font-size: 0.75rem;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  line-height: 1.5;
+  text-transform: uppercase;
+  background: #7a4a00;
+}
+
+.site-notice__text {
+  margin: 0;
+  font-size: 0.98rem;
+  font-weight: 600;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+
+.site-notice__hide {
+  position: absolute;
+  top: 0.35rem;
+  right: 0.35rem;
+  width: 2.25rem;
+  height: 2.25rem;
+  border: 0;
+  border-radius: 50%;
+  color: #4a3200;
+  font-size: 1.4rem;
+  line-height: 1;
+  background: transparent;
+  cursor: pointer;
+}
+
+.site-notice__hide:hover,
+.site-notice__hide:focus-visible {
+  background: rgb(122 74 0 / 0.14);
+}
+
+.site-notice__hide:focus-visible {
+  outline: 2px solid #7a4a00;
+  outline-offset: 1px;
+}

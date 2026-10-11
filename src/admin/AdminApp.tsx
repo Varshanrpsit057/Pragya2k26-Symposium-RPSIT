@@ -12,6 +12,7 @@ import { HelpDialog, repliesSeenAt, type HelpContext } from './HelpDialog';
 import { HelpPanel } from './HelpPanel';
 import { MapEditor } from './MapEditor';
 import { RegistrationDialog } from './RegistrationDialog';
+import { RegistrationWindowPanel } from './RegistrationWindowPanel';
 import { ReportsPanel } from './ReportsPanel';
 import { ResultsPanel } from './ResultsPanel';
 import { RolesPanel } from './RolesPanel';
@@ -30,12 +31,13 @@ const FILTERS: { value: Filter; label: string }[] = [
   { value: 'ALL', label: 'All' },
 ];
 
-type TabId = 'review' | 'desk' | 'events' | 'results' | 'help' | 'system' | 'deleted' | 'map' | 'staff' | 'reports' | 'testing' | 'roles';
+type TabId = 'review' | 'desk' | 'window' | 'events' | 'results' | 'help' | 'system' | 'deleted' | 'map' | 'staff' | 'reports' | 'testing' | 'roles';
 
 /** The dashboard's sections, each shown only to the roles it is for (the server checks again). */
 const TABS: { id: TabId; label: (session: SessionInfo) => string; show: (session: SessionInfo) => boolean }[] = [
   { id: 'desk', label: (session) => (can(session, 'registrations.onsite') ? 'Registration desk' : 'Registrations'), show: (session) => can(session, 'registrations.list') },
   { id: 'review', label: () => 'Online payments', show: (session) => session.role === 'ADMIN' },
+  { id: 'window', label: () => 'Event-day controls', show: (session) => can(session, 'registration.window') || can(session, 'site.notice') },
   { id: 'events', label: () => 'Events', show: (session) => can(session, 'events.operate') },
   { id: 'results', label: () => 'Results & certificates', show: (session) => can(session, 'results.view') },
   { id: 'help', label: () => 'Help requests', show: (session) => can(session, 'help.manage') },
@@ -218,6 +220,7 @@ function Shell({ token, session, onSession, onSignOut, onSignedOut }: ShellProps
           <p className="adm-muted adm-bar__phase">
             <Badge tone={session.phase === 'closed' ? 'bad' : session.phase === 'between' ? 'warn' : 'good'}>{PHASE_LABEL[session.phase]}</Badge>
             {session.phase === 'online' && session.schedule.onlineClosesAt && <> until {formatIst(parseEventStart(session.schedule.onlineClosesAt)!)}</>}
+            {session.phase === 'onsite' && session.schedule.onsiteClosesAt && <> until {formatIst(parseEventStart(session.schedule.onsiteClosesAt)!)}</>}
           </p>
         </div>
         <div className="adm-bar__side">
@@ -244,6 +247,17 @@ function Shell({ token, session, onSession, onSignOut, onSignedOut }: ShellProps
           {session.testing.timeline && <strong>The website is following a test timeline.</strong>}
         </p>
       )}
+      {session.testing?.notice && (
+        <p className="adm-note" role="status">
+          <strong>Notice on the website:</strong> {session.testing.notice}
+        </p>
+      )}
+      {session.testing?.window && !session.testing.timeline && (
+        <p className="adm-note adm-window-banner" role="status">
+          <strong>Registration times changed</strong> by {session.testing.window.setBy} {when(session.testing.window.setAt)}: on-site registration{' '}
+          {session.schedule.onsiteClosesAt ? `closes ${formatIst(parseEventStart(session.schedule.onsiteClosesAt)!)}` : 'has no closing time'}.
+        </p>
+      )}
       {can(session, 'portal.manage') && <StudentPortalSwitch token={token} onSignedOut={onSignedOut} />}
       {session.role === 'DESK' && !session.deskNumber && <DeskChooser token={token} onSession={onSession} onSignedOut={onSignedOut} />}
 
@@ -258,6 +272,7 @@ function Shell({ token, session, onSession, onSignOut, onSignedOut }: ShellProps
 
       {current === 'review' && <Dashboard {...panel} />}
       {current === 'desk' && <DeskPanel {...panel} />}
+      {current === 'window' && <RegistrationWindowPanel {...panel} onSession={onSession} />}
       {current === 'events' && <EventsPanel {...panel} />}
       {current === 'results' && <ResultsPanel {...panel} />}
       {current === 'help' && <HelpPanel {...panel} />}

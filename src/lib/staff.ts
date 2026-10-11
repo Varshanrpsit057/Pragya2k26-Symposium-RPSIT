@@ -29,6 +29,8 @@ export type Permission =
   | 'help.manage'
   | 'system.view'
   | 'map.edit'
+  | 'registration.window'
+  | 'site.notice'
   | 'system.testing';
 
 /** What each permission allows, as the dashboard explains it. */
@@ -45,12 +47,14 @@ export const PERMISSION_LABELS: Record<Permission, string> = {
   'events.operate': 'Search student IDs, enter them in the event (individual or team) with the ₹50 fee, mark attendance, enter winners and submit results',
   'events.correct': 'Authorise corrections: void an event fee, reopen finalized results',
   'results.view': 'See event-wise participants, attendance, winners and submission times; download them as Excel',
-  'staff.manage': 'Create student coordinator accounts, set roles, assign events, reset passwords, deactivate accounts',
+  'staff.manage': 'Create student coordinator accounts, set roles, assign events, reset passwords, sign someone out, deactivate or delete accounts',
   'reports.view': 'See reports and download the Excel report: registrations, cash and GPay collected, attendance',
   'portal.manage': 'Turn the student login on the website on or off (pause it while the desks need the network)',
   'help.manage': 'See and answer the help requests sent with Contact admin',
   'system.view': 'See the system status: website checks, failed emails, passes and Sheet copies',
   'map.edit': 'Edit the campus map: room names, photo spots and directions to each venue',
+  'registration.window': 'Change the registration times: reopen or extend on-site registration, close registration now, or set new times; the website, the desks and the API follow within seconds',
+  'site.notice': 'Post a notice on the website and the student page (e.g. a venue or time change); every open page shows it within two minutes',
   'system.testing': 'Test sessions: set the timeline the website follows, mark records made while testing, and delete that test data',
 };
 
@@ -74,6 +78,8 @@ export const ROLE_PERMISSIONS: Record<StaffRole, readonly Permission[]> = {
     'help.manage',
     'system.view',
     'map.edit',
+    'registration.window',
+    'site.notice',
     'system.testing',
   ],
   // Passes are the students' own (Student login): the desk and the web team do not download them.
@@ -89,7 +95,7 @@ export const EVENT_SCOPED_ROLES: readonly StaffRole[] = ['COORDINATOR'];
 export const ROLE_INFO: Record<StaffRole, { label: string; summary: string }> = {
   ADMIN: {
     label: 'Admin',
-    summary: 'Full control: everything the other roles do, plus student coordinator accounts, cancelling or deleting records, corrections, reports and test sessions. Every event.',
+    summary: 'Full control: everything the other roles do, plus the registration times (reopen or extend on-site registration), a notice on the website, student coordinator accounts (create, change, sign out, delete), cancelling or deleting records, corrections, reports and test sessions. Every event.',
   },
   DESK: {
     label: 'Registration desk',
@@ -152,7 +158,7 @@ export interface SessionInfo {
   /** The registration desk (1, 2, …) this sign-in is at; null for other roles or not chosen yet. */
   deskNumber: number | null;
   /** A test session (its name) and whether a test timeline replaces the real schedule. */
-  testing?: { session: string | null; timeline: boolean };
+  testing?: { session: string | null; timeline: boolean; window?: { setBy: string; setAt: string } | null; notice?: string | null };
 }
 
 /** The highest desk number that can be chosen. */

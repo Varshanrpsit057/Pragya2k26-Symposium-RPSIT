@@ -395,6 +395,24 @@ export class DynamoStore implements Store {
     return this.putRevised(`${STAFF_PREFIX}${account.username}`, account, expectedRevision);
   }
 
+  async deleteStaff(username: string, expectedRevision: number) {
+    try {
+      await this.db.send(
+        new DeleteCommand({
+          TableName: this.tables.control,
+          Key: { pk: `${STAFF_PREFIX}${username}` },
+          ConditionExpression: '#revision = :revision',
+          ExpressionAttributeNames: { '#revision': 'revision' },
+          ExpressionAttributeValues: { ':revision': expectedRevision },
+        }),
+      );
+      return true;
+    } catch (error) {
+      if (error instanceof Error && error.name === 'ConditionalCheckFailedException') return false;
+      throw error;
+    }
+  }
+
   async getEventResult(eventId: string) {
     const { Item } = await this.db.send(
       new GetCommand({ TableName: this.tables.control, Key: { pk: `${RESULT_PREFIX}${eventId}` }, ConsistentRead: true }),

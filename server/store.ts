@@ -199,6 +199,8 @@ export interface StaffAccount {
   passwordChangedAt: string;
   /** Bumped on every change, for safe concurrent edits. */
   revision: number;
+  /** An admin signed them out then: sessions made before it end. */
+  signedOutAt?: string;
 }
 
 export interface ResultSubmission {
@@ -290,6 +292,8 @@ export interface Store {
   listStaff(): Promise<StaffAccount[]>;
   /** Stores the account if its stored revision is still `expectedRevision` (0: must not exist yet). */
   saveStaff(account: StaffAccount, expectedRevision: number): Promise<boolean>;
+  /** Removes the account if its stored revision is still `expectedRevision`. */
+  deleteStaff(username: string, expectedRevision: number): Promise<boolean>;
 
   getEventResult(eventId: string): Promise<EventResult | null>;
   /** Stores the result if its stored revision is still `expectedRevision` (0: must not exist yet). */

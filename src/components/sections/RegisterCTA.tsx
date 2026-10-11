@@ -1,5 +1,7 @@
 import { site } from '../../content/site';
 import { useRegistrationPhase } from '../../hooks/useRegistrationPhase';
+import { useSchedule } from '../../lib/liveSchedule';
+import { onsiteClosingTime } from '../../lib/schedule';
 import { DriftWall } from '../background/DriftWall';
 import { STUDENT_PAGE } from '../../lib/student';
 import { RegisterButton } from '../ui/RegisterButton';
@@ -11,8 +13,9 @@ import './RegisterCTA.css';
  */
 function RegistrationStatus() {
   const phase = useRegistrationPhase();
+  const closes = onsiteClosingTime(useSchedule());
   if (phase === 'closed') return <span className="register__status is-closed">Registration closed</span>;
-  if (phase === 'onsite') return <span className="register__status is-open">On-site registration open today until 11:59 AM</span>;
+  if (phase === 'onsite') return <span className="register__status is-open">On-site registration open today until {closes}</span>;
   if (phase === 'between') return <span className="register__status">On-site registration on {site.dates ?? 'the event day'}</span>;
   return site.registration.endpoint ? (
     <span className="register__status is-open">Registration is open</span>
@@ -24,6 +27,7 @@ function RegistrationStatus() {
 /** How to register right now: online with a deadline, or at the desk on the day. */
 function RegistrationLead() {
   const phase = useRegistrationPhase();
+  const closes = onsiteClosingTime(useSchedule());
   const { deadline, onsite } = site.registration;
   if (phase === 'closed') {
     return <p className="register__lead">Registration for {site.name} {site.year} has closed. Thank you for your interest.</p>;
@@ -35,7 +39,7 @@ function RegistrationLead() {
           Online registration has closed. Register on-site at {onsite.desk}.
           {phase === 'onsite' && ' Already registered? Use Student login with your Registration ID and phone number to get your pass and your event timings.'}
         </p>
-        <p className="register__deadline">{phase === 'onsite' ? 'On-site registration is open today, until 11:59 AM' : `On-site registration: ${site.dates ?? 'the event day'}, until 11:59 AM`}</p>
+        <p className="register__deadline">{phase === 'onsite' ? `On-site registration is open today, until ${closes}` : `On-site registration: ${site.dates ?? 'the event day'}, until ${closes}`}</p>
       </>
     );
   }

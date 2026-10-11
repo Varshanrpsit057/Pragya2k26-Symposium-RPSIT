@@ -180,6 +180,13 @@ export class MemoryStore implements Store {
     return true;
   }
 
+  async deleteStaff(username: string, expectedRevision: number) {
+    await tick();
+    if (this.staff.get(username)?.revision !== expectedRevision) return false;
+    this.staff.delete(username);
+    return true;
+  }
+
   async getEventResult(eventId: string) {
     const result = this.results.get(eventId);
     return result ? copy(result) : null;

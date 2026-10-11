@@ -81,7 +81,7 @@ import { RowNotFoundError, type SheetRow, type SheetsStore } from './sheets';
 import { StaffAccounts, staffCredential } from './staffAccounts';
 import { HelpDesk } from './helpDesk';
 import { StudentPortal } from './studentPortal';
-import { claimsOf, type AdminSession, type Registration, type RegistrationChanges, type RegistrationStatus, type Store } from './store';
+import { claimsOf, type AdminSession, type Registration, type StaffAccount, type RegistrationChanges, type RegistrationStatus, type Store } from './store';
 import { checkScreenshot, validateOnsitePayload, validatePayload } from './validate';
 import { RECORD_FOLDER_NAME, recordFileName, studentRecord, type Deletion } from './studentRecord';
 import { TestTools } from './testTools';
@@ -95,6 +95,9 @@ export interface ScreenshotLinks {
   url: string;
   originalUrl: string;
 }
+
+/** An admin signed the account out after this session began. */
+const signedOutSince = (account: StaffAccount, session: AdminSession) => Boolean(account.signedOutAt) && session.createdAt <= Date.parse(account.signedOutAt!);
 
 export interface ServiceDeps {
   store: Store;
@@ -514,7 +517,7 @@ export class Service {
     if (!session || session.expiresAt <= this.now()) throw signIn;
     if (session.kind === 'staff') {
       const account = await this.deps.store.getStaff(session.username);
-      if (!account || !account.active || !sameText(session.credential, staffCredential(account))) throw signIn;
+      if (!account || !account.active || !sameText(session.credential, staffCredential(account)) || signedOutSince(account, session)) throw signIn;
       return {
         username: account.username,
         displayName: account.displayName,
@@ -556,7 +559,7 @@ export class Service {
           return [{ username: session.username, displayName: 'Administrator', role: 'ADMIN', kind: 'owner', deskNumber: null, since: new Date(session.createdAt).toISOString(), until: new Date(session.expiresAt).toISOString() }];
         }
         const account = accounts.get(session.username);
-        if (!account?.active) return [];
+        if (!account?.active || signedOutSince(account, session)) return [];
         return [
           {
             username: account.username,
