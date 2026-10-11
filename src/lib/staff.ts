@@ -19,6 +19,7 @@ export type Permission =
   | 'registrations.pass'
   | 'registrations.retry'
   | 'registrations.remove'
+  | 'registrations.delete'
   | 'events.operate'
   | 'events.correct'
   | 'results.view'
@@ -27,7 +28,8 @@ export type Permission =
   | 'portal.manage'
   | 'help.manage'
   | 'system.view'
-  | 'map.edit';
+  | 'map.edit'
+  | 'system.testing';
 
 /** What each permission allows, as the dashboard explains it. */
 export const PERMISSION_LABELS: Record<Permission, string> = {
@@ -38,7 +40,8 @@ export const PERMISSION_LABELS: Record<Permission, string> = {
   'registrations.edit': "Correct a student's details: name, college, department, year, phone or email",
   'registrations.pass': 'Download student passes (PDF)',
   'registrations.retry': 'Retry a pass, email or Google Sheet copy that failed',
-  'registrations.remove': "Cancel or delete a student's record",
+  'registrations.remove': "Cancel a student's registration",
+  'registrations.delete': "Delete a student's record: it leaves every list and goes to the Deleted list, where it can be restored",
   'events.operate': 'Search student IDs, enter them in the event (individual or team) with the ₹50 fee, mark attendance, enter winners and submit results',
   'events.correct': 'Authorise corrections: void an event fee, reopen finalized results',
   'results.view': 'See event-wise participants, attendance, winners and submission times; download them as Excel',
@@ -48,6 +51,7 @@ export const PERMISSION_LABELS: Record<Permission, string> = {
   'help.manage': 'See and answer the help requests sent with Contact admin',
   'system.view': 'See the system status: website checks, failed emails, passes and Sheet copies',
   'map.edit': 'Edit the campus map: room names, photo spots and directions to each venue',
+  'system.testing': 'Test sessions: set the timeline the website follows, mark records made while testing, and delete that test data',
 };
 
 export const ROLE_PERMISSIONS: Record<StaffRole, readonly Permission[]> = {
@@ -60,6 +64,7 @@ export const ROLE_PERMISSIONS: Record<StaffRole, readonly Permission[]> = {
     'registrations.pass',
     'registrations.retry',
     'registrations.remove',
+    'registrations.delete',
     'events.operate',
     'events.correct',
     'results.view',
@@ -69,12 +74,13 @@ export const ROLE_PERMISSIONS: Record<StaffRole, readonly Permission[]> = {
     'help.manage',
     'system.view',
     'map.edit',
+    'system.testing',
   ],
   // Passes are the students' own (Student login): the desk and the web team do not download them.
   DESK: ['registrations.list', 'registrations.approve', 'registrations.onsite', 'registrations.events', 'registrations.edit'],
   COORDINATOR: ['registrations.approve', 'events.operate', 'results.view'],
   CERTIFICATE: ['results.view'],
-  SUPPORT: ['registrations.list', 'registrations.edit', 'registrations.retry', 'portal.manage', 'help.manage', 'system.view', 'map.edit'],
+  SUPPORT: ['registrations.list', 'registrations.edit', 'registrations.retry', 'registrations.delete', 'portal.manage', 'help.manage', 'system.view', 'map.edit'],
 };
 
 /** Roles whose event permissions cover only the events assigned to the account. */
@@ -83,11 +89,11 @@ export const EVENT_SCOPED_ROLES: readonly StaffRole[] = ['COORDINATOR'];
 export const ROLE_INFO: Record<StaffRole, { label: string; summary: string }> = {
   ADMIN: {
     label: 'Admin',
-    summary: 'Full control: everything the other roles do, plus student coordinator accounts, cancelling or deleting records, corrections and reports. Every event.',
+    summary: 'Full control: everything the other roles do, plus student coordinator accounts, cancelling or deleting records, corrections, reports and test sessions. Every event.',
   },
   DESK: {
     label: 'Registration desk',
-    summary: 'On the event day: register students (individual or team) with the events they choose and take the ₹100 gate pass (cash, or GPay the student pays from Student login); verify GPay payments; correct details. Students download their own pass. Event fees are paid at each venue.',
+    summary: 'Register students at the desk (individual or team) with the events they choose and take the ₹100 gate pass (cash, or GPay the student pays from Student login); verify GPay payments; correct details. Students download their own pass. Event fees are paid at each venue.',
   },
   COORDINATOR: {
     label: 'Event coordinator',
@@ -99,7 +105,7 @@ export const ROLE_INFO: Record<StaffRole, { label: string; summary: string }> = 
   },
   SUPPORT: {
     label: 'Web assistant team',
-    summary: 'Keeps the website running: help requests, system status, failed emails, passes and Sheet copies, correcting student details, the student login switch and the campus map.',
+    summary: 'Keeps the website running: help requests, system status, failed emails, passes and Sheet copies, correcting or deleting student records (and restoring deleted ones), the student login switch and the campus map.',
   },
 };
 
@@ -145,6 +151,8 @@ export interface SessionInfo {
   passByEmail: boolean;
   /** The registration desk (1, 2, …) this sign-in is at; null for other roles or not chosen yet. */
   deskNumber: number | null;
+  /** A test session (its name) and whether a test timeline replaces the real schedule. */
+  testing?: { session: string | null; timeline: boolean };
 }
 
 /** The highest desk number that can be chosen. */

@@ -310,11 +310,11 @@ be closed by hand** (Forms → Responses → *Accepting responses* off) at 11:59
 
 | Role | May | Events |
 | --- | --- | --- |
-| **Admin** | everything below, plus student coordinator accounts, who is signed in now (with desk numbers), cancelling or deleting records, corrections (void a fee, reopen results), reports and the Excel downloads | all |
-| **Registration desk** | search registrations, register students on-site (cash, or GPay the student pays from Student login), approve GPay payments from the student's screenshot, correct details, add or remove events | all |
+| **Admin** | everything below, plus student coordinator accounts, who is signed in now (with desk numbers), cancelling or deleting records, corrections (void a fee, reopen results), reports and the Excel downloads, and **Testing** (test sessions) | all |
+| **Registration desk** | search registrations, register students at the desk on any day (cash, or GPay the student pays from Student login), approve GPay payments from the student's screenshot, correct details, add or remove events | all |
 | **Event coordinator** | look up participant IDs, add a participant to the event, take the ₹50 fee (cash, or approve the student's GPay screenshot), mark attendance, enter winners, submit results, download the event's Excel | assigned only |
 | **Certificate team** | read every event's participants (present first) and the three prizes with each student's details; Excel | all (read only) |
-| **Web assistant team** | registrations (read, correct details, retry), help requests and replies, system status, campus map, the Student login switch | all |
+| **Web assistant team** | registrations (read, correct details, retry, delete), the **Deleted** list (restore), help requests and replies, system status, campus map, the Student login switch | all |
 
 The dashboard's **Roles** section shows the same list (it is read from `src/lib/staff.ts`, which the
 server enforces). Students download their own pass from **Student login**; the dashboard does not
@@ -357,9 +357,37 @@ its files (S3 keeps every version) and its Sheet row and Drive file, marked DELE
    laptop (e.g. `desk1`…`desk4`), one or more `COORDINATOR` accounts per event (tick their events),
    the `CERTIFICATE` and `SUPPORT` (web assistant team) accounts, and any extra admins. Use
    **Generate** for passwords and hand each over privately.
-2. Rehearse on a sandbox (section 8) with `SCHEDULE_ONSITE_OPENS_AT` set to the rehearsal time, never
-   on the live site.
+2. Rehearse as often as you like with **Testing** (below).
 3. Make sure whoever approves GPay payments can see the receiving account's credits on the day.
+
+### Test sessions (Testing, admins)
+
+Rehearse on the live website without touching real students' registrations:
+
+1. **Start an event-day test**: starts a test session and opens on-site registration now (for the hours
+   chosen). Every coordinator sees a yellow banner while it is on. Everything registered meanwhile (at
+   the desk or online) and every help request is marked **TEST**.
+2. Test the desk, GPay approvals, events (fees, attendance, winners), Student login and the certificate
+   lists. **Timeline** sets other moments: online open now, closed (after the event), or your own
+   day and times. The website and the API follow the timeline within seconds, for everyone: while it
+   is on, online registration opens or closes with it.
+3. **Test data** lists the TEST records. **Keep: a real student** takes the mark off one made by a real
+   student during the test; **Mark as test** marks one made before the session.
+4. **Delete the test data** (type `DELETE TEST DATA`): the TEST records are saved to a private backup
+   file in the files bucket (`backups/…`), then deleted with their files (Drive copies go to the
+   trash), their Sheet rows marked `TEST CLEARED`, and their phones and emails freed. Optionally: clear
+   event results, delete test help requests, start desk IDs again at 262001 (only when no real desk
+   registrations exist), and end the session and go back to the real schedule.
+
+The real schedule (`src/content/site.ts`) applies again as soon as the test timeline is removed: on
+17 October the website switches to on-site registration by itself.
+
+### Deleted records
+
+Admins and the web assistant team can delete a record (a duplicate or a mistake). It leaves every list
+and goes to **Deleted** (web assistant team and admins only), with who deleted it, when and why;
+**Restore** brings it back as it was, unless its phone, email or payment reference has since been used
+by another registration.
 
 ### After the event
 
@@ -372,10 +400,9 @@ and keep **Download all data (Excel)** as their own copy.
 
 The code is ready; these steps are yours, in this order. Nothing here is done automatically.
 
-1. **Content to confirm** (`src/content/`): the help desk phone number, place and hours
-   (`site.ts` → `helpDesk`, still a placeholder), the web team and admin numbers for Contact admin
-   (`helpContacts.ts`), the campus map room labels and photos (`campusMap.json`, `confirmed: false`
-   until checked), the team size limits of team events, and the UPI QR image.
+1. **Content to confirm** (`src/content/`): the help desk phone numbers (`site.ts` → `helpDesk`;
+   phone and WhatsApp only for now), the web team and admin numbers for Contact admin
+   (`helpContacts.ts`), the team size limits of team events, and the UPI QR image.
 2. **Checks**: `npm run check` passes (lint, tests, build, secret check).
 3. **Merge and deploy**: merge the feature branch into `main` and push; Amplify builds and deploys.
    This release adds deletion protection to both tables, versioning to the files bucket (it can be
@@ -383,9 +410,11 @@ The code is ready; these steps are yours, in this order. Nothing here is done au
 4. **After the deploy**: `/api/health` answers `ready`; sign in as the owner; create the accounts
    (above). The Sheet gains its new columns and Drive its **Student Records** folder by themselves
    on the first copy.
-5. **On the day**: every desk signs in with its desk number; check **System status**; keep
+5. **Before the day**: in **Testing**, delete the test data and go back to the real schedule (no
+   yellow banner on the dashboard).
+6. **On the day**: every desk signs in with its desk number; check **System status**; keep
    **Student login** on (pause it only if the desks need the network).
-6. Optional: set `API_RESERVED_CONCURRENCY` (e.g. 50) as a cost ceiling, if the account allows it.
+7. Optional: set `API_RESERVED_CONCURRENCY` (e.g. 50) as a cost ceiling, if the account allows it.
 
 ## Local development
 

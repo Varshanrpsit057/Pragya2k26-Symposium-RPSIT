@@ -13,7 +13,6 @@ import { GroupedId } from '../components/ui/GroupedId';
 import { COLLEGES, OTHER_COLLEGE } from '../content/colleges';
 import { events as allEvents } from '../content/events';
 import type { AdminRegistration } from '../lib/admin';
-import { formatIst, parseEventStart } from '../lib/countdown';
 import { DEPARTMENTS, OTHER_DEPARTMENT, YEARS_OF_STUDY, idParts, newSubmissionId, normalisePhone, normaliseRegistrationId, rupees } from '../lib/registration';
 import { hasPermission, type SessionInfo } from '../lib/staff';
 import { STUDENT_PAGE } from '../lib/student';
@@ -371,7 +370,6 @@ function NewRegistration({ token, session, registrations, onCreated, onOpen, onC
   const [error, setError] = useState<unknown>(null);
   const [done, setDone] = useState<AdminRegistration | null>(null);
   const fees = session.fees;
-  const enabled = session.phase === 'onsite';
   const dirty = !done && (Object.values(values).some((value) => value.trim()) || chosen.length > 0 || method !== '' || teamName.trim() !== '');
 
   // Every change is saved as a draft at once.
@@ -427,10 +425,10 @@ function NewRegistration({ token, session, registrations, onCreated, onOpen, onC
 
   const existing = existingRegistrationOf(error);
   const fieldErrors = error instanceof ApiFailure ? error.fieldErrors : {};
-  const opens = session.schedule.onsiteOpensAt ? parseEventStart(session.schedule.onsiteOpensAt) : null;
   const paid = method === 'UPI' || (method === 'CASH' && cashReceived);
   const taken = holderOf(registrations, values.phone, values.email);
-  const ready = enabled && !busy && (participation === 'INDIVIDUAL' || teamName.trim().length >= 2) && paid && !taken.phone && !taken.email;
+  // The desk registers on any day (the server agrees): only the form decides.
+  const ready = !busy && (participation === 'INDIVIDUAL' || teamName.trim().length >= 2) && paid && !taken.phone && !taken.email;
 
   if (done) {
     const changed = (latest: AdminRegistration) => {
@@ -476,11 +474,6 @@ function NewRegistration({ token, session, registrations, onCreated, onOpen, onC
         </div>
       }
     >
-      {!enabled && (
-        <p className="adm-note">
-          {session.phase === 'closed' ? 'Registration has closed for the day.' : `The desk opens ${opens ? `on ${formatIst(opens)}` : 'on the event day'}.`}
-        </p>
-      )}
       {showRestored && restored && (
         <p className="adm-note adm-draft" role="status">
           Restored the form you were filling in (saved {clockTime(restored.savedAt)}).{' '}
@@ -490,7 +483,7 @@ function NewRegistration({ token, session, registrations, onCreated, onOpen, onC
         </p>
       )}
       <form id="desk-new" className="adm-new" onSubmit={submit} aria-label="New on-site registration">
-        <fieldset className="adm-new__card" disabled={!enabled || busy}>
+        <fieldset className="adm-new__card" disabled={busy}>
           <legend className="adm-new__step">
             <span>1</span> Student
           </legend>
@@ -561,7 +554,7 @@ function NewRegistration({ token, session, registrations, onCreated, onOpen, onC
         </fieldset>
 
         <div className="adm-new__side">
-          <fieldset className="adm-new__card" disabled={!enabled || busy}>
+          <fieldset className="adm-new__card" disabled={busy}>
             <legend className="adm-new__step">
               <span>2</span> Individual or team
             </legend>
@@ -584,7 +577,7 @@ function NewRegistration({ token, session, registrations, onCreated, onOpen, onC
             </div>
           </fieldset>
 
-          <fieldset className="adm-new__card" disabled={!enabled || busy}>
+          <fieldset className="adm-new__card" disabled={busy}>
             <legend className="adm-new__step">
               <span>3</span> Events
             </legend>
@@ -608,7 +601,7 @@ function NewRegistration({ token, session, registrations, onCreated, onOpen, onC
             </div>
           </fieldset>
 
-          <fieldset className="adm-new__card" disabled={!enabled || busy}>
+          <fieldset className="adm-new__card" disabled={busy}>
             <legend className="adm-new__step">
               <span>4</span> Gate pass {rupees(fees.gatePass)}
             </legend>

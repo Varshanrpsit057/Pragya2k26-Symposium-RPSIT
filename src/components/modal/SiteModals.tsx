@@ -1,7 +1,7 @@
 import { useCallback, useMemo, useState, useSyncExternalStore, type ReactNode } from 'react';
-import { site } from '../../content/site';
 import type { SymposiumEvent } from '../../content/types';
-import { registrationPhase, scheduleOf, type RegistrationPhase } from '../../lib/schedule';
+import { currentSchedule } from '../../lib/liveSchedule';
+import { registrationPhase, type RegistrationPhase } from '../../lib/schedule';
 import type { OwnRegistration } from '../../lib/registrationClient';
 import { parseStatusHash, statusHash } from '../../lib/statusLink';
 import { EventDetailsModal } from '../events/EventDetailsModal';
@@ -42,7 +42,7 @@ export function SiteModalsProvider({ children }: { children: ReactNode }) {
 
   const openRegistration = useCallback((event?: SymposiumEvent) => {
     setDetailsEvent(null);
-    const phase = registrationPhase(scheduleOf(site.registration), Date.now());
+    const phase = registrationPhase(currentSchedule(), Date.now());
     setRegistration((current) => ({ open: true, event, request: current.request + 1, phase }));
   }, []);
   const openEventDetails = useCallback((event: SymposiumEvent) => setDetailsEvent(event), []);

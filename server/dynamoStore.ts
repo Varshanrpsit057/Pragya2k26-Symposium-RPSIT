@@ -130,6 +130,10 @@ export class DynamoStore implements Store {
     throw new Error('Could not take a registration number');
   }
 
+  async setCounter(counter: CounterName, value: number) {
+    await this.db.send(new PutCommand({ TableName: this.tables.control, Item: { pk: counterKey(counter), n: value } }));
+  }
+
   async ensureCounter(seed: () => Promise<number>, counter: CounterName = 'registration') {
     const { Item } = await this.db.send(
       new GetCommand({ TableName: this.tables.control, Key: { pk: counterKey(counter) }, ConsistentRead: true }),
@@ -402,6 +406,10 @@ export class DynamoStore implements Store {
     return this.putRevised(`${RESULT_PREFIX}${result.eventId}`, result, expectedRevision);
   }
 
+  async deleteEventResult(eventId: string) {
+    await this.db.send(new DeleteCommand({ TableName: this.tables.control, Key: { pk: `${RESULT_PREFIX}${eventId}` } }));
+  }
+
   /** Puts an item whose stored `revision` must still be `expected` (0: must not exist yet). */
   private async putRevised(pk: string, item: object, expected: number) {
     try {
@@ -472,6 +480,10 @@ export class DynamoStore implements Store {
 
   async listHelpRequests() {
     return (await this.scanPrefix<HelpRequest>(HELP_PREFIX)).sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+  }
+
+  async deleteHelpRequest(id: string) {
+    await this.db.send(new DeleteCommand({ TableName: this.tables.control, Key: { pk: `${HELP_PREFIX}${id}` } }));
   }
 
   async saveHelpRequest(request: HelpRequest) {

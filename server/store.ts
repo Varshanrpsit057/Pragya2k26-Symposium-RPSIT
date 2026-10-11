@@ -72,6 +72,8 @@ export interface Registration {
   registrationId: string;
   /** Missing on registrations stored before the on-site desk existed: those are ONLINE. */
   source?: RegistrationSource;
+  /** Made while a test session was on (or marked by an admin): deleted with the test data. */
+  test?: { session: string; at: string };
   status: RegistrationStatus;
   /** ISO 8601 */
   submittedAt: string;
@@ -251,6 +253,8 @@ export interface Store {
   nextRegistrationNumber(seed: () => Promise<number>, counter?: CounterName): Promise<number>;
   /** Starts the counter at `seed()` if it has not started yet (done ahead by the scheduled job). */
   ensureCounter(seed: () => Promise<number>, counter?: CounterName): Promise<void>;
+  /** Sets a counter (the next number is `value + 1`): after test data is deleted, desk IDs start again. */
+  setCounter(counter: CounterName, value: number): Promise<void>;
   /**
    * Stores a registration with its claims (claimsOf), all or nothing. Fails with no conflicts
    * listed when the Registration ID itself is already taken.
@@ -290,6 +294,8 @@ export interface Store {
   getEventResult(eventId: string): Promise<EventResult | null>;
   /** Stores the result if its stored revision is still `expectedRevision` (0: must not exist yet). */
   saveEventResult(result: EventResult, expectedRevision: number): Promise<boolean>;
+  /** Removes an event's results (test data only). */
+  deleteEventResult(eventId: string): Promise<void>;
 
   /** Counts one hit for `key` in the current window and returns the count so far. */
   hit(key: string, windowMs: number, now: number): Promise<number>;
@@ -301,8 +307,10 @@ export interface Store {
   getHelpRequest(id: string): Promise<HelpRequest | null>;
   listHelpRequests(): Promise<HelpRequest[]>;
   saveHelpRequest(request: HelpRequest): Promise<void>;
+  /** Removes a help request (test data only). */
+  deleteHelpRequest(id: string): Promise<void>;
 
-  /** Records deleted by admins (Control table, pk audit#<time>#<id>). */
+  /** Deleted, restored and test-cleared records (Control table, pk audit#<time>#<id>). */
   addAuditEntry(entry: AuditEntry): Promise<void>;
   listAuditEntries(): Promise<AuditEntry[]>;
 }

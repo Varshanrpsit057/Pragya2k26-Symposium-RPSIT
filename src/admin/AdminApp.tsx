@@ -5,6 +5,7 @@ import type { RegistrationStatus } from '../lib/registration';
 import { ROLE_INFO, hasPermission, type Permission, type SessionInfo } from '../lib/staff';
 import type { StudentPortalState } from '../lib/student';
 import { SignedOut, currentAdmin, listHelp, listRegistrations, myHelp, savedToken, setDeskNumber, setStudentPortal, signIn, signOut, studentPortal } from './adminApi';
+import { DeletedPanel } from './DeletedPanel';
 import { DeskPanel } from './DeskPanel';
 import { EventsPanel } from './EventsPanel';
 import { HelpDialog, repliesSeenAt, type HelpContext } from './HelpDialog';
@@ -16,6 +17,7 @@ import { ResultsPanel } from './ResultsPanel';
 import { RolesPanel } from './RolesPanel';
 import { StaffPanel } from './StaffPanel';
 import { SystemPanel } from './SystemPanel';
+import { TestingPanel } from './TestingPanel';
 import { Badge, ErrorNote, HELP_EVENT, LiveStatus, StatusBadge, messageOf, useLiveData, when } from './ui';
 
 type Filter = RegistrationStatus | 'ALL';
@@ -28,7 +30,7 @@ const FILTERS: { value: Filter; label: string }[] = [
   { value: 'ALL', label: 'All' },
 ];
 
-type TabId = 'review' | 'desk' | 'events' | 'results' | 'help' | 'system' | 'map' | 'staff' | 'reports' | 'roles';
+type TabId = 'review' | 'desk' | 'events' | 'results' | 'help' | 'system' | 'deleted' | 'map' | 'staff' | 'reports' | 'testing' | 'roles';
 
 /** The dashboard's sections, each shown only to the roles it is for (the server checks again). */
 const TABS: { id: TabId; label: (session: SessionInfo) => string; show: (session: SessionInfo) => boolean }[] = [
@@ -38,9 +40,11 @@ const TABS: { id: TabId; label: (session: SessionInfo) => string; show: (session
   { id: 'results', label: () => 'Results & certificates', show: (session) => can(session, 'results.view') },
   { id: 'help', label: () => 'Help requests', show: (session) => can(session, 'help.manage') },
   { id: 'system', label: () => 'System status', show: (session) => can(session, 'system.view') },
+  { id: 'deleted', label: () => 'Deleted', show: (session) => can(session, 'registrations.delete') },
   { id: 'map', label: () => 'Campus map', show: (session) => can(session, 'map.edit') },
   { id: 'staff', label: () => 'Student coordinators', show: (session) => can(session, 'staff.manage') },
   { id: 'reports', label: () => 'Reports', show: (session) => can(session, 'reports.view') },
+  { id: 'testing', label: () => 'Testing', show: (session) => can(session, 'system.testing') },
   { id: 'roles', label: () => 'Roles', show: () => true },
 ];
 
@@ -230,6 +234,16 @@ function Shell({ token, session, onSession, onSignOut, onSignedOut }: ShellProps
           </button>
         </div>
       </header>
+      {(session.testing?.session || session.testing?.timeline) && (
+        <p className="adm-test-banner" role="status">
+          {session.testing.session && (
+            <>
+              <strong>Test session on: {session.testing.session}.</strong> Everything registered now is test data, deleted after testing.{' '}
+            </>
+          )}
+          {session.testing.timeline && <strong>The website is following a test timeline.</strong>}
+        </p>
+      )}
       {can(session, 'portal.manage') && <StudentPortalSwitch token={token} onSignedOut={onSignedOut} />}
       {session.role === 'DESK' && !session.deskNumber && <DeskChooser token={token} onSession={onSession} onSignedOut={onSignedOut} />}
 
@@ -248,6 +262,8 @@ function Shell({ token, session, onSession, onSignOut, onSignedOut }: ShellProps
       {current === 'results' && <ResultsPanel {...panel} />}
       {current === 'help' && <HelpPanel {...panel} />}
       {current === 'system' && <SystemPanel {...panel} />}
+      {current === 'deleted' && <DeletedPanel {...panel} />}
+      {current === 'testing' && <TestingPanel {...panel} onSession={onSession} />}
       {current === 'map' && <MapEditor />}
       {current === 'staff' && <StaffPanel {...panel} />}
       {current === 'reports' && <ReportsPanel {...panel} />}

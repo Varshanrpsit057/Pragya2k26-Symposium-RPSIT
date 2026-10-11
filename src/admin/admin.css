@@ -1595,3 +1595,21 @@ textarea {
   min-width: 18rem;
   box-shadow: 0 8px 24px rgb(0 0 0 / 0.15);
 }
+
+/* Testing: the banner every signed-in coordinator sees while a test session or timeline is on */
+.adm-test-banner {
+  margin: 0;
+  padding: 0.6rem 1rem;
+  border-bottom: 1px solid #e0b252;
+  color: #5c3d00;
+  background: #fff4d6;
+}
+
+.adm-details {
+  margin-top: 0.75rem;
+}
+
+.adm-details > summary {
+  cursor: pointer;
+  font-weight: 600;
+}

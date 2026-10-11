@@ -63,26 +63,14 @@ describe('registration schedule (Asia/Kolkata)', () => {
     expect(await h.store.listRegistrations('PENDING')).toHaveLength(1);
   });
 
-  it('opens the desk only on the event day, and closes it when the day ends', async () => {
+  it('lets the desk register on any day: before, on and after the event day', async () => {
     const h = setup({ at: TIMES.online });
     const desk = await h.staff('DESK');
-    for (const at of [TIMES.online, TIMES.between]) {
+    for (const at of [TIMES.online, TIMES.between, TIMES.onsiteOpens, TIMES.lastOnsiteSecond, TIMES.closed]) {
       h.setTime(at);
-      const refused = await h.onsite((await h.loginAs(desk.username, STAFF_PASSWORD)), {});
-      expect(refused.status).toBe(403);
-      expect(refused.body.code).toBe('ONSITE_CLOSED');
+      const token = await h.loginAs(desk.username, STAFF_PASSWORD);
+      expect((await h.onsite(token)).status, at).toBe(200);
     }
-    h.setTime(TIMES.onsiteOpens);
-    const token = await h.loginAs(desk.username, STAFF_PASSWORD);
-    expect((await h.onsite(token)).status).toBe(200);
-    h.setTime(TIMES.lastOnsiteSecond);
-    // A day later the morning's session has ended (8 hours): the desk signs in again.
-    const evening = await h.loginAs(desk.username, STAFF_PASSWORD);
-    expect((await h.onsite(evening)).status).toBe(200);
-    h.setTime(TIMES.closed);
-    const closed = await h.onsite(evening);
-    expect(closed.status).toBe(403);
-    expect(closed.body.error).toMatch(/closed for the day/);
   });
 
   it('tells the dashboard the phase by the server clock', async () => {
@@ -291,9 +279,13 @@ describe('staff roles (checked on the server)', () => {
       ['POST', `/api/admin/registrations/${id}/retry`, {}, ['ADMIN', 'SUPPORT']],
       ['POST', `/api/admin/registrations/${id}/details`, {}, ['ADMIN', 'DESK', 'SUPPORT']],
       ['POST', `/api/admin/registrations/${id}/events`, { add: ['cognix'] }, ['ADMIN', 'DESK']],
-      // Only admins cancel or delete a record.
+      // Only admins cancel; admins and the web assistant team delete (to the Deleted list).
       ['POST', `/api/admin/registrations/${pending}/cancel`, { reason: 'test' }, ['ADMIN']],
-      ['POST', `/api/admin/registrations/${doomed}/delete`, { reason: 'test entry' }, ['ADMIN']],
+      ['POST', `/api/admin/registrations/${doomed}/delete`, { reason: 'test entry' }, ['ADMIN', 'SUPPORT']],
+      ['GET', '/api/admin/deleted', undefined, ['ADMIN', 'SUPPORT']],
+      // Test sessions: admins only.
+      ['GET', '/api/admin/testing', undefined, ['ADMIN']],
+      ['POST', '/api/admin/testing/session', { action: 'stop' }, ['ADMIN']],
       ['GET', `/api/admin/lookup/${id}`, undefined, ['ADMIN', 'COORDINATOR']],
       ['GET', '/api/admin/events', undefined, ['ADMIN', 'COORDINATOR', 'CERTIFICATE']],
       ['GET', '/api/admin/events/code-flex', undefined, ['ADMIN', 'COORDINATOR', 'CERTIFICATE']],

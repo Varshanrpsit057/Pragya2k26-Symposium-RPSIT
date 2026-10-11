@@ -70,6 +70,10 @@ export class MemoryStore implements Store {
     return next;
   }
 
+  async setCounter(counter: CounterName, value: number) {
+    this.counters.set(counter, value);
+  }
+
   async ensureCounter(seed: () => Promise<number>, counter: CounterName = 'registration') {
     if (this.counters.has(counter)) return;
     const start = await seed();
@@ -181,6 +185,10 @@ export class MemoryStore implements Store {
     return result ? copy(result) : null;
   }
 
+  async deleteEventResult(eventId: string) {
+    this.results.delete(eventId);
+  }
+
   async saveEventResult(result: EventResult, expectedRevision: number) {
     await tick();
     const stored = this.results.get(result.eventId);
@@ -215,6 +223,10 @@ export class MemoryStore implements Store {
 
   async saveHelpRequest(request: HelpRequest) {
     this.help.set(request.id, copy(request));
+  }
+
+  async deleteHelpRequest(id: string) {
+    this.help.delete(id);
   }
 
   async addAuditEntry(entry: AuditEntry) {
