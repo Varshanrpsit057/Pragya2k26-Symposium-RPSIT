@@ -211,6 +211,25 @@ textarea {
   background: var(--adm-surface);
 }
 
+/* Admins: the student page switch, under the bar */
+.adm-portal {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem 0.75rem;
+  padding: 0.55rem 1.25rem;
+  border-bottom: 1px solid var(--adm-line);
+  background: #f7f8fc;
+}
+
+.adm-portal__label {
+  font-weight: 600;
+}
+
+.adm-portal__hint {
+  flex-basis: 100%;
+}
+
 .adm-bar__title {
   font-size: 1.15rem;
 }
@@ -346,6 +365,12 @@ textarea {
   background: var(--adm-red-soft);
 }
 
+.adm-badge--cancelled {
+  color: var(--adm-muted);
+  background: #e3e5ec;
+  text-decoration: line-through;
+}
+
 /* Details */
 .adm-detail {
   position: sticky;
@@ -466,6 +491,12 @@ textarea {
   gap: 0.6rem;
 }
 
+.adm-cancel {
+  margin-top: 0.75rem;
+  padding-top: 0.75rem;
+  border-top: 1px solid #e3e5ec;
+}
+
 @media (max-width: 960px) {
   .adm-main {
     grid-template-columns: minmax(0, 1fr);
@@ -486,4 +517,1081 @@ textarea {
     grid-template-columns: minmax(0, 1fr);
     gap: 0;
   }
+}
+
+/* ------------------------------------------------------------------------------------- */
+/* Staff sections (desk, events, results, staff, reports, roles)                          */
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+.adm-bar__phase {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem;
+  margin-top: 0.2rem;
+  font-size: 0.9rem;
+}
+
+.adm-nav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem;
+  padding: 0.5rem 1.25rem 0;
+  border-bottom: 1px solid var(--adm-line);
+  background: var(--adm-surface);
+}
+
+.adm-nav__tab {
+  padding: 0.55rem 0.9rem;
+  border: 0;
+  border-bottom: 3px solid transparent;
+  font-weight: 600;
+  color: var(--adm-muted);
+  background: none;
+  cursor: pointer;
+}
+
+.adm-nav__tab[aria-current='page'] {
+  border-bottom-color: var(--adm-primary);
+  color: var(--adm-text);
+}
+
+.adm-page,
+.adm-workspace {
+  display: grid;
+  gap: 1rem;
+  padding: 1rem 1.25rem 2rem;
+}
+
+.adm-workspace {
+  padding: 0;
+}
+
+.adm-pad {
+  display: grid;
+  gap: 0.75rem;
+  padding: 1rem;
+}
+
+.adm-h2 {
+  font-size: 1.15rem;
+}
+
+.adm-h3 {
+  font-size: 1rem;
+}
+
+.adm-live {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-left: auto;
+  font-size: 0.88rem;
+}
+
+.adm-button--small {
+  padding: 0.3rem 0.65rem;
+  font-size: 0.88rem;
+}
+
+.adm-badge--plain {
+  color: var(--adm-muted);
+  background: #eef0f5;
+}
+
+.adm-inline {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+}
+
+.adm-inline--wrap {
+  flex-wrap: wrap;
+}
+
+.adm-inline input {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.adm-table--static tbody tr {
+  cursor: default;
+}
+
+.adm-table__expand td {
+  background: #f7f8fc;
+}
+
+/* Forms */
+.adm-form {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 14rem), 1fr));
+  gap: 0.75rem;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.adm-form__wide {
+  grid-column: 1 / -1;
+}
+
+.adm-field select,
+.adm-place select {
+  width: 100%;
+  padding: 0.5rem 0.65rem;
+  border: 1px solid #c9cddb;
+  border-radius: 8px;
+  font: inherit;
+  font-weight: 400;
+  background: #fff;
+}
+
+.adm-field__error {
+  font-weight: 500;
+  color: var(--adm-red);
+}
+
+.adm-events {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem 1.1rem;
+  margin: 0;
+  padding: 0.6rem 0.8rem;
+  border: 1px solid var(--adm-line);
+  border-radius: 8px;
+}
+
+.adm-events legend {
+  padding: 0 0.3rem;
+  font-weight: 600;
+}
+
+.adm-pay {
+  display: grid;
+  gap: 0.6rem;
+  margin: 0;
+  padding: 0.75rem 0.9rem;
+  border: 1px solid var(--adm-line);
+  border-radius: 8px;
+  background: #fbfbfe;
+}
+
+.adm-pay__legend {
+  padding: 0 0.3rem;
+  font-weight: 700;
+}
+
+.adm-pay__methods {
+  display: flex;
+  gap: 1.25rem;
+}
+
+.adm-radio {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.adm-pay__upi {
+  display: grid;
+  gap: 0.5rem;
+}
+
+.adm-pay__qr {
+  width: min(100%, 13rem);
+  border: 1px solid var(--adm-line);
+  border-radius: 8px;
+}
+
+.adm-pay__confirm {
+  padding: 0.55rem 0.7rem;
+  border: 1px solid #f0d9a8;
+  border-radius: 8px;
+  background: var(--adm-amber-soft);
+}
+
+/* Coordinators */
+.adm-lookup {
+  display: grid;
+  gap: 0.5rem;
+}
+
+.adm-lookup__card {
+  display: grid;
+  gap: 0.5rem;
+  padding: 0.7rem 0.85rem;
+  border: 1px solid var(--adm-line);
+  border-radius: 8px;
+  background: #fbfbfe;
+}
+
+.adm-places {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 14rem), 1fr));
+  gap: 0.9rem;
+}
+
+.adm-place {
+  display: grid;
+  align-content: start;
+  gap: 0.45rem;
+}
+
+.adm-chips {
+  display: grid;
+  gap: 0.3rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.adm-chip {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  padding: 0.3rem 0.55rem;
+  border-radius: 6px;
+  background: var(--adm-select);
+}
+
+.adm-chip button {
+  border: 0;
+  font-size: 1.1rem;
+  line-height: 1;
+  color: var(--adm-muted);
+  background: none;
+  cursor: pointer;
+}
+
+/* Roles */
+.adm-roles {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 17rem), 1fr));
+  gap: 0.9rem;
+}
+
+.adm-role {
+  display: grid;
+  align-content: start;
+  gap: 0.5rem;
+  padding: 0.9rem;
+  border: 1px solid var(--adm-line);
+  border-radius: 10px;
+}
+
+.adm-role.is-mine {
+  border-color: var(--adm-primary);
+  box-shadow: 0 0 0 1px var(--adm-primary);
+}
+
+.adm-role__name {
+  font-size: 1rem;
+}
+
+.adm-role__list,
+.adm-rules {
+  display: grid;
+  gap: 0.35rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: 0.9rem;
+}
+
+.adm-rules {
+  padding-left: 1.1rem;
+  list-style: disc;
+}
+
+.adm-role__list li {
+  display: flex;
+  gap: 0.45rem;
+}
+
+.adm-role__list .is-allowed span:first-child {
+  font-weight: 700;
+  color: var(--adm-green);
+}
+
+.adm-role__list .is-denied {
+  color: var(--adm-muted);
+}
+
+/* Reports */
+.adm-report {
+  display: grid;
+  gap: 0.9rem;
+}
+
+.adm-stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 12rem), 1fr));
+  gap: 0.75rem;
+}
+
+.adm-stat {
+  display: grid;
+  gap: 0.15rem;
+  padding: 0.8rem;
+  border: 1px solid var(--adm-line);
+  border-radius: 8px;
+}
+
+.adm-stat__label {
+  font-size: 0.82rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--adm-muted);
+}
+
+.adm-stat__value {
+  font-size: 1.4rem;
+}
+
+@media (max-width: 520px) {
+  .adm-page {
+    padding: 0.75rem;
+  }
+
+  .adm-live {
+    margin-left: 0;
+  }
+}
+
+/* Desk: individual or team */
+.adm-events__team {
+  flex: 1 1 14rem;
+}
+
+.adm-events__team input {
+  max-width: 22rem;
+}
+
+.adm-events__note {
+  flex-basis: 100%;
+}
+
+/* Desk: the events chosen, one per line */
+.adm-events--list {
+  flex-direction: column;
+  gap: 0.45rem;
+}
+
+/* ---------------------------------------------------------------------------------------
+   Pop-up windows, big buttons and the desk (for coordinators trained in a day)
+   --------------------------------------------------------------------------------------- */
+.adm-button--big {
+  min-height: 2.75rem;
+  padding: 0.6rem 1.1rem;
+  font-size: 1rem;
+}
+
+.adm-button--huge {
+  min-height: 3.25rem;
+  padding: 0.7rem 1.5rem;
+  font-size: 1.1rem;
+  font-weight: 700;
+}
+
+.adm-button--help {
+  border-color: #f0c36a;
+  background: #fff8e6;
+}
+
+.adm-visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.adm-dialog {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  display: grid;
+  place-items: center;
+  padding: 1rem;
+  background: rgb(20 24 40 / 0.55);
+}
+
+.adm-dialog__panel {
+  display: grid;
+  grid-template-rows: auto 1fr auto;
+  width: min(100%, 64rem);
+  max-height: calc(100vh - 2rem);
+  border-radius: 12px;
+  background: var(--adm-surface);
+  box-shadow: 0 20px 60px rgb(0 0 0 / 0.3);
+}
+
+.adm-dialog__panel:focus {
+  outline: none;
+}
+
+.adm-dialog__panel--small {
+  width: min(100%, 38rem);
+}
+
+.adm-dialog__panel--full {
+  width: 100%;
+  height: calc(100vh - 2rem);
+  max-width: 90rem;
+}
+
+.adm-dialog__head {
+  display: flex;
+  gap: 1rem;
+  align-items: flex-start;
+  justify-content: space-between;
+  padding: 0.9rem 1.25rem;
+  border-bottom: 1px solid var(--adm-line);
+}
+
+.adm-dialog__title {
+  font-size: 1.25rem;
+}
+
+.adm-dialog__subtitle {
+  max-width: 60rem;
+}
+
+.adm-dialog__close {
+  flex: none;
+  font-weight: 600;
+}
+
+.adm-dialog__body {
+  display: grid;
+  gap: 1rem;
+  align-content: start;
+  padding: 1rem 1.25rem;
+  overflow-y: auto;
+}
+
+.adm-dialog__foot {
+  padding: 0.75rem 1.25rem;
+  border-top: 1px solid var(--adm-line);
+  background: #fafbff;
+  border-radius: 0 0 12px 12px;
+}
+
+@media (max-width: 720px) {
+  .adm-dialog {
+    padding: 0;
+  }
+
+  .adm-dialog__panel,
+  .adm-dialog__panel--full {
+    height: 100vh;
+    max-height: 100vh;
+    border-radius: 0;
+  }
+}
+
+.adm-record-actions {
+  padding-bottom: 0.25rem;
+}
+
+.adm-record {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 24rem), 1fr));
+  gap: 0 1.5rem;
+  align-items: start;
+}
+
+.adm-step {
+  display: grid;
+  gap: 0.9rem;
+}
+
+.adm-step__head {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.adm-verify {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.adm-verify__facts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem 2rem;
+  font-size: 1.05rem;
+}
+
+.adm-check--big {
+  padding: 0.6rem 0.75rem;
+  border: 1px solid var(--adm-line);
+  border-radius: 8px;
+  font-size: 1rem;
+}
+
+.adm-radio--big {
+  font-size: 1.05rem;
+}
+
+.adm-event-toggles {
+  display: grid;
+  gap: 0.6rem;
+}
+
+.adm-event-toggle {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.7rem 0.9rem;
+  border: 1px solid var(--adm-line);
+  border-radius: 10px;
+}
+
+.adm-event-toggle.is-on {
+  border-color: #b9bdf3;
+  background: var(--adm-select);
+}
+
+.adm-form--two {
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 16rem), 1fr));
+}
+
+/* The desk page */
+.adm-desk-top {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  align-items: center;
+}
+
+.adm-search--big {
+  flex: 1 1 18rem;
+  min-height: 3rem;
+  font-size: 1.05rem;
+}
+
+.adm-collections {
+  padding: 0.55rem 0.8rem;
+  border-radius: 8px;
+  background: var(--adm-green-soft);
+}
+
+.adm-guide {
+  padding: 0.75rem 1rem;
+}
+
+.adm-guide summary {
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.adm-guide ol {
+  display: grid;
+  gap: 0.4rem;
+  margin: 0.6rem 0;
+  padding-left: 1.4rem;
+}
+
+/* New registration: two columns on a laptop, so nothing needs scrolling */
+.adm-new {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 26rem), 1fr));
+  gap: 1rem;
+  align-items: start;
+}
+
+.adm-new__side {
+  display: grid;
+  gap: 1rem;
+}
+
+.adm-new__card {
+  display: grid;
+  gap: 0.75rem;
+  margin: 0;
+  padding: 0.9rem 1rem 1rem;
+  border: 1px solid var(--adm-line);
+  border-radius: 12px;
+}
+
+.adm-new__step {
+  display: inline-flex;
+  gap: 0.5rem;
+  align-items: center;
+  padding: 0 0.3rem;
+  font-size: 1.05rem;
+  font-weight: 700;
+}
+
+.adm-new__step span {
+  display: inline-grid;
+  width: 1.7rem;
+  height: 1.7rem;
+  place-items: center;
+  border-radius: 50%;
+  color: #fff;
+  font-size: 0.95rem;
+  background: var(--adm-primary);
+}
+
+.adm-new__foot {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  align-items: center;
+  justify-content: flex-end;
+}
+
+.adm-new__summary {
+  margin-right: auto;
+  font-size: 1.02rem;
+}
+
+.adm-new__error {
+  display: grid;
+  gap: 0.5rem;
+}
+
+.adm-success {
+  display: grid;
+  gap: 0.6rem;
+  justify-items: center;
+  padding: 1.5rem 1rem;
+  text-align: center;
+}
+
+.adm-success__tick {
+  display: grid;
+  width: 4rem;
+  height: 4rem;
+  place-items: center;
+  border-radius: 50%;
+  color: #fff;
+  font-size: 2.2rem;
+  background: var(--adm-green);
+}
+
+.adm-success__id {
+  font-family: ui-monospace, 'SFMono-Regular', Consolas, monospace;
+  font-size: clamp(3rem, 9vw, 5.5rem);
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  line-height: 1.1;
+}
+
+.adm-success__name {
+  font-size: 1.15rem;
+  font-weight: 600;
+}
+
+.adm-success__actions {
+  justify-content: center;
+  margin-top: 0.75rem;
+}
+
+/* Contact admin, help requests, system status */
+.adm-nav__count {
+  display: inline-grid;
+  min-width: 1.3rem;
+  height: 1.3rem;
+  margin-left: 0.35rem;
+  padding: 0 0.3rem;
+  place-items: center;
+  border-radius: 999px;
+  color: #fff;
+  font-size: 0.75rem;
+  font-weight: 700;
+  background: var(--adm-red);
+}
+
+.adm-error__help {
+  margin-left: 0.35rem;
+  font-weight: 600;
+}
+
+.adm-help-call,
+.adm-help-earlier {
+  display: grid;
+  gap: 0.4rem;
+  padding-top: 0.75rem;
+  border-top: 1px solid var(--adm-line);
+}
+
+.adm-help-call__title {
+  font-weight: 700;
+}
+
+.adm-help-call ul,
+.adm-help-earlier ul,
+.adm-help-list,
+.adm-replies,
+.adm-checks,
+.adm-problems {
+  display: grid;
+  gap: 0.5rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.adm-help-call li {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.adm-help-earlier li {
+  padding: 0.5rem 0.65rem;
+  border-radius: 8px;
+  background: #f7f8fc;
+}
+
+.adm-help-reply {
+  margin-top: 0.3rem !important;
+  padding-left: 0.6rem;
+  border-left: 3px solid var(--adm-primary);
+}
+
+.adm-help-sent {
+  display: grid;
+  gap: 0.5rem;
+  justify-items: start;
+}
+
+.adm-help-sent__title {
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: var(--adm-green);
+}
+
+.adm-help-item {
+  display: grid;
+  gap: 0.45rem;
+  padding: 0.85rem 1rem;
+  border: 1px solid var(--adm-line);
+  border-left: 4px solid var(--adm-amber);
+  border-radius: 10px;
+}
+
+.adm-help-item.is-resolved {
+  border-left-color: var(--adm-green);
+  opacity: 0.85;
+}
+
+.adm-help-item__head {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.adm-help-item__message {
+  white-space: pre-wrap;
+}
+
+.adm-replies li {
+  padding: 0.45rem 0.65rem;
+  border-radius: 8px;
+  background: var(--adm-select);
+}
+
+.adm-checks li {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+  align-items: center;
+}
+
+.adm-problems > li {
+  padding: 0.5rem 0.65rem;
+  border-radius: 8px;
+  background: #fafbff;
+}
+
+.adm-problems ul {
+  margin: 0.25rem 0 0;
+  padding-left: 1.2rem;
+}
+
+.adm-stat--warn {
+  border-color: #f0c36a;
+  background: var(--adm-amber-soft);
+}
+
+.adm-stat--bad {
+  border-color: #f2b8b5;
+  background: var(--adm-red-soft);
+}
+
+/* Campus map editor */
+.adm-map-editor {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(16rem, 22rem);
+  gap: 1rem;
+  align-items: start;
+}
+
+@media (max-width: 1000px) {
+  .adm-map-editor {
+    grid-template-columns: 1fr;
+  }
+}
+
+.adm-map-editor__plan {
+  overflow: hidden;
+  border: 1px solid var(--adm-line);
+  border-radius: 14px;
+}
+
+.adm-map-editor__placing {
+  cursor: crosshair;
+}
+
+.adm-map-editor__panel {
+  position: sticky;
+  top: 1rem;
+}
+
+.adm-map-editor__photo {
+  width: 100%;
+  max-height: 14rem;
+  object-fit: cover;
+  border-radius: 8px;
+}
+
+.adm-map-preview {
+  max-width: 52rem;
+  padding: 1rem;
+  border-radius: 14px;
+  color: #edefff;
+  background: #0b0d2b;
+}
+
+/* GPay payment check: the screenshot big on the left, the checks on the right. */
+.adm-verify {
+  grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr);
+  gap: 1.25rem;
+  align-items: start;
+}
+
+.adm-verify__side {
+  display: grid;
+  gap: 0.85rem;
+}
+
+@media (max-width: 860px) {
+  .adm-verify {
+    grid-template-columns: 1fr;
+  }
+}
+
+.adm-shot--big {
+  margin: 0;
+}
+
+.adm-shot__frame {
+  display: block;
+  max-width: 100%;
+  padding: 0;
+  border: 0;
+  background: none;
+  cursor: zoom-in;
+}
+
+.adm-shot--big img {
+  width: auto;
+  max-width: 100%;
+  max-height: 72vh;
+}
+
+.adm-shot--zoom .adm-shot__frame {
+  max-height: 80vh;
+  overflow: auto;
+  cursor: zoom-out;
+}
+
+.adm-shot--zoom img {
+  max-width: none;
+  max-height: none;
+}
+
+.adm-wait {
+  display: grid;
+  gap: 0.4rem;
+  padding: 2.5rem 1.25rem;
+  border: 2px dashed var(--adm-line);
+  border-radius: 12px;
+  text-align: center;
+  background: var(--adm-bg);
+}
+
+.adm-wait__title {
+  margin: 0;
+  font-size: 1.2rem;
+  font-weight: 700;
+}
+
+.adm-field--big input {
+  padding: 0.7rem 0.8rem;
+  font-size: 1.2rem;
+  letter-spacing: 0.04em;
+}
+
+/* Desk: what a GPay payment from Student login looks like, step by step. */
+.adm-gpay-steps {
+  display: grid;
+  gap: 0.35rem;
+  margin: 0.4rem 0 0;
+  padding: 0.75rem 0.9rem 0.75rem 2rem;
+  border-radius: 10px;
+  background: var(--adm-select);
+}
+
+.adm-await {
+  display: grid;
+  gap: 1rem;
+}
+
+.adm-await__top {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem 2.5rem;
+  align-items: center;
+}
+
+.adm-await__id {
+  text-align: center;
+}
+
+.adm-await__id p {
+  margin: 0.2rem 0;
+}
+
+.adm-await__steps {
+  flex: 1 1 22rem;
+  margin: 0;
+  font-size: 1.05rem;
+}
+
+.adm-await__checked {
+  margin: 0;
+}
+
+.adm-draft {
+  margin-bottom: 0.75rem;
+}
+
+.adm-new__saved {
+  font-size: 0.9rem;
+}
+
+.adm-proof .adm-shot {
+  margin: 0.25rem 0 0.75rem;
+}
+
+.adm-warn-text {
+  color: var(--adm-amber);
+}
+
+.adm-h4 {
+  margin: 1.25rem 0 0.5rem;
+  font-size: 1rem;
+}
+
+.adm-table--muted td {
+  color: var(--adm-muted);
+}
+
+/* A payment with its evidence: screenshot, the student's transaction ID, the one entered. */
+.adm-payrecs {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.adm-payrec {
+  display: grid;
+  gap: 0.5rem;
+  padding: 0.75rem 0.9rem;
+  border: 1px solid var(--adm-line);
+  border-radius: 10px;
+  background: var(--adm-surface);
+}
+
+.adm-payrec__head {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem 0.75rem;
+  align-items: center;
+}
+
+.adm-payrec__facts {
+  display: grid;
+  gap: 0.35rem;
+  margin: 0;
+}
+
+.adm-payrec__facts > div {
+  display: grid;
+  grid-template-columns: minmax(10rem, 15rem) 1fr;
+  gap: 0.75rem;
+}
+
+.adm-payrec__facts dt {
+  color: var(--adm-muted);
+}
+
+.adm-payrec__facts dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 640px) {
+  .adm-payrec__facts > div {
+    grid-template-columns: 1fr;
+    gap: 0.1rem;
+  }
+}
+
+/* The desk number: chosen once per sign-in, shown in the header. */
+.adm-desk-choose {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem 1rem;
+  align-items: center;
+  margin: 0.75rem 1rem 0;
+}
+
+.adm-bar__side {
+  position: relative;
+}
+
+.adm-desk-popover {
+  position: absolute;
+  top: 100%;
+  right: 0;
+  z-index: 20;
+  min-width: 18rem;
+  box-shadow: 0 8px 24px rgb(0 0 0 / 0.15);
 }

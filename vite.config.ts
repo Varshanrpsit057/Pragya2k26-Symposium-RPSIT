@@ -23,15 +23,17 @@ function apiUrl(): string {
 const devProxy = process.env.DEV_API_PROXY ? { '/api': { target: process.env.DEV_API_PROXY, changeOrigin: true } } : undefined;
 
 /**
- * /landing/admin → /landing/admin/ in the dev server and preview, as Amplify Hosting does for
- * a folder. Only these local servers: the public site itself never mentions the admin path.
+ * /landing/admin → /landing/admin/ (and the same for the student page) in the dev server and
+ * preview, as Amplify Hosting does for a folder. The site links to the student page with the
+ * slash already; it never mentions the admin path.
  */
+const FOLDERS = ['/landing/admin', '/landing/student'];
 const adminFolderRedirect = (): Plugin => {
   const redirect: Connect.NextHandleFunction = (request, response, next) => {
     const [path, query] = (request.url ?? '').split('?');
-    if (path !== '/landing/admin') return next();
+    if (!FOLDERS.includes(path)) return next();
     response.statusCode = 301;
-    response.setHeader('Location', `/landing/admin/${query ? `?${query}` : ''}`);
+    response.setHeader('Location', `${path}/${query ? `?${query}` : ''}`);
     response.end();
   };
   return {
@@ -49,10 +51,12 @@ export default defineConfig({
   build: {
     target: 'es2022',
     rollupOptions: {
-      // The public site, and the admin dashboard at /landing/admin/ (never linked from the site).
+      // The public site, the admin dashboard at /landing/admin/ (never linked from the site),
+      // and the event-day student page at /landing/student/ (linked on the event day).
       input: {
         main: resolve(import.meta.dirname, 'index.html'),
         admin: resolve(import.meta.dirname, 'landing/admin/index.html'),
+        student: resolve(import.meta.dirname, 'landing/student/index.html'),
       },
     },
   },

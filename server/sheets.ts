@@ -3,7 +3,9 @@
  * (The approval workflow itself is kept in DynamoDB; each row mirrors it.)
  *
  * Columns are found by their header, so organisers may reorder them or add their own
- * (e.g. "Checked in"); missing ones are added at the end. Values are written RAW, so
+ * (e.g. "Checked in"); missing ones are added at the end. A column the API no longer
+ * writes (e.g. "Non-Technical Events" from before the symposium became technical-only)
+ * stays as it is. Values are written RAW, so
  * nothing a participant types can ever run as a formula. Rows are found by their
  * Registration ID, so a row is never added twice.
  *
@@ -15,6 +17,7 @@ import { GoogleApiError, type GoogleClient } from './google';
 export const COLUMNS = {
   id: 'Registration ID',
   registeredAt: 'Registration Timestamp (IST)',
+  source: 'Registration Source',
   name: 'Student Name',
   college: 'College Name',
   department: 'Department',
@@ -22,12 +25,22 @@ export const COLUMNS = {
   email: 'Email',
   phone: 'Phone',
   technicalEvents: 'Technical Events',
-  nonTechnicalEvents: 'Non-Technical Events',
   eventCount: 'Events Selected',
   feePerEvent: 'Fee per Event (On-site)',
   eventFee: 'Amount Payable at Venue',
   amountPaid: 'Payment Amount (Gate Pass)',
   transactionId: 'Transaction ID',
+  gatePassPayment: 'Gate Pass Payment',
+  eventFeesPaid: 'Event Fees Paid',
+  attendedEvents: 'Attended Events',
+  teams: 'Teams',
+  gatePassStudentTxn: 'Gate Pass Txn ID (typed by student)',
+  gatePassStaffTxn: 'Gate Pass Txn ID (entered by staff)',
+  gatePassApprovedBy: 'Gate Pass Approved By',
+  eventFeeDetails: 'Event Fee Details',
+  attendanceDetails: 'Attendance Details',
+  screenshotLinks: 'Student Login Screenshots',
+  recordLink: 'Student Record (JSON) Link',
   paymentFileId: 'Payment File ID',
   paymentFileName: 'Payment File Name',
   paymentLink: 'Payment Screenshot Link',
@@ -215,8 +228,8 @@ export class SheetsStore {
 
     const widths: Partial<Record<ColumnKey, number>> = {
       id: 110, registeredAt: 165, name: 180, college: 280, department: 280, year: 85, email: 240, phone: 115,
-      technicalEvents: 230, nonTechnicalEvents: 230, eventCount: 90, feePerEvent: 105, eventFee: 120, amountPaid: 120,
-      transactionId: 160, paymentFileId: 150, paymentFileName: 190, paymentLink: 260, status: 125, reviewedAt: 165,
+      technicalEvents: 230, eventCount: 90, feePerEvent: 105, eventFee: 120, amountPaid: 120,
+      transactionId: 160, source: 100, gatePassPayment: 190, eventFeesPaid: 260, attendedEvents: 230, teams: 230, paymentFileId: 150, paymentFileName: 190, paymentLink: 260, status: 125, reviewedAt: 165,
       reviewedBy: 110, passStatus: 100, passFileId: 150, passFileName: 215, passLink: 260, emailStatus: 100,
       emailSentAt: 165, emailAttempts: 90, notes: 360,
     };
@@ -224,6 +237,7 @@ export class SheetsStore {
       ['status', 'APPROVED', '#d9f2e3'],
       ['status', 'REJECTED', '#fbd9d9'],
       ['status', 'PENDING', '#fff1cc'],
+      ['status', 'CANCELLED', '#e3e3e3'],
       ['passStatus', 'GENERATED', '#d9f2e3'],
       ['passStatus', 'FAILED', '#fbd9d9'],
       ['emailStatus', 'SENT', '#d9f2e3'],

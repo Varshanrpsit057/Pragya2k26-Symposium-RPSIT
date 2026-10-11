@@ -3,6 +3,7 @@ import { site } from '../../content/site';
 import { API_BASE } from '../../lib/api';
 import { RegistrationError, type StatusResult } from '../../lib/registration';
 import { checkStatus, passDownloadUrl, type OwnRegistration } from '../../lib/registrationClient';
+import { HelpDeskLine } from '../help/HelpDeskLine';
 import { Modal } from '../modal/Modal';
 import { SpecularButton } from '../ui/SpecularButton';
 import './RegistrationModal.css';
@@ -14,6 +15,7 @@ const STATE_LABEL: Record<StatusResult['status'], string> = {
   PENDING: 'Pending verification',
   APPROVED: 'Approved',
   REJECTED: 'Not approved',
+  CANCELLED: 'Cancelled',
 };
 
 const errorMessage = (error: unknown) =>
@@ -97,11 +99,13 @@ function StatusView({ own, onClose }: { own: OwnRegistration; onClose: () => voi
           <p className={`reg-state reg-state--${result.status.toLowerCase()}`}>{STATE_LABEL[result.status]}</p>
           <p className="reg-done__mail">
             {result.status === 'PENDING' &&
-              'The organisers have not verified your payment yet. Once your registration is approved, your participant pass (PDF) and a confirmation email are sent to you.'}
+              `The organisers have not verified your payment yet. Once your registration is approved, download your participant pass (PDF) here${site.registration.passByEmail ? '; it is emailed to you too' : ''}.`}
             {result.status === 'APPROVED' &&
-              'Your registration is confirmed. Your participant pass has been emailed to you, and you can also download it here.'}
+              `Your registration is confirmed. Download your participant pass here${site.registration.passByEmail ? ' (it was emailed to you too)' : ''}.`}
             {result.status === 'REJECTED' &&
               `Your registration was not approved${result.reason ? `: ${result.reason}` : '.'} Please contact the organisers if you think this is a mistake.`}
+            {result.status === 'CANCELLED' &&
+              `Your registration was cancelled by the organisers${result.reason ? `: ${result.reason}` : '.'} Your participant pass is no longer valid. Please contact the organisers if you think this is a mistake.`}
           </p>
           {result.status === 'APPROVED' &&
             (result.passAvailable ? (
@@ -128,6 +132,7 @@ function StatusView({ own, onClose }: { own: OwnRegistration; onClose: () => voi
         </p>
       )}
 
+      <HelpDeskLine />
       <div className="reg-done__actions">
         <SpecularButton variant="ghost" onClick={refresh} busy={loading}>
           Refresh

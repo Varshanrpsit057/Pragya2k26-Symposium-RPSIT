@@ -48,6 +48,20 @@ export const DEPARTMENTS = [
 
 export const NO_EVENTS_MESSAGE = 'Please select at least one event to continue.';
 
+/** How a participant enters a team event: alone, or with a team (each member pays separately). */
+export type ParticipationMode = 'INDIVIDUAL' | 'TEAM';
+
+/** A team name as typed: letters, digits and simple punctuation; tidied. */
+export function teamNameProblem(value: string): string | undefined {
+  const name = tidy(value);
+  if (name.length < 2) return 'Enter the team name.';
+  if (name.length > 40) return 'Keep the team name under 40 characters.';
+  return /^[\p{L}\p{N}][\p{L}\p{M}\p{N} &.,()'!-]*$/u.test(name) ? undefined : 'Use letters, numbers and simple punctuation in the team name.';
+}
+
+/** Team names match whatever their case or spacing: "Code Ninjas" and "code  ninjas" are one team. */
+export const teamKey = (value: string) => tidy(value).toLowerCase();
+
 export interface Fees {
   /** Gate pass, paid online with the registration (₹). */
   gatePass: number;
@@ -246,7 +260,11 @@ export interface ParticipantDetails {
 export interface RegistrationRecord {
   participant: ParticipantDetails;
   technicalEvents: string[];
-  nonTechnicalEvents: string[];
+  /**
+   * Only on registrations stored before PRAGYA 2026 became technical-only: the names of the
+   * discontinued events chosen then. They are never charged, marked or put on a pass.
+   */
+  nonTechnicalEvents?: string[];
   payment: {
     gatePassAmount: number;
     transactionId: string;
@@ -279,8 +297,7 @@ export function buildRegistrationRecord(
       phone: normalisePhone(input.phone),
       email: input.email.trim().toLowerCase(),
     },
-    technicalEvents: chosen.filter((event) => event.category === 'technical').map((event) => event.name),
-    nonTechnicalEvents: chosen.filter((event) => event.category === 'non-technical').map((event) => event.name),
+    technicalEvents: chosen.map((event) => event.name),
     payment: { gatePassAmount: fees.gatePass, transactionId: input.transactionId.trim() },
     eventRegistration: { eventCount, feePerEvent: fees.perEvent, totalEventFee: eventTotal },
   };
@@ -314,8 +331,11 @@ export interface RegistrationPayload {
   upload: { id: string };
 }
 
-/** Where a registration stands. Only an organiser can move it from PENDING. */
-export type RegistrationStatus = 'PENDING' | 'APPROVED' | 'REJECTED';
+/**
+ * Where a registration stands. Only an organiser can move it from PENDING; an admin can
+ * cancel an APPROVED one (a duplicate, wrong details, or a participant who withdrew).
+ */
+export type RegistrationStatus = 'PENDING' | 'APPROVED' | 'REJECTED' | 'CANCELLED';
 
 /** The server's answer once the registration and its screenshot are stored. */
 export interface RegistrationSuccess {
@@ -343,7 +363,7 @@ export interface StatusResult {
   registeredAt: string;
   /** The participant pass can be downloaded (approved, and the PDF is ready). */
   passAvailable: boolean;
-  /** Why it was rejected, when the organisers gave a reason. */
+  /** Why it was rejected or cancelled, when the organisers gave a reason. */
   reason?: string;
 }
 
@@ -353,8 +373,44 @@ export const SUBMISSION_ID = /^[A-Za-z0-9_-]{32,64}$/;
 /** A screenshot upload handed out by the server (a UUID). */
 export const UPLOAD_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 
-/** A Registration ID, e.g. PRG26-0042. */
-export const REGISTRATION_ID = /^PRG26-\d{4,6}$/;
+/**
+ * Registration IDs are short numbers that read in three parts, easy to remember:
+ *   26 1 007   the year (2026), 1 = online (the public website), participant 7
+ *   26 2 015   the year (2026), 2 = the registration desk on the event day, participant 15
+ * The participant number has three digits (four from the thousandth). Online registrations
+ * made before this format keep their IDs (PRG26-0042), which stay valid everywhere; new online
+ * IDs continue the same serial, so no number is ever reused.
+ */
+export const ONLINE_ID_PREFIX = '261';
+export const ONSITE_ID_PREFIX = '262';
+export const REGISTRATION_ID = /^(?:26[12]\d{3,4}|PRG26-\d{4,6})$/;
+
+export const formatOnlineId = (serial: number) => `${ONLINE_ID_PREFIX}${String(serial).padStart(3, '0')}`;
+export const formatOnsiteId = (serial: number) => `${ONSITE_ID_PREFIX}${String(serial).padStart(3, '0')}`;
+
+/** '261042' or the earlier 'PRG26-0042' → 42 (online serials); NaN for anything else. */
+export function onlineSerial(id: string): number {
+  if (/^PRG26-\d+$/.test(id)) return Number.parseInt(id.slice('PRG26-'.length), 10);
+  if (/^261\d{3,4}$/.test(id)) return Number.parseInt(id.slice(3), 10);
+  return Number.NaN;
+}
+
+/** A Registration ID as typed: spaces, dashes or dots between its parts (26 2 005, 26-2-005) are dropped. */
+export function normaliseRegistrationId(raw: string): string {
+  const id = raw.replace(/\s+/g, '').toUpperCase();
+  return /^26[-.]?[12][-.]?\d{3,4}$/.test(id) ? id.replace(/[-.]/g, '') : id;
+}
+
+/**
+ * The parts of a Registration ID, to show it grouped (26 · 1 · 007) where people read it out:
+ * the year, online (1) or desk (2), and the participant number. Other IDs stay whole.
+ */
+export function idParts(id: string): { parts: string[]; meaning: string | null } {
+  const match = /^(26)([12])(\d{3,4})$/.exec(id);
+  if (!match) return { parts: [id], meaning: null };
+  const [, year, source, number] = match;
+  return { parts: [year, source, number], meaning: `20${year} · ${source === '1' ? 'online' : 'registration desk'} · participant ${Number(number)}` };
+}
 
 /** A random id for one filled-in form. Works on plain http too, unlike crypto.randomUUID. */
 export function newSubmissionId(): string {

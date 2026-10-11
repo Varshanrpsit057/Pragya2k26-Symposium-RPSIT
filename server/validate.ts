@@ -3,6 +3,7 @@
  * server never relies on that: every request is checked again here.
  */
 import { eventCatalog } from '../src/content/eventCatalog';
+import type { PaymentMethod } from '../src/lib/admin';
 import {
   ACCEPTED_SCREENSHOT_TYPES,
   MAX_SCREENSHOT_BYTES,
@@ -10,6 +11,8 @@ import {
   UPLOAD_ID,
   buildRegistrationRecord,
   splitDepartment,
+  teamNameProblem,
+  tidy,
   validateField,
   type Fees,
   type RegistrationErrors,
@@ -176,6 +179,116 @@ export function validatePayload(body: unknown, fees: Fees): ValidationResult {
       emailKey: record.participant.email,
       transactionKey: record.payment.transactionId.toUpperCase(),
       uploadId,
+    },
+  };
+}
+
+// ---------------------------------------------------------------------------------------
+// The event day: the registration desk and the event coordinators.
+
+export type ReceivedPayment = { method: PaymentMethod; reference: string | null };
+
+const NOT_PROOF =
+  'Tick the box to confirm the money was received: in hand for cash, or seen credited in the receiving account for UPI. A QR scan, screenshot or transaction ID alone is not proof of payment.';
+
+/**
+ * Money taken at the venue (the gate pass at the desk, or an event fee): cash or UPI, with
+ * the staff member's confirmation that it was actually received. A UPI reference may be noted
+ * but is never accepted as the proof itself.
+ */
+export function readReceivedPayment(value: unknown): { ok: true; value: ReceivedPayment } | { ok: false; error: string } {
+  if (!isObject(value)) return { ok: false, error: 'Choose how the money was paid: cash or UPI.' };
+  const method = value.method;
+  if (method !== 'CASH' && method !== 'UPI') return { ok: false, error: 'Choose how the money was paid: cash or UPI.' };
+  if (value.confirmedReceived !== true) return { ok: false, error: NOT_PROOF };
+  const reference = str(value.reference, 60).trim();
+  if (method === 'CASH' && reference) return { ok: false, error: 'A cash payment has no transaction reference.' };
+  if (reference && !/^[A-Za-z0-9]{6,35}$/.test(reference)) {
+    return { ok: false, error: 'The UPI reference must be the 6–35 letters or digits shown in the payment app.' };
+  }
+  return { ok: true, value: { method, reference: reference || null } };
+}
+
+export interface ValidOnsiteRegistration {
+  submissionId: string;
+  record: RegistrationRecord;
+  emailKey: string;
+  phoneKey: string;
+  payment: ReceivedPayment;
+  /** The team name, when the participant comes as part of a team; null on their own. */
+  teamName: string | null;
+  /** The events chosen at the desk (catalog order); each event's ₹50 is paid at its venue. */
+  eventIds: string[];
+  /**
+   * GPay paid by the student from their own phone: they sign in to Student login, pay and upload
+   * the screenshot, and staff approve it with the transaction ID. Until then it waits (PENDING).
+   */
+  studentPays: boolean;
+}
+
+const ONSITE_FIELDS: RegistrationField[] = ['name', 'department', 'departmentOther', 'year', 'college', 'phone', 'email'];
+
+/**
+ * Checks a registration typed in at the desk: the same field rules as the website's form, the
+ * events the participant chooses (none is fine: they can join one at its venue later), and the
+ * ₹100 gate pass received. Event fees are paid at each venue, to its coordinator.
+ */
+export function validateOnsitePayload(
+  body: unknown,
+  fees: Fees,
+): { ok: true; value: ValidOnsiteRegistration } | { ok: false; error: string; fieldErrors?: RegistrationErrors } {
+  if (!isObject(body) || !isObject(body.participant)) return { ok: false, error: 'The registration could not be read. Please try again.' };
+  const submissionId = str(body.submissionId, 80);
+  if (!SUBMISSION_ID.test(submissionId)) return { ok: false, error: 'The registration could not be read. Please try again.' };
+
+  const requested: unknown[] = Array.isArray(body.events) ? body.events : [];
+  if (requested.some((id) => !eventCatalog.some((event) => event.id === id))) return { ok: false, error: 'Choose events from the list only.' };
+  const eventIds = eventCatalog.filter((event) => requested.includes(event.id)).map((event) => event.id);
+  const mode = body.participation ?? 'INDIVIDUAL';
+  if (mode !== 'INDIVIDUAL' && mode !== 'TEAM') return { ok: false, error: 'Choose individual or team.' };
+  const rawTeam = str(body.teamName, 80);
+  const teamProblem = mode === 'TEAM' ? teamNameProblem(rawTeam) : undefined;
+  if (teamProblem) return { ok: false, error: teamProblem };
+
+  const participant = body.participant;
+  const department = str(participant.department).trim();
+  const input: Omit<RegistrationInput, 'screenshot'> = {
+    name: str(participant.name),
+    ...(department ? splitDepartment(department) : { department: '', departmentOther: '' }),
+    college: str(participant.college),
+    year: str(participant.year, 40),
+    phone: str(participant.phone, 40),
+    email: str(participant.email, 300),
+    events: eventIds,
+    transactionId: '',
+  };
+
+  const fieldErrors: RegistrationErrors = {};
+  for (const field of ONSITE_FIELDS) {
+    const message = validateField(field, { ...input, screenshot: null });
+    if (message) fieldErrors[field] = message;
+  }
+  if (fieldErrors.departmentOther) {
+    fieldErrors.department = fieldErrors.departmentOther;
+    delete fieldErrors.departmentOther;
+  }
+  const studentPays = isObject(body.payment) && body.payment.method === 'UPI' && body.payment.studentPays === true;
+  const payment: ReturnType<typeof readReceivedPayment> = studentPays ? { ok: true, value: { method: 'UPI', reference: null } } : readReceivedPayment(body.payment);
+  if (!payment.ok) fieldErrors.transactionId = payment.error;
+  if (Object.keys(fieldErrors).length || !payment.ok) return { ok: false, error: 'Please check the highlighted fields.', fieldErrors };
+
+  const record = buildRegistrationRecord({ ...input, transactionId: payment.value.reference ?? '' }, eventCatalog, fees);
+  return {
+    ok: true,
+    value: {
+      submissionId,
+      record,
+      emailKey: record.participant.email,
+      phoneKey: record.participant.phone,
+      teamName: mode === 'TEAM' ? tidy(rawTeam) : null,
+      eventIds,
+      payment: payment.value,
+      studentPays,
     },
   };
 }

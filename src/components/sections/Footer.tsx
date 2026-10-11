@@ -1,5 +1,6 @@
 import { crew } from '../../content/crew';
 import { site } from '../../content/site';
+import { HelpDeskLine } from '../help/HelpDeskLine';
 import { ContactIcon } from '../icons/ContactIcon';
 import { SocialIcon } from '../icons/SocialIcon';
 import type { NavItem } from '../nav/PillNav';
@@ -35,7 +36,7 @@ export function Footer({ links }: FooterProps) {
       <div className="container footer__grid">
         <div className="footer__brand">
           {/* The college crest, as in the header; the institution is named just below */}
-          <img className="footer__logo" src="/images/rpsit-logo-sm.webp" alt="" width="73" height="120" loading="lazy" />
+          <img className="footer__logo" src="/images/rpsit-crest.webp" alt="" width="153" height="240" loading="lazy" />
           <p className="footer__wordmark">
             {site.name} <span className="footer__year">{site.year}</span>
           </p>
@@ -89,6 +90,11 @@ export function Footer({ links }: FooterProps) {
               </li>
             )}
           </ul>
+
+          <div className="footer__helpdesk">
+            <h3 className="footer__subheading">Help desk</h3>
+            <HelpDeskLine lead="Call for any help" />
+          </div>
 
           {hasContacts ? (
             <div className="footer__coordinators">

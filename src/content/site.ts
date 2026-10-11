@@ -36,6 +36,13 @@ export const site: SiteInfo = {
     // The hero countdown runs to this moment (IST); after it, registration shows as closed.
     closesAt: '2026-10-16T23:59:00',
     deadline: '16 October 2026, 11:59 PM IST',
+    // The event day (IST): the website switches to on-site registration at midnight on
+    // 17 October, and closes every registration when the day ends.
+    onsite: {
+      opensAt: '2026-10-17T00:00:00',
+      closesAt: '2026-10-18T00:00:00',
+      desk: 'the registration desk at the college',
+    },
     note: null,
     gatePassFee: 100,
     eventFee: 50,
@@ -45,6 +52,14 @@ export const site: SiteInfo = {
       qrImage: '/images/upi-qr.jpg',
     },
     fallbackFormUrl: 'https://forms.gle/FXEpHYS2AMrZ8U4c8',
+    // Passes are not emailed for now: students download them from the website.
+    passByEmail: false,
+  },
+  // The help desk's numbers show on every page that may need them. Replace with the help desk's own numbers.
+  helpDesk: {
+    phones: [{ label: 'Help desk', phone: '+91 73582 13736' }],
+    where: 'At the registration desk, at the main entrance of the main building',
+    hours: '17 October 2026, 8:00 AM to 5:00 PM',
   },
   contacts: [{ name: 'Balajimanikandhaan S.S', role: 'Overall Student Coordinator · III Year AI&DS', phone: '+91 73582 13736' }],
   email: null,

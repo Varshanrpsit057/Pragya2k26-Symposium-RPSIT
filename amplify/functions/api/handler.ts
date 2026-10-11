@@ -10,6 +10,7 @@
  */
 import type { APIGatewayProxyEventV2, APIGatewayProxyStructuredResultV2, ScheduledEvent } from 'aws-lambda';
 import { readConfig } from '../../../server/config';
+import { encodeResponse } from '../../../server/compress';
 import { DriveStore } from '../../../server/drive';
 import { DynamoStore } from '../../../server/dynamoStore';
 import { S3Files } from '../../../server/files';
@@ -51,6 +52,7 @@ function getService(): Service | null {
     mail: config.mail,
     admin: config.admin,
     rateLimit: config.rateLimit,
+    schedule: config.schedule,
     log,
   });
   return service;
@@ -79,7 +81,8 @@ export const handler = async (
       getService(),
       log,
     );
-    return { statusCode: response.status, headers: response.headers, body: response.body };
+    // Compressed for the browser (the staff lists shrink to a fraction).
+    return { statusCode: response.status, ...encodeResponse(response, headers['accept-encoding']) };
   }
 
   // The schedule: retry what failed earlier.

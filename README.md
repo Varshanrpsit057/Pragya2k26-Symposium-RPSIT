@@ -9,14 +9,21 @@ It is deployed straight from GitHub to **AWS Amplify**: no servers to run, no SS
 
 - **Public website** (React + TypeScript + Vite, prerendered): the hero with the PRAGYA 2K26 emblem
   (drawn in code, in the site's colours; scrolling turns it into a faint backdrop for the whole page)
-  and the countdown to the registration deadline (**11:59 PM IST, 16 October 2026**); the ten events,
-  folded until a visitor reaches one, each with a See More window (rules, time, venue, prizes,
-  coordinators); the registration form; and the footer (coordinator contact, credits beside the map).
+  and the countdown to the registration deadline (**11:59 PM IST, 16 October 2026**); the five
+  technical events (Pro-Pitch, Viz Craft, Paper Presentation, Code Flex, Cognix), folded until a
+  visitor reaches one, each with a See More window (rules, time, venue, prizes, coordinators); the
+  registration form; and the footer (coordinator contact, credits beside the map). PRAGYA 2026 runs
+  technical events only: the website and the API accept no other event.
   The Dev Crew opens from the incognito button next to Contact in the navigation.
 - **Registration form**: participant details, event selection, the ₹100 gate-pass payment details,
   the payment screenshot and the transaction ID.
-- **Admin dashboard** at `/landing/admin/`: sign in, check each payment screenshot, then approve or
-  reject. It is not linked anywhere on the public site.
+- **Registration schedule** (automatic, Asia/Kolkata, enforced by the API from its clock, no deploy
+  needed): online until **11:59 PM IST, 16 October**; on **17 October** only the registration desk
+  registers (on-site mode); from midnight after the event day, every registration is closed. The site
+  switches its countdown, Register section and form by itself. See section 12.
+- **Staff dashboard** at `/landing/admin/`: every staff member signs in with their own account and
+  sees only what their role allows (Admin, Registration desk, Event coordinator, Certificate team);
+  the server checks the role on every request. It is not linked anywhere on the public site.
 - **Registration workflow**:
 
   ```
@@ -28,6 +35,10 @@ It is deployed straight from GitHub to **AWS Amplify**: no servers to run, no SS
   Submitting the form never confirms a registration: only an admin's approval does. The participant
   pass is made, stored and handed out by the server only after approval.
 
+  On the event day the desk registers walk-ins (`PRG26-OS-0001`, …, approved at once when the desk
+  records the ₹100 gate pass in cash or by UPI), and each event's coordinator verifies the ₹50 event
+  fee, marks attendance, enters the winners and submits the results for certificates (section 12).
+
 ## 2. Architecture
 
 ```
@@ -36,7 +47,8 @@ GitHub ──push──▶ AWS Amplify Hosting (build: amplify.yml)
                    └─ backend: amplify/ (Amplify Gen 2, AWS CDK)
                         HTTP API (API Gateway) /api/*  ──▶  Lambda "pragya-api" (Node.js 22)
                         EventBridge, every 10 min      ──▶  same Lambda: retries
-                        DynamoDB  Registrations, Control   (workflow state, IDs, sessions)
+                        DynamoDB  Registrations, Control   (workflow state, IDs, sessions,
+                                                            staff accounts, event results)
                         S3 (private)  payment screenshots, participant passes
                         SSM (Amplify secrets)              Google + admin credentials
                         CloudWatch Logs
@@ -57,15 +69,21 @@ GitHub ──push──▶ AWS Amplify Hosting (build: amplify.yml)
   their form's random submission id, stored only as a SHA-256 hash. Through it they see their status
   and, **only once approved**, get a one-minute download link for their own pass. A pending or
   rejected registration, another student's ID or a guessed key gets nothing.
-- **Admin sign-in**: one username and a scrypt password hash, both Amplify secrets. Sign-in gives a
-  random session token (8 hours, stored only as a hash, with sign-in attempts rate limited). Every
-  `/api/admin/*` route checks it on the server. Changing the password signs every session out.
+- **Staff sign-in**: the owner's admin account is one username and a scrypt password hash, both
+  Amplify secrets (unchanged). Further staff accounts (desk, coordinators, certificate team, more
+  admins) are made in the dashboard and stored in the Control table with scrypt hashes. Sign-in gives
+  a random session token (8 hours, stored only as a hash, with sign-in attempts rate limited). Every
+  `/api/admin/*` route checks the token and the account's role on the server, reading the account
+  again on each request, so a new role, deactivation or password change applies at once.
 
 ```
 amplify/            backend.ts (DynamoDB, S3, HTTP API, CORS, throttling, logs), functions/api (Lambda)
-server/             the API: http.ts (routes), service.ts (workflow), auth.ts, dynamoStore.ts,
-                    files.ts (S3), sheets.ts, drive.ts, gmail.ts, google.ts, pass.ts (PDF), validate.ts
-src/                the website (content in src/content/), src/admin/ (dashboard)
+server/             the API: http.ts (routes and the permission each needs), service.ts (workflow,
+                    desk), events.ts (fees, attendance, winners, results), roles.ts, staffAccounts.ts,
+                    reports.ts, auth.ts, dynamoStore.ts, files.ts (S3), sheets.ts, drive.ts, gmail.ts,
+                    google.ts, pass.ts (PDF), validate.ts
+src/                the website (content in src/content/), src/admin/ (staff dashboard),
+                    src/lib/schedule.ts (registration phases), src/lib/staff.ts (roles), src/lib/csv.ts
 landing/admin/      the dashboard's page (built to dist/landing/admin/index.html)
 scripts/            google-auth.mjs, admin-password.ts, check-secrets.mjs, prerender.mjs
 amplify.yml         Amplify build;  customHttp.yml  security headers
@@ -79,8 +97,8 @@ layer has a limit, so a flood of requests is turned away cheaply instead of runn
 | Layer | Limit |
 | --- | --- |
 | Website (Amplify Hosting, CloudFront) | Static and cached at the edge. Optionally turn on the **Amplify firewall** (below). |
-| API Gateway, per route, all visitors together | `uploads`, `register` 50/s (burst 100) · `status` 25/s · `pass` 10/s · `admin/login` 2/s (burst 10) · other admin routes 20/s GET, 10/s POST · `health` 5/s · whole API 100/s (burst 200). Unknown paths get a 404 without running the function. |
-| Lambda, per network address | registration (upload + submit) `RATE_LIMIT_MAX` per `RATE_LIMIT_WINDOW_MINUTES` (300 per 10 min: a college network shares one address) · status/pass 120 per 10 min · admin sign-in 10 per 15 min |
+| API Gateway, per route, all visitors together | `uploads`, `register` 50/s (burst 100) · `status` 25/s · `pass` 10/s · `admin/login` 2/s (burst 10) · other staff routes 30/s GET (burst 60), 20/s POST (burst 40) · `health` 5/s · whole API 100/s (burst 200). Unknown paths get a 404 without running the function. |
+| Lambda, per network address | registration (upload + submit) `RATE_LIMIT_MAX` per `RATE_LIMIT_WINDOW_MINUTES` (300 per 10 min: a college network shares one address) · status/pass 120 per 10 min · staff sign-in 10 per account name per 15 min, and 100 per address (staff share the college's address on the event day) |
 | Lambda, concurrency (optional) | `API_RESERVED_CONCURRENCY` caps simultaneous runs (e.g. `50`), which bounds cost and the Google API load |
 | Logs | API access logs (address, route, status, latency) and function logs, kept 3 months in CloudWatch |
 
@@ -120,6 +138,7 @@ All values live in AWS, never in git. `.env.example` lists every name.
 | `ALLOWED_ORIGINS` | none | extra site addresses allowed to call the API, e.g. a custom domain `https://pragya.rpsit.ac.in` |
 | `RATE_LIMIT_MAX` / `RATE_LIMIT_WINDOW_MINUTES` | `300` / `10` | registration requests per IP address per window |
 | `API_RESERVED_CONCURRENCY` | none | cap on simultaneous API runs, e.g. `50`; leave unset on a new AWS account (its concurrency quota may be too low to reserve any) |
+| `SCHEDULE_ONLINE_CLOSES_AT` / `SCHEDULE_ONSITE_OPENS_AT` / `SCHEDULE_ONSITE_CLOSES_AT` | none | **sandbox rehearsals only**: move the registration schedule (IST, e.g. `2026-10-12T09:00:00`). Leave unset in production; an unreadable value keeps the API closed and `/api/health` names it |
 
 Set automatically (do not set them): `REGISTRATIONS_TABLE`, `CONTROL_TABLE`, `FILES_BUCKET` and the
 website's API address (`VITE_API_URL`, read from `amplify_outputs.json` at build time). Nothing in a
@@ -267,6 +286,106 @@ the build and the secret check.
 | Deploy fails on `ReservedConcurrentExecutions` | The account cannot reserve that much concurrency: lower or remove `API_RESERVED_CONCURRENCY`. |
 | `/landing/admin` shows the main page | Use `/landing/admin/`, or add a rewrite in **Hosting → Rewrites and redirects**: source `/landing/admin`, target `/landing/admin/index.html`, type `200`. |
 | First registration right after the very first deploy says "temporarily unavailable" | The ID counter starts from the sheet's highest ID; the schedule sets it up within 10 minutes of the first deploy, or check the Google settings. |
+| A staff member says "Your role cannot do this" | Their role lacks that permission (dashboard → Roles). An admin changes the role in Staff; it applies at once. |
+| A coordinator says "This event is not assigned to your account" | Admin → Staff → Edit → tick the event. |
+| "Ask an admin to authorise a correction" | The event's results are submitted and locked. An admin opens the event and chooses **Authorise correction** with a reason. |
+| Fees and attendance are not in the Google Sheet yet | Event-day changes reach the sheet with the 10-minute schedule (DynamoDB is the record); wait, or check the sheet's *Event Fees Paid* / *Attended Events* columns later. |
+
+## 12. Event day: desk, coordinators and certificates
+
+### The schedule (automatic)
+
+| When (IST) | Public website | Registration desk | Coordinators |
+| --- | --- | --- | --- |
+| until 16 Oct, 11:59 PM | online form, countdown | closed | read only |
+| 16 Oct, 11:59 PM – midnight | "Online registration closed; on-site on 17 October" | closed | read only |
+| 17 Oct, all day | "On-site registration is open today"; no online form | open | fees, attendance, winners |
+| from 18 Oct, 12:00 AM | "Registration closed" | closed | may still finish and submit results |
+
+The API decides from its own clock on every request (`src/lib/schedule.ts`); the website only mirrors
+it. The Google Form fallback link disappears with the online form, but **the Google Form itself must
+be closed by hand** (Forms → Responses → *Accepting responses* off) at 11:59 PM on 16 October.
+
+### Roles
+
+| Role | May | Events |
+| --- | --- | --- |
+| **Admin** | everything below, plus student coordinator accounts, who is signed in now (with desk numbers), cancelling or deleting records, corrections (void a fee, reopen results), reports and the Excel downloads | all |
+| **Registration desk** | search registrations, register students on-site (cash, or GPay the student pays from Student login), approve GPay payments from the student's screenshot, correct details, add or remove events | all |
+| **Event coordinator** | look up participant IDs, add a participant to the event, take the ₹50 fee (cash, or approve the student's GPay screenshot), mark attendance, enter winners, submit results, download the event's Excel | assigned only |
+| **Certificate team** | read every event's participants (present first) and the three prizes with each student's details; Excel | all (read only) |
+| **Web assistant team** | registrations (read, correct details, retry), help requests and replies, system status, campus map, the Student login switch | all |
+
+The dashboard's **Roles** section shows the same list (it is read from `src/lib/staff.ts`, which the
+server enforces). Students download their own pass from **Student login**; the dashboard does not
+offer passes.
+
+### Desk numbers
+
+Each registration desk sign-in says which desk it is at (picked on the sign-in page, filled in from a
+username like `desk2`, or asked right after signing in). The desk number is kept on every
+registration and gate pass made there; admins see it in the list, the record, **Reports** (by desk),
+the Excel files and **Student coordinators → Signed in now**.
+
+### Money and attendance rules
+
+- Registration status, the gate pass and each event fee are separate records, each with who
+  recorded it, at which desk, and when.
+- Cash counts as received only when the staff member ticks that it is in hand.
+- GPay at the desk or a venue: the student pays from **Student login** (the QR and a UPI-app button)
+  and uploads the screenshot; the desk (gate pass) or the event's coordinator (event fee) checks it,
+  types the transaction ID from it and approves it. A transaction ID is never accepted twice. Each
+  record shows the screenshot, the ID the student typed and the one entered, flagged when they differ.
+- Attendance is marked only after: the gate pass is verified (registration approved), the participant
+  is registered for that event, and that event's fee is recorded. Winners must be marked present.
+- Submitting an event's results snapshots its participant list, attendance list and winners and locks
+  the event. An admin can **Authorise correction** (with a reason); the coordinator then submits again,
+  and earlier submissions stay listed with their times.
+
+### No data is lost
+
+DynamoDB is the record (point-in-time recovery, deletion protection, kept if the stack is deleted).
+Every change is also copied to the Google Sheet (every detail, including transaction IDs, fees and
+attendance) and to a JSON file per student in Drive (**Student Records**, next to the payment
+screenshots folder), and students' screenshots are copied to Drive. If Google is down the copies
+catch up automatically (System status shows it). Deleting a record keeps its whole data in the log,
+its files (S3 keeps every version) and its Sheet row and Drive file, marked DELETED.
+
+### Before the event (manual)
+
+1. Sign in as the owner admin and create accounts in **Student coordinators**: one `DESK` account per
+   laptop (e.g. `desk1`…`desk4`), one or more `COORDINATOR` accounts per event (tick their events),
+   the `CERTIFICATE` and `SUPPORT` (web assistant team) accounts, and any extra admins. Use
+   **Generate** for passwords and hand each over privately.
+2. Rehearse on a sandbox (section 8) with `SCHEDULE_ONSITE_OPENS_AT` set to the rehearsal time, never
+   on the live site.
+3. Make sure whoever approves GPay payments can see the receiving account's credits on the day.
+
+### After the event
+
+The certificate team downloads the results Excel (participants, certificate list of those present,
+winners) from *Results & certificates*; a file named `…-NOT-FINAL-…` contains an event whose
+coordinator has not submitted yet. Admins reconcile cash per staff member and per desk in **Reports**,
+and keep **Download all data (Excel)** as their own copy.
+
+## 13. Going live (do this last)
+
+The code is ready; these steps are yours, in this order. Nothing here is done automatically.
+
+1. **Content to confirm** (`src/content/`): the help desk phone number, place and hours
+   (`site.ts` → `helpDesk`, still a placeholder), the web team and admin numbers for Contact admin
+   (`helpContacts.ts`), the campus map room labels and photos (`campusMap.json`, `confirmed: false`
+   until checked), the team size limits of team events, and the UPI QR image.
+2. **Checks**: `npm run check` passes (lint, tests, build, secret check).
+3. **Merge and deploy**: merge the feature branch into `main` and push; Amplify builds and deploys.
+   This release adds deletion protection to both tables, versioning to the files bucket (it can be
+   suspended later, never removed), and the Student login and Contact admin routes to API Gateway.
+4. **After the deploy**: `/api/health` answers `ready`; sign in as the owner; create the accounts
+   (above). The Sheet gains its new columns and Drive its **Student Records** folder by themselves
+   on the first copy.
+5. **On the day**: every desk signs in with its desk number; check **System status**; keep
+   **Student login** on (pause it only if the desks need the network).
+6. Optional: set `API_RESERVED_CONCURRENCY` (e.g. 50) as a cost ceiling, if the account allows it.
 
 ## Local development
 
@@ -282,7 +401,7 @@ If a real secret is ever committed or pushed, rotate it: deleting it from git is
 
 Content (dates, venue, fees, UPI details, contacts, events, rules) lives in `src/content/`:
 `site.ts` (dates, registration closing time, fees, payment details, college, socials, the overall
-coordinator in `contacts`), `events.ts` and `eventCatalog.ts` (the ten events: description, time,
+coordinator in `contacts`), `events.ts` and `eventCatalog.ts` (the five technical events: description, time,
 venue, prizes, coordinators), `eventInfo.ts` (See More details), `crew.ts` (Dev Crew; `credited`
 members are named under "Developed by" in the footer).
 

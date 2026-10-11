@@ -1,4 +1,5 @@
 import { site } from '../../content/site';
+import { useRegistrationPhase } from '../../hooks/useRegistrationPhase';
 import { EMBLEM_SLOT_ID } from '../brand/BrandEmblem';
 import { RegisterButton } from '../ui/RegisterButton';
 import { SpecularButton } from '../ui/SpecularButton';
@@ -7,6 +8,28 @@ import './Hero.css';
 
 /** 'PRAGYA' and '2026' → the edition mark '2K26'. */
 const edition = `${site.year.slice(0, 1)}K${site.year.slice(-2)}`;
+
+const PHASE_NOTES = {
+  between: `Online registration closed · On-site registration on ${site.dates ?? 'the event day'}`,
+  onsite: 'On-site registration is open today at the registration desk',
+  closed: 'Registration closed',
+} as const;
+
+/** The countdown while online registration is open; then where registration stands. */
+function HeroRegistration() {
+  const phase = useRegistrationPhase();
+  if (phase === 'online') {
+    return site.registration.closesAt ? (
+      <Countdown target={site.registration.closesAt} label="Registration closes in" endedLabel="Registration closed" />
+    ) : null;
+  }
+  return (
+    <p className="countdown countdown--ended" role="status">
+      <span className="countdown__ended-dot" aria-hidden="true" />
+      {PHASE_NOTES[phase]}
+    </p>
+  );
+}
 
 export function Hero() {
   // The date is shown large in the lockup; only the venue is left for the facts below.
@@ -42,9 +65,7 @@ export function Hero() {
           {site.dates && <p className="hero__date">{site.dates}</p>}
         </div>
 
-        {site.registration.closesAt && (
-          <Countdown target={site.registration.closesAt} label="Registration closes in" endedLabel="Registration closed" />
-        )}
+        <HeroRegistration />
 
         <div className="hero__actions">
           <RegisterButton size="lg" magnetic className="spec-btn--intro" />

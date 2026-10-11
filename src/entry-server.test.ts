@@ -9,6 +9,7 @@ describe('prerender', () => {
     expect(html).toContain('PRAGYA');
     expect(html).toContain('R P Sarathy Institute of Technology, Salem');
     expect(html).toContain('id="technical"');
-    expect(html).toContain('id="non-technical"');
+    expect(html).not.toContain('id="non-technical"');
+    expect(html).not.toMatch(/SHORT FILM|E-SPORTS|BRAND IT|EAGLE EYE|VISUAL LOGO/);
   });
 });

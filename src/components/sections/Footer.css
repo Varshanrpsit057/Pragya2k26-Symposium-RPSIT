@@ -68,7 +68,7 @@
 .footer__institution {
   max-width: 30ch;
   margin-top: -0.4rem;
-  color: var(--c-text-muted);
+  color: var(--c-college);
 }
 
 .footer__credentials {
@@ -169,7 +169,7 @@
 
 .footer__info strong {
   font-weight: 600;
-  color: var(--c-text);
+  color: var(--c-college);
 }
 
 .footer__status {

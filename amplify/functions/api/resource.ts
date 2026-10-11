@@ -2,7 +2,8 @@ import { defineFunction, secret } from '@aws-amplify/backend';
 
 /**
  * The registration API (one Lambda function for every /api route, plus a 10-minute
- * schedule that retries failed Google syncs, passes and emails).
+ * schedule that retries failed Google syncs, passes and emails, and copies event-day
+ * changes such as event fees and attendance to the Google Sheet).
  *
  * Secrets are set per branch in the Amplify console (Hosting → Secrets) or, for a sandbox,
  * with `npx ampx sandbox secret set NAME`. Plain settings come from the Amplify
@@ -33,5 +34,10 @@ export const api = defineFunction({
     MAIL_REPLY_TO: process.env.MAIL_REPLY_TO || '',
     RATE_LIMIT_MAX: process.env.RATE_LIMIT_MAX || '300',
     RATE_LIMIT_WINDOW_MINUTES: process.env.RATE_LIMIT_WINDOW_MINUTES || '10',
+    // Only to rehearse the event day on a sandbox: unset, the schedule in src/content/site.ts
+    // applies (online until 16 Oct 11:59 PM IST, on-site on 17 Oct, then closed).
+    SCHEDULE_ONLINE_CLOSES_AT: process.env.SCHEDULE_ONLINE_CLOSES_AT || '',
+    SCHEDULE_ONSITE_OPENS_AT: process.env.SCHEDULE_ONSITE_OPENS_AT || '',
+    SCHEDULE_ONSITE_CLOSES_AT: process.env.SCHEDULE_ONSITE_CLOSES_AT || '',
   },
 });

@@ -21,7 +21,7 @@ describe('DevCrewModal', () => {
     expect(screen.getByRole('dialog', { name: 'Dev Crew' })).toHaveAttribute('open');
     expect(screen.getByRole('heading', { level: 2, name: 'Dev Crew' })).toBeInTheDocument();
     const names = screen.getAllByRole('heading', { level: 3 }).map((heading) => heading.textContent);
-    expect(names).toEqual(['Mohan Prabu K', 'Varshan C', 'Barath S']);
+    expect(names).toEqual(['Mohan Prabu K', 'Varshan C', 'Barath S', 'Sivakasi N']);
     expect(screen.queryByText(/DEV 00/)).toBeNull();
   });
 
@@ -29,9 +29,12 @@ describe('DevCrewModal', () => {
     renderCrew();
 
     expect(within(card('Mohan Prabu K')).getByText('Senior Developer')).toBeInTheDocument();
-    expect(within(card('Varshan C')).getByText('UI/UX Design')).toBeInTheDocument();
-    expect(within(card('Barath S')).getByText('Prompt Engineer & API Authenticator')).toBeInTheDocument();
+    expect(within(card('Varshan C')).getByText('Project Lead & Product Architect')).toBeInTheDocument();
+    expect(within(card('Barath S')).getByText('Backend & AWS Hosting')).toBeInTheDocument();
+    expect(within(card('Sivakasi N')).getByText('UI/UX & Logo Designer')).toBeInTheDocument();
     crew.forEach((member) => expect(within(card(member.name)).getByText('III Year – AI&DS')).toBeInTheDocument());
+    // No two developers share a role.
+    expect(new Set(crew.map((member) => member.role)).size).toBe(crew.length);
   });
 
   it('uses each GitHub username as the handle', () => {
@@ -40,6 +43,7 @@ describe('DevCrewModal', () => {
     expect(within(card('Mohan Prabu K')).getByText('@MohanPrabu018-K')).toBeInTheDocument();
     expect(within(card('Varshan C')).getByText('@Varshanrpsit057')).toBeInTheDocument();
     expect(within(card('Barath S')).getByText('@Barath-S-07')).toBeInTheDocument();
+    expect(within(card('Sivakasi N')).getByText('@sivakasi1866-sketch')).toBeInTheDocument();
   });
 
   it('links each profile, opening safely in a new tab', () => {
@@ -53,6 +57,7 @@ describe('DevCrewModal', () => {
       ],
       'Varshan C': ['https://www.linkedin.com/in/varshan-c-56b30a339', 'https://github.com/Varshanrpsit057'],
       'Barath S': ['https://www.linkedin.com/in/barath-sivalingam-4ba41a330', 'https://github.com/Barath-S-07'],
+      'Sivakasi N': ['https://www.linkedin.com/in/sivakasi-n-832049352', 'https://github.com/sivakasi1866-sketch'],
     };
 
     for (const [name, urls] of Object.entries(expected)) {

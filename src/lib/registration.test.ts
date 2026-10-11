@@ -6,12 +6,18 @@ import {
   EMPTY_REGISTRATION,
   NO_EVENTS_MESSAGE,
   OTHER_DEPARTMENT,
+  REGISTRATION_ID,
   RegistrationError,
   buildRegistrationRecord,
   feeSummary,
+  formatOnlineId,
+  formatOnsiteId,
+  idParts,
   isRegistrationClosed,
   newSubmissionId,
   normalisePhone,
+  normaliseRegistrationId,
+  onlineSerial,
   resolvedDepartment,
   rupees,
   splitDepartment,
@@ -34,7 +40,7 @@ const valid: RegistrationInput = {
   year: '3rd Year',
   phone: '+91 93449 72274',
   email: 'Barath@Example.com',
-  events: ['pro-pitch', 'code-flex', 'short-film'],
+  events: ['pro-pitch', 'code-flex', 'cognix'],
   transactionId: '412345678901',
   screenshot,
 };
@@ -51,7 +57,6 @@ describe('feeSummary', () => {
     [2, 100, 200],
     [3, 150, 250],
     [5, 250, 350],
-    [10, 500, 600],
   ])('%i events: ₹%i in event fees, ₹%i in total with the gate pass', (count, eventTotal, grandTotal) => {
     expect(feeSummary(ids.slice(0, count), fees)).toEqual({ eventCount: count, eventTotal, grandTotal });
   });
@@ -100,8 +105,8 @@ describe('buildRegistrationRecord', () => {
       phone: '9344972274',
       email: 'barath@example.com',
     });
-    expect(record.technicalEvents).toEqual(['PRO-PITCH', 'CODE FLEX']);
-    expect(record.nonTechnicalEvents).toEqual(['SHORT FILM']);
+    expect(record.technicalEvents).toEqual(['PRO-PITCH', 'CODE FLEX', 'COGNIX']);
+    expect(record).not.toHaveProperty('nonTechnicalEvents');
     expect(record.payment).toEqual({ gatePassAmount: 100, transactionId: '412345678901' });
     expect(record.eventRegistration).toEqual({ eventCount: 3, feePerEvent: 50, totalEventFee: 150 });
   });
@@ -170,7 +175,7 @@ describe('validateRegistration', () => {
 
   it('needs at least one event', () => {
     expect(validateField('events', { ...valid, events: [] })).toBe(NO_EVENTS_MESSAGE);
-    expect(validateField('events', { ...valid, events: ['e-sports'] })).toBeUndefined();
+    expect(validateField('events', { ...valid, events: ['cognix'] })).toBeUndefined();
   });
 
   it('accepts a complete, valid registration', () => {
@@ -281,7 +286,7 @@ describe('submitRegistration', () => {
       phone: '9344972274',
       email: 'Barath@Example.com',
     });
-    expect(body.events).toEqual(['pro-pitch', 'code-flex', 'short-film']);
+    expect(body.events).toEqual(['pro-pitch', 'code-flex', 'cognix']);
     expect(body.transactionId).toBe('412345678901');
     expect(body.upload).toEqual({ id: ticket.uploadId });
     // The screenshot never travels inside the registration itself.
@@ -404,5 +409,28 @@ describe('submitRegistration', () => {
       duplicate: true,
       key: null,
     });
+  });
+});
+
+describe('Registration IDs: 26, then 1 (online) or 2 (desk), then the participant number', () => {
+  it('makes, checks and reads them', () => {
+    expect(formatOnlineId(7)).toBe('261007');
+    expect(formatOnsiteId(15)).toBe('262015');
+    expect(formatOnsiteId(1000)).toBe('2621000');
+    for (const id of ['261007', '262015', '2621000', 'PRG26-0042']) expect(REGISTRATION_ID.test(id), id).toBe(true);
+    for (const id of ['100001', '200001', '26100', '263001', '26100001']) expect(REGISTRATION_ID.test(id), id).toBe(false);
+    // Online numbers continue the earlier PRG26 serial; desk numbers have their own.
+    expect(onlineSerial('261042')).toBe(42);
+    expect(onlineSerial('PRG26-0041')).toBe(41);
+    expect(onlineSerial('262003')).toBeNaN();
+  });
+
+  it('accepts an ID typed in parts, and shows what each part means', () => {
+    expect(normaliseRegistrationId(' 26 2 005 ')).toBe('262005');
+    expect(normaliseRegistrationId('26-1-007')).toBe('261007');
+    expect(normaliseRegistrationId('prg26-0042')).toBe('PRG26-0042');
+    expect(idParts('262015')).toEqual({ parts: ['26', '2', '015'], meaning: '2026 · registration desk · participant 15' });
+    expect(idParts('261007').meaning).toBe('2026 · online · participant 7');
+    expect(idParts('PRG26-0042')).toEqual({ parts: ['PRG26-0042'], meaning: null });
   });
 });

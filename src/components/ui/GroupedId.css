@@ -1,0 +1,4 @@
+/* The parts of a Registration ID (26 · 2 · 005), spaced apart; copying still gives one number. */
+.grouped-id__part + .grouped-id__part {
+  margin-left: 0.3em;
+}

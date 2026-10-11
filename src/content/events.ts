@@ -8,7 +8,7 @@ import type { EventCategory, SymposiumEvent } from './types';
 const posterFiles = import.meta.glob<string>('../assets/events/*.webp', { eager: true, import: 'default' });
 const posterFor = (id: string, size: '' | '-large') => posterFiles[`../assets/events/${id}${size}.webp`];
 
-/** The ten PRAGYA 2026 events with their posters. Edit the events in eventCatalog.ts. */
+/** The five PRAGYA 2026 technical events with their posters. Edit the events in eventCatalog.ts. */
 export const events: SymposiumEvent[] = eventCatalog.map((event) => ({
   ...event,
   poster: posterFor(event.id, ''),
@@ -17,7 +17,6 @@ export const events: SymposiumEvent[] = eventCatalog.map((event) => ({
 
 export const categoryLabels: Record<EventCategory, string> = {
   technical: 'Technical',
-  'non-technical': 'Non-technical',
 };
 
 export function eventsByCategory(category: EventCategory): SymposiumEvent[] {

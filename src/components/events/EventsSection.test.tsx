@@ -16,7 +16,7 @@ const renderTrack = (category: EventCategory) =>
 const panelOf = (container: HTMLElement, eventId: string) => container.querySelector<HTMLElement>(`#event-${eventId}`)!;
 
 describe('EventsSection (accordion gallery)', () => {
-  it.each(['technical', 'non-technical'] as const)('shows the %s track as five panels with the new artwork', (category) => {
+  it.each(['technical'] as const)('shows the %s track as five panels with the new artwork', (category) => {
     renderTrack(category);
     const list = eventsByCategory(category);
 
@@ -97,23 +97,19 @@ describe('EventsSection (accordion gallery)', () => {
   );
 
   it('opens the event chosen elsewhere on the page (the carousel), however often it is chosen', () => {
-    const { container } = renderTrack('non-technical');
-    const [shortFilm, eagleEye] = eventsByCategory('non-technical').slice(1, 3);
+    const { container } = renderTrack('technical');
+    const [vizCraft, paper] = eventsByCategory('technical').slice(1, 3);
 
-    act(() => focusEvent(shortFilm.id));
-    expect(panelOf(container, shortFilm.id)).toHaveAttribute('aria-current', 'true');
-    expect(window.location.hash).toBe(`#${eventAnchor(shortFilm)}`);
+    act(() => focusEvent(vizCraft.id));
+    expect(panelOf(container, vizCraft.id)).toHaveAttribute('aria-current', 'true');
+    expect(window.location.hash).toBe(`#${eventAnchor(vizCraft)}`);
 
-    fireEvent.click(panelOf(container, eagleEye.id));
-    act(() => focusEvent(shortFilm.id));
-    expect(panelOf(container, shortFilm.id)).toHaveAttribute('aria-current', 'true');
-
-    // An event of the other track leaves this one as it is.
-    act(() => focusEvent('code-flex'));
-    expect(panelOf(container, shortFilm.id)).toHaveAttribute('aria-current', 'true');
+    fireEvent.click(panelOf(container, paper.id));
+    act(() => focusEvent(vizCraft.id));
+    expect(panelOf(container, vizCraft.id)).toHaveAttribute('aria-current', 'true');
   });
 
-  it('gives a technical event its time, venue, prizes and coordinators, without repeating the poster', () => {
+  it('gives a technical event its student coordinators at the top, then time, venue with a route map, prizes, each once', () => {
     const { container } = renderTrack('technical');
     const proPitch = events.find((event) => event.id === 'pro-pitch')!;
     const panel = panelOf(container, proPitch.id);
@@ -122,17 +118,57 @@ describe('EventsSection (accordion gallery)', () => {
 
     const details = screen.getByRole('dialog', { name: proPitch.name });
     expect(details.querySelector('img')).toBeNull();
-    expect(within(details).getByText('10:30 AM – 12:00 PM')).toBeInTheDocument();
-    expect(within(details).getByText('Delta Lab')).toBeInTheDocument();
-    expect(within(details).getByText(/1st prize: ₹1,000/)).toBeInTheDocument();
 
-    const coordinators = within(details).getByRole('heading', { name: 'Coordinators' }).closest('section') as HTMLElement;
-    for (const name of ['Mrs. D. Vidya', 'Kabil V', 'Vaishnavi R']) {
-      expect(within(coordinators).getByText(name)).toBeInTheDocument();
-    }
-    // Queries go to the overall coordinator, by phone.
-    expect(within(coordinators).getByRole('link', { name: '+91 73582 13736' })).toHaveAttribute('href', 'tel:+917358213736');
+    // Student coordinators only, straight under the name; no staff.
+    const coordinators = within(details).getByLabelText('Event coordinators');
+    expect([...coordinators.querySelectorAll('.event-details__chip')].map((chip) => chip.textContent)).toEqual(['Kabil V', 'Vaishnavi R']);
+    expect(within(details).queryByText(/Mrs\.|Mr\.|Staff/)).toBeNull();
+    const heading = within(details).getByRole('heading', { level: 2, name: proPitch.name });
+    expect(heading.compareDocumentPosition(coordinators) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(coordinators.compareDocumentPosition(within(details).getByText('Delta Lab')) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+
+    expect(within(details).getByText('10:30 AM – 12:00 PM')).toBeInTheDocument();
+    expect(within(details).getByText('Individual or team')).toBeInTheDocument();
+    expect(within(details).getByText('₹1,000')).toBeInTheDocument();
+    expect(within(details).getByText('Participation certificate for every participant')).toBeInTheDocument();
+
+    // The route map: the campus map in this window, Delta Lab lit up on its floor, with directions.
+    fireEvent.click(within(details).getByRole('button', { name: 'Route map' }));
+    const map = within(details).getByRole('region', { name: 'Map to Delta Lab' });
+    expect(map).toHaveTextContent('Delta Lab is on the second floor of the main building.');
+    expect(within(map).getByRole('tab', { name: /Second floor/ })).toHaveAttribute('aria-selected', 'true');
+    expect(within(map).getByRole('list', { name: 'How to get to Delta Lab' })).toBeInTheDocument();
+    expect(within(details).getByRole('button', { name: 'Hide map' })).toHaveAttribute('aria-expanded', 'true');
+
+    // The judges' decision and the venue's rules are final.
+    expect(within(details).getByText(/The judges' decision is final\. No arguments about the winners will be entertained\./)).toBeInTheDocument();
+    expect(within(details).getByText(/the rules on this website are subject to change/)).toBeInTheDocument();
+
+    // Nothing said twice: the old type, rounds-count and per-event instruction lists are gone.
+    expect(within(details).queryByText('Event type')).toBeNull();
+    expect(within(details).getAllByText(/gate pass ₹100/i)).toHaveLength(1);
+    // Help on the day: the help desk (and the overall coordinator), by phone.
+    expect(within(details).getByText('Any help on the day? Call the help desk:')).toBeInTheDocument();
+    for (const link of within(details).getAllByRole('link', { name: '+91 73582 13736' })) expect(link).toHaveAttribute('href', 'tel:+917358213736');
     expect(within(details).queryByText(/Details are provisional/)).toBeNull();
+  });
+
+  it('opens the route map when one is configured for the event', () => {
+    const codeFlex = events.find((event) => event.id === 'code-flex')!;
+    codeFlex.routeMap = 'https://maps.example.com/delta-lab';
+    try {
+      const { container } = renderTrack('technical');
+      const panel = panelOf(container, codeFlex.id);
+      fireEvent.click(panel);
+      fireEvent.click(within(panel).getByRole('button', { name: `See more about ${codeFlex.name}` }));
+      const details = screen.getByRole('dialog', { name: codeFlex.name });
+      const link = within(details).getByRole('link', { name: 'Route map to Delta Lab (opens in a new tab)' });
+      expect(link).toHaveAttribute('href', 'https://maps.example.com/delta-lab');
+      expect(link).toHaveAttribute('target', '_blank');
+      expect(within(details).getByText('Individual')).toBeInTheDocument();
+    } finally {
+      codeFlex.routeMap = null;
+    }
   });
 
   it('opens the event named in a #event-… link', () => {

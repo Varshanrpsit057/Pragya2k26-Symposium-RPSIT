@@ -1,0 +1,899 @@
+{
+  "version": 1,
+  "confirmed": false,
+  "note": "Room positions are a starting layout from photos of the main building: mark the real class and lab names in the dashboard (Campus map), then publish.",
+  "floors": [
+    {
+      "id": "ground",
+      "name": "Ground floor",
+      "rooms": [
+        {
+          "id": "ground-back-left",
+          "label": "Stairs",
+          "kind": "stairs",
+          "x": 60,
+          "y": 60,
+          "w": 100,
+          "h": 110
+        },
+        {
+          "id": "ground-back-1",
+          "label": "Room G-01",
+          "kind": "room",
+          "x": 160,
+          "y": 60,
+          "w": 113,
+          "h": 110
+        },
+        {
+          "id": "ground-back-2",
+          "label": "Room G-02",
+          "kind": "room",
+          "x": 273,
+          "y": 60,
+          "w": 114,
+          "h": 110
+        },
+        {
+          "id": "ground-back-3",
+          "label": "Room G-03",
+          "kind": "room",
+          "x": 387,
+          "y": 60,
+          "w": 113,
+          "h": 110
+        },
+        {
+          "id": "ground-back-4",
+          "label": "Room G-04",
+          "kind": "room",
+          "x": 500,
+          "y": 60,
+          "w": 113,
+          "h": 110
+        },
+        {
+          "id": "ground-back-5",
+          "label": "Room G-05",
+          "kind": "room",
+          "x": 613,
+          "y": 60,
+          "w": 114,
+          "h": 110
+        },
+        {
+          "id": "ground-back-6",
+          "label": "Room G-06",
+          "kind": "room",
+          "x": 727,
+          "y": 60,
+          "w": 113,
+          "h": 110
+        },
+        {
+          "id": "ground-back-right",
+          "label": "Stairs / lift",
+          "kind": "stairs",
+          "x": 840,
+          "y": 60,
+          "w": 100,
+          "h": 110
+        },
+        {
+          "id": "ground-left-1",
+          "label": "Room G-07",
+          "kind": "room",
+          "x": 60,
+          "y": 170,
+          "w": 140,
+          "h": 127
+        },
+        {
+          "id": "ground-left-2",
+          "label": "Room G-08",
+          "kind": "room",
+          "x": 60,
+          "y": 297,
+          "w": 140,
+          "h": 126
+        },
+        {
+          "id": "ground-left-3",
+          "label": "Room G-09",
+          "kind": "room",
+          "x": 60,
+          "y": 423,
+          "w": 140,
+          "h": 127
+        },
+        {
+          "id": "ground-right-1",
+          "label": "Room G-10",
+          "kind": "room",
+          "x": 800,
+          "y": 170,
+          "w": 140,
+          "h": 127
+        },
+        {
+          "id": "ground-right-2",
+          "label": "Room G-11",
+          "kind": "room",
+          "x": 800,
+          "y": 297,
+          "w": 140,
+          "h": 126
+        },
+        {
+          "id": "ground-right-3",
+          "label": "Room G-12",
+          "kind": "room",
+          "x": 800,
+          "y": 423,
+          "w": 140,
+          "h": 127
+        },
+        {
+          "id": "ground-front-tower-left",
+          "label": "Stairs (front left tower)",
+          "kind": "stairs",
+          "x": 40,
+          "y": 550,
+          "w": 110,
+          "h": 130
+        },
+        {
+          "id": "ground-front-1",
+          "label": "Room G-13",
+          "kind": "room",
+          "x": 150,
+          "y": 550,
+          "w": 97,
+          "h": 110
+        },
+        {
+          "id": "ground-front-2",
+          "label": "Room G-14",
+          "kind": "room",
+          "x": 247,
+          "y": 550,
+          "w": 96,
+          "h": 110
+        },
+        {
+          "id": "ground-front-3",
+          "label": "Room G-15",
+          "kind": "room",
+          "x": 343,
+          "y": 550,
+          "w": 97,
+          "h": 110
+        },
+        {
+          "id": "ground-front-lobby",
+          "label": "Main entrance & lobby",
+          "kind": "entrance",
+          "x": 440,
+          "y": 550,
+          "w": 120,
+          "h": 140
+        },
+        {
+          "id": "ground-front-4",
+          "label": "Room G-16",
+          "kind": "room",
+          "x": 560,
+          "y": 550,
+          "w": 97,
+          "h": 110
+        },
+        {
+          "id": "ground-front-5",
+          "label": "LH-05",
+          "kind": "hall",
+          "x": 657,
+          "y": 550,
+          "w": 96,
+          "h": 110
+        },
+        {
+          "id": "ground-front-6",
+          "label": "Room G-18",
+          "kind": "room",
+          "x": 753,
+          "y": 550,
+          "w": 97,
+          "h": 110
+        },
+        {
+          "id": "ground-front-tower-right",
+          "label": "Stairs (front right tower)",
+          "kind": "stairs",
+          "x": 850,
+          "y": 550,
+          "w": 110,
+          "h": 130
+        }
+      ],
+      "photos": []
+    },
+    {
+      "id": "first",
+      "name": "First floor",
+      "rooms": [
+        {
+          "id": "first-back-left",
+          "label": "Stairs",
+          "kind": "stairs",
+          "x": 60,
+          "y": 60,
+          "w": 100,
+          "h": 110
+        },
+        {
+          "id": "first-back-1",
+          "label": "Room 1-01",
+          "kind": "room",
+          "x": 160,
+          "y": 60,
+          "w": 113,
+          "h": 110
+        },
+        {
+          "id": "first-back-2",
+          "label": "Room 1-02",
+          "kind": "room",
+          "x": 273,
+          "y": 60,
+          "w": 114,
+          "h": 110
+        },
+        {
+          "id": "first-back-3",
+          "label": "Room 1-03",
+          "kind": "room",
+          "x": 387,
+          "y": 60,
+          "w": 113,
+          "h": 110
+        },
+        {
+          "id": "first-back-4",
+          "label": "Room 1-04",
+          "kind": "room",
+          "x": 500,
+          "y": 60,
+          "w": 113,
+          "h": 110
+        },
+        {
+          "id": "first-back-5",
+          "label": "Room 1-05",
+          "kind": "room",
+          "x": 613,
+          "y": 60,
+          "w": 114,
+          "h": 110
+        },
+        {
+          "id": "first-back-6",
+          "label": "Room 1-06",
+          "kind": "room",
+          "x": 727,
+          "y": 60,
+          "w": 113,
+          "h": 110
+        },
+        {
+          "id": "first-back-right",
+          "label": "Stairs / lift",
+          "kind": "stairs",
+          "x": 840,
+          "y": 60,
+          "w": 100,
+          "h": 110
+        },
+        {
+          "id": "first-left-1",
+          "label": "Room 1-07",
+          "kind": "room",
+          "x": 60,
+          "y": 170,
+          "w": 140,
+          "h": 127
+        },
+        {
+          "id": "first-left-2",
+          "label": "Room 1-08",
+          "kind": "room",
+          "x": 60,
+          "y": 297,
+          "w": 140,
+          "h": 126
+        },
+        {
+          "id": "first-left-3",
+          "label": "Room 1-09",
+          "kind": "room",
+          "x": 60,
+          "y": 423,
+          "w": 140,
+          "h": 127
+        },
+        {
+          "id": "first-right-1",
+          "label": "Room 1-10",
+          "kind": "room",
+          "x": 800,
+          "y": 170,
+          "w": 140,
+          "h": 127
+        },
+        {
+          "id": "first-right-2",
+          "label": "Room 1-11",
+          "kind": "room",
+          "x": 800,
+          "y": 297,
+          "w": 140,
+          "h": 126
+        },
+        {
+          "id": "first-right-3",
+          "label": "Room 1-12",
+          "kind": "room",
+          "x": 800,
+          "y": 423,
+          "w": 140,
+          "h": 127
+        },
+        {
+          "id": "first-front-tower-left",
+          "label": "Stairs (front left tower)",
+          "kind": "stairs",
+          "x": 40,
+          "y": 550,
+          "w": 110,
+          "h": 130
+        },
+        {
+          "id": "first-front-1",
+          "label": "Room 1-13",
+          "kind": "room",
+          "x": 150,
+          "y": 550,
+          "w": 97,
+          "h": 110
+        },
+        {
+          "id": "first-front-2",
+          "label": "Room 1-14",
+          "kind": "room",
+          "x": 247,
+          "y": 550,
+          "w": 96,
+          "h": 110
+        },
+        {
+          "id": "first-front-3",
+          "label": "Room 1-15",
+          "kind": "room",
+          "x": 343,
+          "y": 550,
+          "w": 97,
+          "h": 110
+        },
+        {
+          "id": "first-front-lobby",
+          "label": "Room 1-16",
+          "kind": "room",
+          "x": 440,
+          "y": 550,
+          "w": 120,
+          "h": 110
+        },
+        {
+          "id": "first-front-4",
+          "label": "Room 1-17",
+          "kind": "room",
+          "x": 560,
+          "y": 550,
+          "w": 97,
+          "h": 110
+        },
+        {
+          "id": "first-front-5",
+          "label": "Room 1-18",
+          "kind": "room",
+          "x": 657,
+          "y": 550,
+          "w": 96,
+          "h": 110
+        },
+        {
+          "id": "first-front-6",
+          "label": "Room 1-19",
+          "kind": "room",
+          "x": 753,
+          "y": 550,
+          "w": 97,
+          "h": 110
+        },
+        {
+          "id": "first-front-tower-right",
+          "label": "Stairs (front right tower)",
+          "kind": "stairs",
+          "x": 850,
+          "y": 550,
+          "w": 110,
+          "h": 130
+        }
+      ],
+      "photos": []
+    },
+    {
+      "id": "second",
+      "name": "Second floor",
+      "rooms": [
+        {
+          "id": "second-back-left",
+          "label": "Stairs",
+          "kind": "stairs",
+          "x": 60,
+          "y": 60,
+          "w": 100,
+          "h": 110
+        },
+        {
+          "id": "second-back-1",
+          "label": "Room 2-01",
+          "kind": "room",
+          "x": 160,
+          "y": 60,
+          "w": 113,
+          "h": 110
+        },
+        {
+          "id": "second-back-2",
+          "label": "Room 2-02",
+          "kind": "room",
+          "x": 273,
+          "y": 60,
+          "w": 114,
+          "h": 110
+        },
+        {
+          "id": "second-back-3",
+          "label": "Room 2-03",
+          "kind": "room",
+          "x": 387,
+          "y": 60,
+          "w": 113,
+          "h": 110
+        },
+        {
+          "id": "second-back-4",
+          "label": "Room 2-04",
+          "kind": "room",
+          "x": 500,
+          "y": 60,
+          "w": 113,
+          "h": 110
+        },
+        {
+          "id": "second-back-5",
+          "label": "Room 2-05",
+          "kind": "room",
+          "x": 613,
+          "y": 60,
+          "w": 114,
+          "h": 110
+        },
+        {
+          "id": "second-back-6",
+          "label": "Room 2-06",
+          "kind": "room",
+          "x": 727,
+          "y": 60,
+          "w": 113,
+          "h": 110
+        },
+        {
+          "id": "second-back-right",
+          "label": "Stairs / lift",
+          "kind": "stairs",
+          "x": 840,
+          "y": 60,
+          "w": 100,
+          "h": 110
+        },
+        {
+          "id": "second-left-1",
+          "label": "Room 2-07",
+          "kind": "room",
+          "x": 60,
+          "y": 170,
+          "w": 140,
+          "h": 127
+        },
+        {
+          "id": "second-left-2",
+          "label": "Delta Lab",
+          "kind": "lab",
+          "x": 60,
+          "y": 297,
+          "w": 140,
+          "h": 126
+        },
+        {
+          "id": "second-left-3",
+          "label": "Room 2-09",
+          "kind": "room",
+          "x": 60,
+          "y": 423,
+          "w": 140,
+          "h": 127
+        },
+        {
+          "id": "second-right-1",
+          "label": "Room 2-10",
+          "kind": "room",
+          "x": 800,
+          "y": 170,
+          "w": 140,
+          "h": 127
+        },
+        {
+          "id": "second-right-2",
+          "label": "Theta Lab",
+          "kind": "lab",
+          "x": 800,
+          "y": 297,
+          "w": 140,
+          "h": 126
+        },
+        {
+          "id": "second-right-3",
+          "label": "Room 2-12",
+          "kind": "room",
+          "x": 800,
+          "y": 423,
+          "w": 140,
+          "h": 127
+        },
+        {
+          "id": "second-front-tower-left",
+          "label": "Stairs (front left tower)",
+          "kind": "stairs",
+          "x": 40,
+          "y": 550,
+          "w": 110,
+          "h": 130
+        },
+        {
+          "id": "second-front-1",
+          "label": "Room 2-13",
+          "kind": "room",
+          "x": 150,
+          "y": 550,
+          "w": 97,
+          "h": 110
+        },
+        {
+          "id": "second-front-2",
+          "label": "Room 2-14",
+          "kind": "room",
+          "x": 247,
+          "y": 550,
+          "w": 96,
+          "h": 110
+        },
+        {
+          "id": "second-front-3",
+          "label": "Room 2-15",
+          "kind": "room",
+          "x": 343,
+          "y": 550,
+          "w": 97,
+          "h": 110
+        },
+        {
+          "id": "second-front-lobby",
+          "label": "Room 2-16",
+          "kind": "room",
+          "x": 440,
+          "y": 550,
+          "w": 120,
+          "h": 110
+        },
+        {
+          "id": "second-front-4",
+          "label": "Room 2-17",
+          "kind": "room",
+          "x": 560,
+          "y": 550,
+          "w": 97,
+          "h": 110
+        },
+        {
+          "id": "second-front-5",
+          "label": "Room 2-18",
+          "kind": "room",
+          "x": 657,
+          "y": 550,
+          "w": 96,
+          "h": 110
+        },
+        {
+          "id": "second-front-6",
+          "label": "Room 2-19",
+          "kind": "room",
+          "x": 753,
+          "y": 550,
+          "w": 97,
+          "h": 110
+        },
+        {
+          "id": "second-front-tower-right",
+          "label": "Stairs (front right tower)",
+          "kind": "stairs",
+          "x": 850,
+          "y": 550,
+          "w": 110,
+          "h": 130
+        }
+      ],
+      "photos": []
+    },
+    {
+      "id": "third",
+      "name": "Third floor",
+      "rooms": [
+        {
+          "id": "third-back-left",
+          "label": "Stairs",
+          "kind": "stairs",
+          "x": 60,
+          "y": 60,
+          "w": 100,
+          "h": 110
+        },
+        {
+          "id": "third-back-1",
+          "label": "Room 3-01",
+          "kind": "room",
+          "x": 160,
+          "y": 60,
+          "w": 113,
+          "h": 110
+        },
+        {
+          "id": "third-back-2",
+          "label": "Room 3-02",
+          "kind": "room",
+          "x": 273,
+          "y": 60,
+          "w": 114,
+          "h": 110
+        },
+        {
+          "id": "third-back-3",
+          "label": "Room 3-03",
+          "kind": "room",
+          "x": 387,
+          "y": 60,
+          "w": 113,
+          "h": 110
+        },
+        {
+          "id": "third-back-4",
+          "label": "Room 3-04",
+          "kind": "room",
+          "x": 500,
+          "y": 60,
+          "w": 113,
+          "h": 110
+        },
+        {
+          "id": "third-back-5",
+          "label": "Room 3-05",
+          "kind": "room",
+          "x": 613,
+          "y": 60,
+          "w": 114,
+          "h": 110
+        },
+        {
+          "id": "third-back-6",
+          "label": "Room 3-06",
+          "kind": "room",
+          "x": 727,
+          "y": 60,
+          "w": 113,
+          "h": 110
+        },
+        {
+          "id": "third-back-right",
+          "label": "Stairs / lift",
+          "kind": "stairs",
+          "x": 840,
+          "y": 60,
+          "w": 100,
+          "h": 110
+        },
+        {
+          "id": "third-left-1",
+          "label": "Room 3-07",
+          "kind": "room",
+          "x": 60,
+          "y": 170,
+          "w": 140,
+          "h": 127
+        },
+        {
+          "id": "third-left-2",
+          "label": "Room 3-08",
+          "kind": "room",
+          "x": 60,
+          "y": 297,
+          "w": 140,
+          "h": 126
+        },
+        {
+          "id": "third-left-3",
+          "label": "Room 3-09",
+          "kind": "room",
+          "x": 60,
+          "y": 423,
+          "w": 140,
+          "h": 127
+        },
+        {
+          "id": "third-right-1",
+          "label": "Room 3-10",
+          "kind": "room",
+          "x": 800,
+          "y": 170,
+          "w": 140,
+          "h": 127
+        },
+        {
+          "id": "third-right-2",
+          "label": "Room 3-11",
+          "kind": "room",
+          "x": 800,
+          "y": 297,
+          "w": 140,
+          "h": 126
+        },
+        {
+          "id": "third-right-3",
+          "label": "Room 3-12",
+          "kind": "room",
+          "x": 800,
+          "y": 423,
+          "w": 140,
+          "h": 127
+        },
+        {
+          "id": "third-front-tower-left",
+          "label": "Stairs (front left tower)",
+          "kind": "stairs",
+          "x": 40,
+          "y": 550,
+          "w": 110,
+          "h": 130
+        },
+        {
+          "id": "third-front-1",
+          "label": "Room 3-13",
+          "kind": "room",
+          "x": 150,
+          "y": 550,
+          "w": 97,
+          "h": 110
+        },
+        {
+          "id": "third-front-2",
+          "label": "Room 3-14",
+          "kind": "room",
+          "x": 247,
+          "y": 550,
+          "w": 96,
+          "h": 110
+        },
+        {
+          "id": "third-front-3",
+          "label": "Room 3-15",
+          "kind": "room",
+          "x": 343,
+          "y": 550,
+          "w": 97,
+          "h": 110
+        },
+        {
+          "id": "third-front-lobby",
+          "label": "Room 3-16",
+          "kind": "room",
+          "x": 440,
+          "y": 550,
+          "w": 120,
+          "h": 110
+        },
+        {
+          "id": "third-front-4",
+          "label": "Room 3-17",
+          "kind": "room",
+          "x": 560,
+          "y": 550,
+          "w": 97,
+          "h": 110
+        },
+        {
+          "id": "third-front-5",
+          "label": "Room 3-18",
+          "kind": "room",
+          "x": 657,
+          "y": 550,
+          "w": 96,
+          "h": 110
+        },
+        {
+          "id": "third-front-6",
+          "label": "Room 3-19",
+          "kind": "room",
+          "x": 753,
+          "y": 550,
+          "w": 97,
+          "h": 110
+        },
+        {
+          "id": "third-front-tower-right",
+          "label": "Stairs (front right tower)",
+          "kind": "stairs",
+          "x": 850,
+          "y": 550,
+          "w": 110,
+          "h": 130
+        }
+      ],
+      "photos": []
+    }
+  ],
+  "venues": [
+    {
+      "name": "LH-05",
+      "floorId": "ground",
+      "roomId": "ground-front-5",
+      "steps": [
+        "From the main gate, walk straight up the main road to the main building.",
+        "Go in through the main entrance (the front door with the pillars).",
+        "In the lobby, turn right and follow the corridor around the courtyard.",
+        "LH-05 is on the ground floor, shown on the map."
+      ]
+    },
+    {
+      "name": "Delta Lab",
+      "floorId": "second",
+      "roomId": "second-left-2",
+      "steps": [
+        "From the main gate, walk straight up the main road to the main building.",
+        "Go in through the main entrance and take the stairs to the second floor.",
+        "Follow the corridor to the left side of the building, around the courtyard.",
+        "Delta Lab is shown on the map."
+      ]
+    },
+    {
+      "name": "Theta Lab",
+      "floorId": "second",
+      "roomId": "second-right-2",
+      "steps": [
+        "From the main gate, walk straight up the main road to the main building.",
+        "Go in through the main entrance and take the stairs to the second floor.",
+        "Follow the corridor to the right side of the building, around the courtyard.",
+        "Theta Lab is shown on the map."
+      ]
+    }
+  ],
+  "campusPhotos": []
+}
