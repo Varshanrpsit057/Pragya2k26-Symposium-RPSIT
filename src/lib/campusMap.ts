@@ -1,8 +1,9 @@
 /**
- * The campus map: the main building's floors (rooms on a 1000 × 720 plan around the
- * courtyard), photo spots that show a picture of exactly where the student stands, and the
- * directions to each venue. The layout lives in src/content/campusMap.json, edited in the
- * dashboard (Campus map) and replaced as a whole; photos go in public/images/map/.
+ * The campus map: the main building's floors (rooms around the courtyard, drawn with the main
+ * entrance at the bottom), photo spots that show a picture of exactly where the student stands,
+ * and the way to each venue, drawn on each floor. The layout lives in
+ * src/content/campusMap.json, edited in the dashboard (Campus map) and replaced as a whole;
+ * photos go in public/images/map/.
  */
 
 export const ROOM_KINDS = {
@@ -10,22 +11,26 @@ export const ROOM_KINDS = {
   lab: 'Lab',
   hall: 'Hall',
   office: 'Office',
-  stairs: 'Stairs / lift',
-  washroom: 'Washroom',
+  stairs: 'Stairs',
+  lift: 'Lift (staff only)',
+  washroom: 'Restroom',
   entrance: 'Entrance',
   empty: 'Not used',
 } as const;
 
 export type RoomKind = keyof typeof ROOM_KINDS;
 
-export interface Room {
-  id: string;
-  label: string;
-  kind: RoomKind;
+export interface Box {
   x: number;
   y: number;
   w: number;
   h: number;
+}
+
+export interface Room extends Box {
+  id: string;
+  label: string;
+  kind: RoomKind;
 }
 
 /** A dot on the plan; clicked, it shows the photo taken from that spot. */
@@ -38,11 +43,39 @@ export interface PhotoSpot {
   caption: string;
 }
 
+export type Side = 'left' | 'right' | 'up' | 'down';
+
+/**
+ * Something drawn on a floor besides rooms: drinking water, a glass door that closes a
+ * corridor (from x,y to x2,y2), a way in (an arrow pointing `dir`, its tip on the wall), a way
+ * out to somewhere outside (an arrow along `points`), a way out that is closed (a stub with a
+ * cross, pointing `dir`), or a building outside the main one.
+ */
+export type Mark =
+  | { id: string; kind: 'water'; x: number; y: number; label: string }
+  | { id: string; kind: 'glass-door'; x: number; y: number; x2: number; y2: number; label: string }
+  | { id: string; kind: 'entrance'; x: number; y: number; dir: Side; label: string }
+  | { id: string; kind: 'exit'; points: [number, number][]; label: string }
+  | { id: string; kind: 'closed'; x: number; y: number; dir: Side; label: string }
+  | { id: string; kind: 'outside'; x: number; y: number; w: number; h: number; label: string };
+
 export interface Floor {
   id: string;
   name: string;
   rooms: Room[];
   photos: PhotoSpot[];
+  marks?: Mark[];
+}
+
+/** The way to a venue on one floor: a line through `points`, labelled where it starts and ends. */
+export interface RouteLeg {
+  floorId: string;
+  points: [number, number][];
+  from?: string;
+  to?: string;
+  /** Where the start and end labels go (they start there), when beside the line would cover rooms. */
+  fromAt?: [number, number];
+  toAt?: [number, number];
 }
 
 /** An event venue (its name as in the event catalog), where it is, and how to get there. */
@@ -51,20 +84,36 @@ export interface Venue {
   floorId: string;
   roomId: string;
   steps: string[];
+  /** Which door of the main building to use: the campus tab draws the way to it. */
+  entrance?: 'main' | 'side-1';
+  route?: RouteLeg[];
+}
+
+/** The building every floor shares: its walls, the courtyard, the amphitheatre and fountain. */
+export interface BuildingPlan {
+  width: number;
+  height: number;
+  outline: Box;
+  court: Box;
+  /** The amphitheatre in the courtyard, with steps up to it on the given sides. */
+  amphitheatre: { x: number; y: number; r: number; steps: ('left' | 'right' | 'top' | 'bottom')[] };
+  fountain: { x: number; y: number; r: number };
 }
 
 export interface CampusMap {
-  version: 1;
-  /** False while the room positions are a starting guess: the map says they are approximate. */
+  version: 2;
+  /** False while the layout is not yet checked on site: the map says it may be approximate. */
   confirmed: boolean;
   note?: string;
+  plan: BuildingPlan;
   floors: Floor[];
   venues: Venue[];
-  /** Photo spots on the campus overview (gate, road, main entrance). */
+  /** Photo spots on the campus overview (gates, road, main entrance). */
   campusPhotos: PhotoSpot[];
 }
 
-export const PLAN = { width: 1000, height: 720 } as const;
+/** The campus overview's drawing size (its photo spots use these coordinates). */
+export const CAMPUS = { width: 700, height: 840 } as const;
 export const MAP_PHOTOS = '/images/map/';
 
 /** The URL of a photo spot's picture (a file name, or a full path if one is given). */
@@ -74,14 +123,17 @@ export const venueOf = (map: CampusMap, name: string | null | undefined) => (nam
 
 const isObject = (value: unknown): value is Record<string, unknown> => typeof value === 'object' && value !== null && !Array.isArray(value);
 const isNumber = (value: unknown): value is number => typeof value === 'number' && Number.isFinite(value);
+const isBox = (value: unknown) => isObject(value) && [value.x, value.y, value.w, value.h].every(isNumber);
 
 /** Checks a layout file (from the editor); the problem, or null when it can be used. */
 export function mapProblem(value: unknown): string | null {
-  if (!isObject(value) || value.version !== 1 || !Array.isArray(value.floors) || !Array.isArray(value.venues)) return 'This is not a campus map layout file.';
+  if (!isObject(value) || value.version !== 2 || !Array.isArray(value.floors) || !Array.isArray(value.venues)) return 'This is not a campus map layout file (or it is from an older version of the map).';
+  const plan = value.plan;
+  if (!isObject(plan) || !isNumber(plan.width) || !isNumber(plan.height) || !isBox(plan.outline) || !isBox(plan.court)) return 'The building outline in the file is incomplete.';
   for (const floor of value.floors as unknown[]) {
     if (!isObject(floor) || typeof floor.id !== 'string' || typeof floor.name !== 'string' || !Array.isArray(floor.rooms) || !Array.isArray(floor.photos)) return 'A floor in the file is incomplete.';
     for (const room of floor.rooms as unknown[]) {
-      if (!isObject(room) || typeof room.id !== 'string' || typeof room.label !== 'string' || !(String(room.kind) in ROOM_KINDS) || ![room.x, room.y, room.w, room.h].every(isNumber)) {
+      if (!isObject(room) || typeof room.id !== 'string' || typeof room.label !== 'string' || !(String(room.kind) in ROOM_KINDS) || !isBox(room)) {
         return `A room on the ${floor.name} is incomplete.`;
       }
     }
@@ -91,6 +143,11 @@ export function mapProblem(value: unknown): string | null {
   }
   for (const venue of value.venues as unknown[]) {
     if (!isObject(venue) || typeof venue.name !== 'string' || !Array.isArray(venue.steps)) return 'A venue in the file is incomplete.';
+    const legs = venue.route ?? [];
+    const isPoint = (point: unknown) => Array.isArray(point) && point.length === 2 && point.every(isNumber);
+    if (!Array.isArray(legs) || !legs.every((leg: unknown) => isObject(leg) && typeof leg.floorId === 'string' && Array.isArray(leg.points) && leg.points.every(isPoint))) {
+      return `The way to ${venue.name} in the file is incomplete.`;
+    }
   }
   return null;
 }

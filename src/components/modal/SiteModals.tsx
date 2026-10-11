@@ -5,6 +5,7 @@ import { registrationPhase, scheduleOf, type RegistrationPhase } from '../../lib
 import type { OwnRegistration } from '../../lib/registrationClient';
 import { parseStatusHash, statusHash } from '../../lib/statusLink';
 import { EventDetailsModal } from '../events/EventDetailsModal';
+import { RouteMapModal, parseRouteHash } from '../map/RouteMapModal';
 import { RegistrationModal } from '../registration/RegistrationModal';
 import { StatusModal } from '../registration/StatusModal';
 import { DevCrewModal } from '../sections/DevCrew';
@@ -21,7 +22,8 @@ const noHash = () => '';
 /**
  * Holds the page's shared windows. Every Register Now button opens the same registration
  * form; every See More opens the same event-details window; the footer's incognito button
- * opens the Dev Crew; a private status link (#status=…) opens the registration status.
+ * opens the Dev Crew; a private status link (#status=…) opens the registration status; and
+ * #route-map (or #route-map=<event>), from the Route map buttons, opens the route map.
  */
 export function SiteModalsProvider({ children }: { children: ReactNode }) {
   // `request` counts openings, so the form can pre-select the event behind each one;
@@ -36,6 +38,7 @@ export function SiteModalsProvider({ children }: { children: ReactNode }) {
   const [crewOpen, setCrewOpen] = useState(false);
   const hash = useSyncExternalStore(subscribeToHash, readHash, noHash);
   const statusOf = useMemo(() => parseStatusHash(hash), [hash]);
+  const routeOf = useMemo(() => parseRouteHash(hash), [hash]);
 
   const openRegistration = useCallback((event?: SymposiumEvent) => {
     setDetailsEvent(null);
@@ -50,13 +53,14 @@ export function SiteModalsProvider({ children }: { children: ReactNode }) {
   const openStatus = useCallback((own: OwnRegistration) => {
     window.location.hash = statusHash(own);
   }, []);
-  // Closing the status window takes the private key back out of the address bar.
+  // Closing the status window takes the private key back out of the address bar (and the
+  // route map its #route-map).
   const closeStatus = useCallback(() => {
     window.history.replaceState(null, '', `${window.location.pathname}${window.location.search}`);
     window.dispatchEvent(new HashChangeEvent('hashchange'));
   }, []);
 
-  const windowOpen = registration.open || detailsEvent !== null || crewOpen || statusOf !== null;
+  const windowOpen = registration.open || detailsEvent !== null || crewOpen || statusOf !== null || routeOf !== null;
   const value = useMemo(
     () => ({ openRegistration, openEventDetails, openDevCrew, windowOpen }),
     [openRegistration, openEventDetails, openDevCrew, windowOpen],
@@ -75,6 +79,7 @@ export function SiteModalsProvider({ children }: { children: ReactNode }) {
         onCheckStatus={openStatus}
       />
       <StatusModal own={statusOf} onClose={closeStatus} />
+      <RouteMapModal open={routeOf !== null} eventId={routeOf?.eventId ?? null} onClose={closeStatus} />
       <DevCrewModal open={crewOpen} onClose={closeDevCrew} />
     </SiteModalsContext.Provider>
   );

@@ -41,6 +41,8 @@ const FOOTER_LINKS: readonly NavItem[] = [
   { id: 'technical', label: 'Technical events' },
   { id: 'register', label: 'Register' },
   { id: 'help', label: 'Help desk' },
+  // Opens the route map window (not a section).
+  { id: 'route-map', label: 'Route map' },
 ];
 
 export function App() {

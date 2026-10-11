@@ -58,7 +58,8 @@ export const site: SiteInfo = {
   // The help desk's numbers show on every page that may need them. Replace with the help desk's own numbers.
   helpDesk: {
     phones: [{ label: 'Help desk', phone: '+91 73582 13736' }],
-    where: 'At the registration desk, at the main entrance of the main building',
+    // Online only for now (no counter on campus yet).
+    where: 'By phone or WhatsApp only, for now: there is no help desk counter on campus',
     hours: '17 October 2026, 8:00 AM to 5:00 PM',
   },
   contacts: [{ name: 'Balajimanikandhaan S.S', role: 'Overall Student Coordinator · III Year AI&DS', phone: '+91 73582 13736' }],

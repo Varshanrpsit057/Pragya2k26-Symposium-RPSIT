@@ -70,6 +70,9 @@ export function HelpDeskSection() {
           <a className="help-desk__student" href={STUDENT_PAGE}>
             Student login: your pass, your events and their timings →
           </a>
+          <a className="help-desk__student" href="#route-map" aria-haspopup="dialog">
+            Route map: the way from the main gate to your event's venue →
+          </a>
         </div>
 
         <div className="help-desk__faq" data-reveal>
