@@ -5,7 +5,7 @@
  */
 import { describe, expect, it } from 'vitest';
 import { site } from '../src/content/site';
-import { registrationPhase, scheduleOf } from '../src/lib/schedule';
+import { isEventDay, registrationPhase, scheduleOf } from '../src/lib/schedule';
 import { readConfig } from './config';
 import { ADMIN, STAFF_PASSWORD, TIMES, setup } from './testing';
 
@@ -31,7 +31,7 @@ describe('registration schedule (Asia/Kolkata)', () => {
     expect(schedule).toEqual({
       onlineClosesAt: '2026-10-16T23:59:00',
       onsiteOpensAt: '2026-10-17T00:00:00',
-      onsiteClosesAt: '2026-10-18T00:00:00',
+      onsiteClosesAt: '2026-10-17T11:59:00',
     });
     const phase = (iso: string) => registrationPhase(schedule, Date.parse(iso));
     expect(phase(TIMES.online)).toBe('online');
@@ -39,7 +39,13 @@ describe('registration schedule (Asia/Kolkata)', () => {
     expect(phase(TIMES.between)).toBe('between');
     expect(phase(TIMES.onsiteOpens)).toBe('onsite');
     expect(phase(TIMES.eventDay)).toBe('onsite');
-    expect(phase(TIMES.lastOnsiteSecond)).toBe('onsite');
+    expect(phase(TIMES.lastOnsiteMinute)).toBe('onsite');
+    // On-site registration closes at 11:59 AM; the event day goes on.
+    expect(phase(TIMES.onsiteCloses)).toBe('closed');
+    expect(isEventDay(schedule, Date.parse(TIMES.onsiteCloses))).toBe(true);
+    expect(isEventDay(schedule, Date.parse(TIMES.lastOnsiteSecond))).toBe(true);
+    expect(isEventDay(schedule, Date.parse(TIMES.closed))).toBe(false);
+    expect(isEventDay(schedule, Date.parse(TIMES.between))).toBe(false);
     expect(phase(TIMES.closed)).toBe('closed');
     expect(phase('2026-11-01T00:00:00Z')).toBe('closed');
   });
@@ -63,13 +69,19 @@ describe('registration schedule (Asia/Kolkata)', () => {
     expect(await h.store.listRegistrations('PENDING')).toHaveLength(1);
   });
 
-  it('lets the desk register on any day: before, on and after the event day', async () => {
+  it('lets the desk register on any day until on-site registration closes at 11:59 AM on the event day', async () => {
     const h = setup({ at: TIMES.online });
     const desk = await h.staff('DESK');
-    for (const at of [TIMES.online, TIMES.between, TIMES.onsiteOpens, TIMES.lastOnsiteSecond, TIMES.closed]) {
+    for (const at of [TIMES.online, TIMES.between, TIMES.onsiteOpens, TIMES.lastOnsiteMinute]) {
       h.setTime(at);
       const token = await h.loginAs(desk.username, STAFF_PASSWORD);
       expect((await h.onsite(token)).status, at).toBe(200);
+    }
+    for (const at of [TIMES.onsiteCloses, TIMES.closed]) {
+      h.setTime(at);
+      const refused = await h.onsite(await h.loginAs(desk.username, STAFF_PASSWORD));
+      expect(refused.status, at).toBe(403);
+      expect(refused.body).toMatchObject({ code: 'ONSITE_CLOSED', error: 'On-site registration closed at 17 October 2026 · 11:59 AM IST.' });
     }
   });
 
@@ -109,7 +121,7 @@ describe('registration schedule (Asia/Kolkata)', () => {
 // ---------------------------------------------------------------------------------------
 
 describe('on-site registration at the desk', () => {
-  it('gives on-site registrations numeric 20 + serial IDs from their own counter, approved at once with pass, email and sheet row', async () => {
+  it('gives on-site registrations 262 + serial IDs from their own counter, approved at once with a sheet row (no pass, no email)', async () => {
     const h = setup({ at: TIMES.online });
     const online = await h.submit();
     expect(online.body.registrationId).toBe('261001');
@@ -126,14 +138,14 @@ describe('on-site registration at the desk', () => {
       gatePass: { status: 'VERIFIED', method: 'CASH', amount: 100, verifiedBy: desk.username, verifiedAt: '2026-10-17T04:00:00.000Z' },
       technicalEvents: ['CODE FLEX', 'COGNIX'],
       payableAtVenue: 100,
-      pdfStatus: 'GENERATED',
-      emailStatus: 'SENT',
+      pdfStatus: 'NOT_STARTED',
       screenshot: null,
     });
     expect(first.body.registration.events.map((event: { fee: { status: string } }) => event.fee.status)).toEqual(['UNPAID', 'UNPAID']);
-    expect(h.sendMail).toHaveBeenCalledTimes(1);
-    expect(h.sendMail.mock.calls[0][0]).toContain('To: nila@example.com');
-    expect(h.files.objects.has('passes/262001.pdf')).toBe(true);
+    // No pass for a desk registration, so no pass email either (the online one got its own).
+    await h.service.runScheduled();
+    expect(h.sendMail.mock.calls.some(([mime]) => String(mime).includes('To: nila@example.com'))).toBe(false);
+    expect(h.files.objects.has('passes/262001.pdf')).toBe(false);
     expect(h.sheets.rows.find((row) => row.id === '262001')).toMatchObject({ source: 'On-site', status: 'APPROVED', gatePassPayment: 'Cash at desk · verified' });
 
     // The online counter is untouched: on-site IDs never take its numbers.
@@ -163,13 +175,13 @@ describe('on-site registration at the desk', () => {
     expect(next.body.registration.registrationId).toBe('262003');
   });
 
-  it('answers a resent form with the first registration (one record, one email)', async () => {
+  it('answers a resent form with the first registration (one record)', async () => {
     const h = setup({ at: TIMES.eventDay });
     const desk = await h.staff('DESK');
     const [a, b] = await Promise.all([h.onsite(desk.token, { submissionId: 'retry'.padEnd(32, 'x') }), h.onsite(desk.token, { submissionId: 'retry'.padEnd(32, 'x') })]);
     expect(a.body.registration.registrationId).toBe(b.body.registration.registrationId);
     expect(await h.store.listRegistrations('APPROVED')).toHaveLength(1);
-    expect(h.sendMail).toHaveBeenCalledTimes(1);
+    expect(h.sendMail).not.toHaveBeenCalled();
   });
 
   it('refuses an email, phone or UPI reference that is already registered, naming the registration', async () => {

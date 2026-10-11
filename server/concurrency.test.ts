@@ -91,7 +91,7 @@ describe('30 students at the same moment', () => {
     const recorded = await Promise.all(ids.map(async (id) => (await h.call('GET', `/api/admin/registrations/${id}`, undefined, { token: tokens[0] })).body.registration.gatePass.reference as string));
     const freed = recorded.map((reference) => (reference.startsWith('UTRX') ? reference.replace('UTRX', 'UTR') : reference.replace('UTR', 'UTRX')));
     for (const reference of freed) expect(await h.store.findClaim('transaction', reference)).toBeNull();
-    // And one pass per student.
-    expect([...h.files.objects.keys()].filter((key) => key.startsWith('passes/')).length).toBe(STUDENTS);
+    // Desk registrations have no pass: none made.
+    expect([...h.files.objects.keys()].filter((key) => key.startsWith('passes/')).length).toBe(0);
   }, SLOW);
 });

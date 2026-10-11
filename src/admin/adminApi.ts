@@ -170,9 +170,16 @@ export interface DetailsChange {
 export const editDetails = (token: string, id: string, change: DetailsChange) => action(token, id, 'details', change);
 export const changeEvents = (token: string, id: string, change: { add?: string[]; remove?: string[] }) => action(token, id, 'events', change);
 
+/** Short-lived links (a few minutes) to a screenshot: a small copy to show, and the original. */
+export interface ScreenshotLinks {
+  url: string;
+  originalUrl?: string;
+}
+const linksOf = (data: ScreenshotLinks): ScreenshotLinks => ({ url: data.url, ...(data.originalUrl && data.originalUrl !== data.url && { originalUrl: data.originalUrl }) });
+
 /** Short-lived links (a few minutes) to the payment screenshot and the pass. */
 export const screenshotUrl = (token: string, id: string) =>
-  request<{ url: string }>(`/api/admin/registrations/${encodeURIComponent(id)}/screenshot`, { token }).then((data) => data.url);
+  request<ScreenshotLinks>(`/api/admin/registrations/${encodeURIComponent(id)}/screenshot`, { token }).then(linksOf);
 export const passUrl = (token: string, id: string) =>
   request<{ url: string }>(`/api/admin/registrations/${encodeURIComponent(id)}/pass`, { token }).then((data) => data.url);
 
@@ -250,9 +257,9 @@ export const updateHelp = (token: string, id: string, change: { status?: HelpReq
   request<{ request: HelpRequest }>(`/api/admin/help/${encodeURIComponent(id)}`, { method: 'POST', body: change, token }).then((data) => data.request);
 /** The help requests this student coordinator sent, with the answers. */
 export const myHelp = (token: string) => request<{ requests: HelpRequest[] }>('/api/help/mine', { token }).then((data) => data.requests);
-/** A five-minute link to a GPay screenshot the student uploaded. */
+/** Five-minute links to a GPay screenshot the student uploaded (a small copy and the original). */
 export const proofUrl = (token: string, id: string, proofId: string) =>
-  request<{ url: string }>(`/api/admin/registrations/${encodeURIComponent(id)}/proofs/${encodeURIComponent(proofId)}`, { token }).then((data) => data.url);
+  request<ScreenshotLinks>(`/api/admin/registrations/${encodeURIComponent(id)}/proofs/${encodeURIComponent(proofId)}`, { token }).then(linksOf);
 export const systemStatus = (token: string) => request<SystemStatus>('/api/admin/system', { token });
 
 export const lookupParticipant = (token: string, id: string) => request<ParticipantLookup>(`/api/admin/lookup/${encodeURIComponent(id)}`, { token });

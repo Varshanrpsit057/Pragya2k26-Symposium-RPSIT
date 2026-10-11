@@ -31,6 +31,10 @@ export const TIMES = {
   onsiteOpens: '2026-10-16T18:30:00Z',
   /** 17 October, 9:30 AM IST: the event day. */
   eventDay: '2026-10-17T04:00:00Z',
+  /** 17 October, 11:58:59 AM IST: the last minute of on-site registration. */
+  lastOnsiteMinute: '2026-10-17T06:28:59Z',
+  /** 17 October, 11:59 AM IST: on-site registration closes (the events go on). */
+  onsiteCloses: '2026-10-17T06:29:00Z',
   /** 17 October, 11:59:59 PM IST: the last second of the event day. */
   lastOnsiteSecond: '2026-10-17T18:29:59Z',
   /** 18 October, 12:00 AM IST: every registration closed. */
@@ -68,6 +72,9 @@ export class FakeFiles implements FileStore {
     const found = this.objects.get(key);
     if (!found) throw new Error(`No such key ${key}`);
     return found.bytes;
+  }
+  async exists(key: string) {
+    return this.objects.has(key);
   }
   async delete(key: string) {
     this.objects.delete(key);

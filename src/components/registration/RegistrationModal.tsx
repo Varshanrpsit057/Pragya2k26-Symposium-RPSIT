@@ -778,14 +778,14 @@ function ClosedNotice({ phase, onClose }: { phase: RegistrationPhase; onClose: (
       </h2>
       <p className="reg__lead">
         {closedMessage()}
-        {onsiteAhead ? '' : ' On-site registration ended with the event day. Thank you for your interest.'}
+        {onsiteAhead ? '' : ' On-site registration closed at 11:59 AM on the event day. Thank you for your interest.'}
       </p>
       {onsiteAhead && (
         <div className="reg-note" role="note">
           <p className="reg-note__title">{phase === 'onsite' ? 'On-site registration is open today' : 'Register on-site on the event day'}</p>
           <p>
             {phase === 'onsite'
-              ? `Come to ${onsite.desk} today, until the end of the day.`
+              ? `Come to ${onsite.desk} today, until 11:59 AM.`
               : `On-site registration opens ${opens ? `on ${formatIst(opens)}` : 'on the event day'} at ${onsite.desk}.`}{' '}
             Pay the {rupees(gatePassFee)} gate pass there in cash or by UPI, then {rupees(eventFee)} for each event to its
             coordinator. Bring your college ID card.

@@ -27,7 +27,7 @@ const PHASE: Record<string, string> = {
   online: 'Online registration open',
   between: 'Between online and on-site',
   onsite: 'On-site registration (event day)',
-  closed: 'Registration closed (after the event)',
+  closed: 'Registration closed (from 11:59 AM on the event day)',
 };
 
 const MODE: Record<TimelineMode, string> = {

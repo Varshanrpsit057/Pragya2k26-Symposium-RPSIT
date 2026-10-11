@@ -17,7 +17,7 @@ import { credentialsProblem, proofLabel, type StudentPortalState, type StudentVi
 import { sameText } from './auth';
 import { ApiError } from './errors';
 import type { FileStore } from './files';
-import { currentEventIds, isFeePaid, isPresent, participationOf, sourceOf } from './participation';
+import { currentEventIds, hasPass, isFeePaid, isPresent, participationOf, sourceOf } from './participation';
 import { passFileName } from './pass';
 import type { Actor } from './roles';
 import type { Registration, RegistrationChanges, Store } from './store';
@@ -159,7 +159,7 @@ export class StudentPortal {
         sourceOf(registration) === 'ONSITE' && registration.status === 'PENDING'
           ? { amount: registration.record.payment.gatePassAmount, screenshotSent: (registration.proofs ?? []).some((proof) => proof.kind === 'GATE_PASS') }
           : null,
-      passAvailable: registration.status === 'APPROVED' && registration.pdfStatus === 'GENERATED' && Boolean(registration.pdfKey),
+      passAvailable: hasPass(registration) && registration.status === 'APPROVED' && registration.pdfStatus === 'GENERATED' && Boolean(registration.pdfKey),
       reason: reason ?? null,
       proofs: (registration.proofs ?? []).map((proof) => ({ kind: proof.kind, label: proofLabel(proof.kind, eventName), uploadedAt: proof.uploadedAt })),
     };
@@ -207,6 +207,9 @@ export class StudentPortal {
   /** A one-minute link to the participant's own pass, once approved. */
   async pass(body: unknown, ip: string): Promise<{ success: true; url: string }> {
     const registration = await this.signIn(body, ip);
+    if (!hasPass(registration)) {
+      throw new ApiError(404, 'NO_PASS', 'Registrations made at the desk have no pass: show your Registration ID (on this page) to the coordinator at each event.');
+    }
     if (registration.status !== 'APPROVED') {
       throw new ApiError(403, 'PASS_NOT_AVAILABLE', 'Your pass is available only for an approved registration. Please go to the registration desk.');
     }

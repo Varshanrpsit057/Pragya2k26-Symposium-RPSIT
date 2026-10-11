@@ -1,13 +1,15 @@
 import { useEffect, useState } from 'react';
-import { SignedOut } from './adminApi';
+import { SignedOut, type ScreenshotLinks } from './adminApi';
 import { messageOf } from './ui';
 
 /**
  * A private payment screenshot, big enough to read the amount, the time and the transaction
- * ID, with zoom. `load` (stable) fetches its short-lived link; Reload fetches a new one.
+ * ID, with zoom. `load` (stable) fetches its short-lived links: a small copy to show (quick on
+ * a busy network) and the original as uploaded; Reload fetches new ones.
  */
-export function Screenshot({ load, alt, onSignedOut }: { load: () => Promise<string>; alt: string; onSignedOut: () => void }) {
-  const [url, setUrl] = useState<string | null>(null);
+export function Screenshot({ load, alt, onSignedOut }: { load: () => Promise<ScreenshotLinks>; alt: string; onSignedOut: () => void }) {
+  const [links, setLinks] = useState<ScreenshotLinks | null>(null);
+  const url = links?.url ?? null;
   const [problem, setProblem] = useState('');
   const [loads, setLoads] = useState(0);
   const [zoom, setZoom] = useState(false);
@@ -17,7 +19,7 @@ export function Screenshot({ load, alt, onSignedOut }: { load: () => Promise<str
     load().then(
       (value) => {
         if (!active) return;
-        setUrl(value);
+        setLinks(value);
         setProblem('');
       },
       (failure: unknown) => {
@@ -44,9 +46,9 @@ export function Screenshot({ load, alt, onSignedOut }: { load: () => Promise<str
         <button type="button" className="adm-link" disabled={!url} onClick={() => setZoom(!zoom)}>
           {zoom ? 'Make smaller' : 'Zoom in'}
         </button>
-        {url && (
-          <a href={url} target="_blank" rel="noopener noreferrer">
-            Open full size
+        {links && (
+          <a href={links.originalUrl ?? links.url} target="_blank" rel="noopener noreferrer">
+            {links.originalUrl ? 'Open the original' : 'Open full size'}
           </a>
         )}
         <button type="button" className="adm-link" onClick={() => setLoads((count) => count + 1)}>

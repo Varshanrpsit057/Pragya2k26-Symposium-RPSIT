@@ -132,12 +132,6 @@
   background: color-mix(in oklab, var(--accent) 14%, transparent);
 }
 
-.event-details__route-note {
-  margin-top: 0.35rem;
-  font-size: 0.86rem;
-  color: var(--c-text-muted);
-}
-
 /* The chief guest, set apart */
 .event-details__guest {
   display: grid;

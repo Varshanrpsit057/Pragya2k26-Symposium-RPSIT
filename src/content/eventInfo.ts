@@ -9,10 +9,10 @@ import type { EventInfo } from './types';
 
 /** The same for every event: gate pass, event registration at the venue, what to bring. */
 export const DAY_INSTRUCTIONS = [
-  'Gate pass ₹100: online until 11:59 PM, 16 October, or at the registration desk on 17 October.',
+  'Gate pass ₹100: online until 11:59 PM, 16 October, or at the registration desk on 17 October until 11:59 AM.',
   'Register for each event at its venue: give the coordinator your Registration ID and pay ₹50.',
-  'Carry your college ID card and your participant pass (printed or on your phone).',
-  'Be at the venue 30 minutes before the start.',
+  'Carry your college ID card, and your participant pass (printed or on your phone) if you registered online. At the desk you get your Registration ID.',
+  'Every event starts at 10:30 AM: be at the venue by 10:00 AM.',
 ];
 
 export const eventInfo: Record<string, EventInfo> = {

@@ -49,7 +49,7 @@ describe('student login: switched by admins', () => {
 });
 
 describe('student login: the participant’s own pass and events', () => {
-  it('signs in with the Registration ID and phone number, shows the events and hands out the pass', async () => {
+  it('signs in with the Registration ID and phone number and shows the events (a desk registration has no pass)', async () => {
     const { h, id, signIn } = await eventDay();
     // The phone as people type it: with +91, spaces or dashes.
     const view = await signIn('+91 98400-12345');
@@ -70,14 +70,14 @@ describe('student login: the participant’s own pass and events', () => {
       // The details the desk typed, for the student to check.
       details: { department: 'Computer Science and Engineering (CSE)', year: '2nd Year', phone: '9840012345', email: expect.stringContaining('@') },
       payAtLogin: null,
-      passAvailable: true,
+      passAvailable: false,
       reason: null,
       proofs: [],
     });
 
     const pass = await h.call('POST', '/api/student/pass', { registrationId: id, phone: '9840012345' });
-    expect(pass.status).toBe(200);
-    expect(pass.body.url).toMatch(new RegExp(`passes/${id}\\.pdf\\?X-Amz-Expires=60&download=PRAGYA-2026-Pass-${id}\\.pdf`));
+    expect(pass.status).toBe(404);
+    expect(pass.body).toMatchObject({ code: 'NO_PASS', error: expect.stringContaining('show your Registration ID') });
 
     // A fee paid at the venue shows up on the next sign-in.
     const coordinator = await h.staff('COORDINATOR', ['viz-craft']);

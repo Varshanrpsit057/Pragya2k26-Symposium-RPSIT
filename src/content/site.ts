@@ -37,10 +37,10 @@ export const site: SiteInfo = {
     closesAt: '2026-10-16T23:59:00',
     deadline: '16 October 2026, 11:59 PM IST',
     // The event day (IST): the website switches to on-site registration at midnight on
-    // 17 October, and closes every registration when the day ends.
+    // 17 October, and on-site registration closes at 11:59 AM that day (the events go on).
     onsite: {
       opensAt: '2026-10-17T00:00:00',
-      closesAt: '2026-10-18T00:00:00',
+      closesAt: '2026-10-17T11:59:00',
       desk: 'the registration desk at the college',
     },
     note: null,

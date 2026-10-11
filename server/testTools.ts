@@ -27,6 +27,7 @@ import {
 import type { DriveStore } from './drive';
 import { ApiError } from './errors';
 import type { FileStore } from './files';
+import { previewKey } from './preview';
 import { describeError } from './google';
 import { sourceOf } from './participation';
 import type { Actor } from './roles';
@@ -166,7 +167,8 @@ export class TestTools {
         schedule = { onlineClosesAt: istLocal(now + hours * HOUR), onsiteOpensAt: istLocal(now + hours * HOUR), onsiteClosesAt: istLocal(now + (hours + 24) * HOUR) };
         break;
       case 'closed':
-        schedule = { onlineClosesAt: istLocal(now - 3 * MINUTE), onsiteOpensAt: istLocal(now - 2 * MINUTE), onsiteClosesAt: istLocal(now - MINUTE) };
+        // After the event: the event day was yesterday, and on-site registration has closed.
+        schedule = { onlineClosesAt: istLocal(now - 26 * HOUR), onsiteOpensAt: istLocal(now - 25 * HOUR), onsiteClosesAt: istLocal(now - MINUTE) };
         break;
       case 'custom': {
         const given = isObject(body) && isObject(body.schedule) ? body.schedule : {};
@@ -357,7 +359,8 @@ export class TestTools {
     }
     const record = current ?? registration;
     for (const [kind, key] of claimsOf(record)) await quietly(() => store.releaseClaim(kind, key, id));
-    const keys = [record.screenshot?.key, record.pdfKey, ...(record.proofs ?? []).map((proof) => proof.key)].filter((key): key is string => Boolean(key));
+    const screenshots = [record.screenshot?.key, ...(record.proofs ?? []).map((proof) => proof.key)].filter((key): key is string => Boolean(key));
+    const keys = [...screenshots, ...screenshots.map(previewKey), ...(record.pdfKey ? [record.pdfKey] : [])];
     // Best effort: a file that cannot be removed now never stops the clean-up.
     await Promise.all(keys.map((key) => quietly(() => files.delete(key))));
     const driveIds = [record.paymentDriveFileId, record.passDriveFileId, record.recordFileId, ...(record.proofs ?? []).map((proof) => proof.driveFileId)].filter(

@@ -283,31 +283,9 @@ export function MapEditor() {
       </section>
 
       <section className="adm-card adm-pad">
-        <h3 className="adm-h3">Directions to each venue</h3>
-        <p className="adm-muted">One step per line. Students see them under the map.</p>
-        <div className="adm-form adm-form--two">
-          {map.venues.map((venue) => (
-            <label key={venue.name} className="adm-field">
-              <span>
-                {venue.name} · {map.floors.find((item) => item.id === venue.floorId)?.name ?? 'not placed'}
-              </span>
-              <textarea
-                rows={5}
-                value={venue.steps.join('\n')}
-                onChange={(event) =>
-                  update((draft) => {
-                    draft.venues.find((item) => item.name === venue.name)!.steps = event.target.value.split('\n').map((line) => line.trimStart()).filter((line, index, all) => line || index < all.length - 1);
-                  })
-                }
-              />
-            </label>
-          ))}
-        </div>
-      </section>
-
-      <section className="adm-card adm-pad">
         <div className="adm-toolbar">
           <h3 className="adm-h3">What students will see</h3>
+          <p className="adm-muted">The way and its steps are worked out from the walking paths: put each venue in its room above.</p>
           <select value={previewVenue} onChange={(event) => setPreviewVenue(event.target.value)} aria-label="Venue to preview">
             {map.venues.map((venue) => (
               <option key={venue.name}>{venue.name}</option>

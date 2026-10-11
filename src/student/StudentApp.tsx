@@ -8,11 +8,9 @@
  * request. The help desk's numbers are always at the bottom.
  */
 import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
-import { CampusMap } from '../components/map/CampusMap';
+import { LazyCampusMap } from '../components/map/LazyCampusMap';
 import { GroupedId } from '../components/ui/GroupedId';
-import { campusMap } from '../content/campusMap';
 import { site } from '../content/site';
-import { venueOf } from '../lib/campusMap';
 import { useSchedule } from '../lib/liveSchedule';
 import { normaliseRegistrationId, rupees } from '../lib/registration';
 import { credentialsProblem, type StudentCredentials, type StudentView } from '../lib/student';
@@ -286,7 +284,10 @@ function Home({ view, credentials, updatedAt, onUpdate, onPaused, onSignOut }: H
             {busy === 'pass' ? 'Preparing your pass…' : 'Download your pass (PDF)'}
           </button>
         )}
-        {view.status === 'APPROVED' && !view.passAvailable && <p className="stu-muted">Your pass is being prepared. Refresh in a few minutes.</p>}
+        {view.status === 'APPROVED' && !view.passAvailable && view.source === 'ONSITE' && (
+          <p className="stu-muted">No pass is needed: show your Registration ID (above) to the coordinator at each event.</p>
+        )}
+        {view.status === 'APPROVED' && !view.passAvailable && view.source !== 'ONSITE' && <p className="stu-muted">Your pass is being prepared. Refresh in a few minutes.</p>}
         {!view.payAtLogin && (
           <details className="stu-more">
             <summary>Your details</summary>
@@ -344,13 +345,13 @@ function Home({ view, credentials, updatedAt, onUpdate, onPaused, onSignOut }: H
                     Route map to {event.venue ?? 'the venue'}
                   </a>
                 ) : (
-                  venueOf(campusMap, event.venue) && (
+                  event.venue && (
                     <button type="button" className="stu-button stu-button--ghost stu-button--small" aria-expanded={mapFor === event.id} onClick={() => setMapFor(mapFor === event.id ? null : event.id)}>
                       {mapFor === event.id ? 'Hide the map' : `Show ${event.venue} on the map`}
                     </button>
                   )
                 )}
-                {mapFor === event.id && <CampusMap map={campusMap} venue={event.venue} />}
+                {mapFor === event.id && <LazyCampusMap venue={event.venue} />}
               </li>
             ))}
           </ul>
@@ -636,7 +637,7 @@ function CheckDetails({ view, onContinue }: { view: StudentView; onContinue: () 
       <h1 id="stu-check" className="stu-title">
         Check your details
       </h1>
-      <p className="stu-muted">The registration desk typed these for you. Your pass shows them.</p>
+      <p className="stu-muted">The registration desk typed these for you.</p>
       <DetailsList view={view} />
       <button className="stu-button" type="button" onClick={onContinue}>
         My details are correct: continue to payment

@@ -37,10 +37,12 @@ describe('GPay payments made online', () => {
 
 describe("correcting a student's details", () => {
   it('fixes a typo, makes a new pass with it, and can send the pass to a corrected email', async () => {
-    const h = setup({ at: TIMES.eventDay });
+    const h = setup({ at: TIMES.online });
+    const id = (await h.submit({ phone: '9840000001', email: 'walkin1@example.com' })).body.registrationId as string;
+    await h.asOwner('POST', `/api/admin/registrations/${id}/approve`, {});
+    h.setTime(TIMES.eventDay);
     const desk = await h.staff('DESK');
     const support = await h.staff('SUPPORT');
-    const id = (await h.onsite(desk.token, { phone: '9840000001', email: 'walkin1@example.com' })).body.registration.registrationId as string;
     const fix = (body: unknown, token = support.token) => h.call('POST', `/api/admin/registrations/${id}/details`, body, { token });
     expect(h.sendMail).toHaveBeenCalledTimes(1);
 
@@ -65,7 +67,9 @@ describe("correcting a student's details", () => {
     expect(clash.status).toBe(409);
     expect(clash.body).toMatchObject({ code: 'DUPLICATE_EMAIL', details: { registrationId: other } });
     expect(await h.store.findClaim('email', 'nila.r@example.com')).toBe(id);
-    const phoneClash = await fix(details({ email: 'nila.r@example.com', phone: '9840000002' }));
+    // Phones are held by desk registrations: one cannot take another's.
+    const walkIn = (await h.onsite(desk.token, { email: 'walkin3@example.com', phone: '9840000003' })).body.registration.registrationId as string;
+    const phoneClash = await h.call('POST', `/api/admin/registrations/${walkIn}/details`, details({ email: 'walkin3@example.com', phone: '9840000002' }), { token: support.token });
     expect(phoneClash.body.code).toBe('DUPLICATE_PHONE');
     const invalid = await fix(details({ name: '', phone: '123' }));
     expect(invalid.status).toBe(400);
@@ -89,8 +93,7 @@ describe('deleting a record', () => {
     expect(deleted.body).toEqual({ success: true, deleted: id });
     expect(await h.store.getRegistration(id)).toBeNull();
     expect((await h.asOwner('GET', `/api/admin/registrations/${id}`)).status).toBe(404);
-    // Nothing is lost: its files stay (private), and the whole record is kept in the log.
-    expect(h.files.objects.has(`passes/${id}.pdf`)).toBe(true);
+    // Nothing is lost: the whole record is kept in the log (and its files, if it had any, stay).
     expect(JSON.parse(h.store.audit[0].snapshot!).registrationId).toBe(id);
     expect(h.sheets.rows.find((row) => row.id === id)).toMatchObject({ status: 'DELETED', notes: 'Deleted by pragya-admin 2026-10-17 09:31:00: Test entry' });
     // The same student can be registered again.

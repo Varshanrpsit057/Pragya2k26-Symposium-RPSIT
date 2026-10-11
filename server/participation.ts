@@ -27,7 +27,10 @@ export const isFeePaid = (registration: Registration, eventId: string) => partic
 
 export const isPresent = (registration: Registration, eventId: string) => participationOf(registration, eventId).attendance?.present === true;
 
-export const sourceOf = (registration: Registration) => registration.source ?? 'ONLINE';
+export const sourceOf = (registration: Pick<Registration, 'source'>) => registration.source ?? 'ONLINE';
+
+/** Only online registrations have a participant pass; at the desk the Registration ID is enough. */
+export const hasPass = (registration: Pick<Registration, 'source'>) => sourceOf(registration) !== 'ONSITE';
 
 export function gatePassView(registration: Registration): GatePassView {
   const { gatePass } = registration;

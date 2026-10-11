@@ -15,11 +15,20 @@ It is deployed straight from GitHub to **AWS Amplify**: no servers to run, no SS
   registration form; and the footer (coordinator contact, credits beside the map). PRAGYA 2026 runs
   technical events only: the website and the API accept no other event.
   The Dev Crew opens from the incognito button next to Contact in the navigation.
+- **Route map** (home page, each event's See More window, Student login): the student picks where
+  they are and where to go (an event's venue, the nearest restroom or drinking water, the canteen,
+  the mess, the main auditorium, any room) and sees the way drawn on the campus and on each floor,
+  with plain steps ("Turn left along the corridor…"); a step opens its floor. Zoom with + and −, or
+  pinch; on a phone the map opens zoomed in on the way. The way is worked out from the walking paths
+  in `src/content/campusMap.json` (`nav`; `src/lib/navigation.ts`), which avoid the closed COE
+  corridor and the staff-only lift. The map is downloaded only when it is opened.
+- **Event day**: the help desk section moves up, right under the hero, and a bar at the bottom of
+  every screen offers Call the help desk, WhatsApp and the Route map.
 - **Registration form**: participant details, event selection, the ₹100 gate-pass payment details,
   the payment screenshot and the transaction ID.
 - **Registration schedule** (automatic, Asia/Kolkata, enforced by the API from its clock, no deploy
   needed): online until **11:59 PM IST, 16 October**; on **17 October** only the registration desk
-  registers (on-site mode); from midnight after the event day, every registration is closed. The site
+  registers (on-site mode), **until 11:59 AM**; after that, every registration is closed. The site
   switches its countdown, Register section and form by itself. See section 12.
 - **Staff dashboard** at `/landing/admin/`: every staff member signs in with their own account and
   sees only what their role allows (Admin, Registration desk, Event coordinator, Certificate team);
@@ -299,8 +308,9 @@ the build and the secret check.
 | --- | --- | --- | --- |
 | until 16 Oct, 11:59 PM | online form, countdown | closed | read only |
 | 16 Oct, 11:59 PM – midnight | "Online registration closed; on-site on 17 October" | closed | read only |
-| 17 Oct, all day | "On-site registration is open today"; no online form | open | fees, attendance, winners |
-| from 18 Oct, 12:00 AM | "Registration closed" | closed | may still finish and submit results |
+| 17 Oct, until 11:59 AM | "On-site registration open · Closes today at 11:59 AM"; no online form | open | fees, attendance, winners |
+| 17 Oct, from 11:59 AM | "Registration closed"; Student login, help desk and Route map stay up front | closed (the API refuses with `ONSITE_CLOSED`) | fees, attendance, winners |
+| from 18 Oct | "Registration closed" | closed | may still finish and submit results |
 
 The API decides from its own clock on every request (`src/lib/schedule.ts`); the website only mirrors
 it. The Google Form fallback link disappears with the online form, but **the Google Form itself must
@@ -317,7 +327,8 @@ be closed by hand** (Forms → Responses → *Accepting responses* off) at 11:59
 | **Web assistant team** | registrations (read, correct details, retry, delete), the **Deleted** list (restore), help requests and replies, system status, campus map, the Student login switch | all |
 
 The dashboard's **Roles** section shows the same list (it is read from `src/lib/staff.ts`, which the
-server enforces). Students download their own pass from **Student login**; the dashboard does not
+server enforces). Students who registered online download their pass from **Student login**; desk
+registrations get no pass (the Registration ID is enough); the dashboard does not
 offer passes.
 
 ### Desk numbers
@@ -332,6 +343,9 @@ the Excel files and **Student coordinators → Signed in now**.
 - Registration status, the gate pass and each event fee are separate records, each with who
   recorded it, at which desk, and when.
 - Cash counts as received only when the staff member ticks that it is in hand.
+- Screenshots: the dashboard shows a small JPEG copy (at most 720 px wide, `previews/payments/…` in
+  S3, made the first time anyone opens it), with **Open the original** for the file exactly as the
+  student uploaded it. The originals are never changed; they stay in S3 and are copied to Drive.
 - GPay at the desk or a venue: the student pays from **Student login** (the QR and a UPI-app button)
   and uploads the screenshot; the desk (gate pass) or the event's coordinator (event fee) checks it,
   types the transaction ID from it and approves it. A transaction ID is never accepted twice. Each

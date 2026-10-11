@@ -13,6 +13,7 @@ import { GroupedId } from '../components/ui/GroupedId';
 import { COLLEGES, OTHER_COLLEGE } from '../content/colleges';
 import { events as allEvents } from '../content/events';
 import type { AdminRegistration } from '../lib/admin';
+import { formatIst, parseEventStart } from '../lib/countdown';
 import { DEPARTMENTS, OTHER_DEPARTMENT, YEARS_OF_STUDY, idParts, newSubmissionId, normalisePhone, normaliseRegistrationId, rupees } from '../lib/registration';
 import { hasPermission, type SessionInfo } from '../lib/staff';
 import { STUDENT_PAGE } from '../lib/student';
@@ -108,10 +109,15 @@ export function DeskPanel({ token, session, onSignedOut }: PanelProps) {
   return (
     <main className="adm-page">
       {canRegister && <DeskGuide />}
+      {canRegister && session.phase === 'closed' && (
+        <p className="adm-note" role="status">
+          On-site registration has closed{session.schedule.onsiteClosesAt ? ` (${formatIst(parseEventStart(session.schedule.onsiteClosesAt)!)})` : ''}. GPay approvals, corrections and events go on.
+        </p>
+      )}
       <section className="adm-card adm-pad" aria-label="Find a registration">
         <div className="adm-desk-top">
           {canRegister && (
-            <button className="adm-button adm-button--primary adm-button--huge" type="button" onClick={() => setCreating(true)}>
+            <button className="adm-button adm-button--primary adm-button--huge" type="button" disabled={session.phase === 'closed'} onClick={() => setCreating(true)}>
               + New registration
             </button>
           )}
@@ -248,7 +254,7 @@ function DeskGuide() {
           screenshot. It appears on your screen: type the transaction ID from it and press <strong>Approve payment</strong>.
         </li>
         <li>
-          Tell the student their <strong>Registration ID</strong> (big on the screen). They download their own pass on their phone with <em>Student login</em> (ID and phone). Then press <strong>Register the next student</strong>.
+          Tell the student their <strong>Registration ID</strong> (big on the screen): there is no pass for desk registrations, the ID is what they show at each event. They can see their events and timings on their phone with <em>Student login</em> (ID and phone). Then press <strong>Register the next student</strong>.
         </li>
       </ol>
       <p className="adm-muted">
@@ -438,7 +444,7 @@ function NewRegistration({ token, session, registrations, onCreated, onOpen, onC
     return (
       <Dialog title={done.status === 'PENDING' ? 'Registered: GPay payment next' : done.status === 'APPROVED' ? 'Registered' : 'Not registered'} onClose={onClose} size="full">
         {done.status === 'APPROVED' ? (
-          <Success registration={done} passByEmail={session.passByEmail} onNext={reset} onClose={onClose} />
+          <Success registration={done} onNext={reset} onClose={onClose} />
         ) : (
           <AwaitingPayment registration={done} token={token} onChange={changed} onNext={reset} onClose={onClose} onSignedOut={onSignedOut} />
         )}
@@ -449,7 +455,7 @@ function NewRegistration({ token, session, registrations, onCreated, onOpen, onC
   return (
     <Dialog
       title="New registration"
-      subtitle={`The student gets an ID (20…) and a pass${session.passByEmail ? ' by email' : ' to download from the website (Student login)'}. Events chosen here show up in each coordinator's list; each event's ${rupees(fees.perEvent)} is paid at its venue.`}
+      subtitle={`The student gets a Registration ID (262…), shown at each event: no pass for desk registrations. Events chosen here show up in each coordinator's list; each event's ${rupees(fees.perEvent)} is paid at its venue.`}
       onClose={onClose}
       size="full"
       footer={
@@ -777,12 +783,11 @@ function AwaitingPayment({ registration: current, token, onChange, onNext, onClo
  */
 interface SuccessProps {
   registration: AdminRegistration;
-  passByEmail: boolean;
   onNext: () => void;
   onClose: () => void;
 }
 
-function Success({ registration, passByEmail, onNext, onClose }: SuccessProps) {
+function Success({ registration, onNext, onClose }: SuccessProps) {
   return (
     <div className="adm-success" role="status">
       <p className="adm-success__tick" aria-hidden="true">
@@ -803,11 +808,7 @@ function Success({ registration, passByEmail, onNext, onClose }: SuccessProps) {
           : 'No events yet: they register at each venue.'}
       </p>
       <p className="adm-muted">
-        {passByEmail
-          ? registration.emailStatus === 'SENT'
-            ? `The pass was emailed to ${registration.participant.email}.`
-            : 'The pass and email are on their way.'
-          : 'The student downloads their pass on their own phone: Student login on the website, with the Registration ID and phone number.'}
+        No pass for desk registrations: the student shows this Registration ID at each event. On their phone, Student login (the ID and their phone number) shows their events and timings.
       </p>
       <div className="adm-actions__row adm-success__actions">
         <button className="adm-button adm-button--approve adm-button--huge" type="button" onClick={onNext} autoFocus>

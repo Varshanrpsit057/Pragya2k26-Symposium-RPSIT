@@ -1,10 +1,15 @@
 import { act, fireEvent, render, screen, within } from '@testing-library/react';
-import { describe, expect, it } from 'vitest';
+import { beforeAll, describe, expect, it } from 'vitest';
 import { eventAnchor, events, eventsByCategory } from '../../content/events';
 import type { EventCategory } from '../../content/types';
 import { focusEvent } from '../../lib/eventFocus';
 import { SiteModalsProvider } from '../modal/SiteModals';
 import { EventsSection } from './EventsSection';
+
+// The campus map is downloaded when first shown; load it once up front (see LazyCampusMap).
+beforeAll(async () => {
+  await import('../map/CampusMapWithData');
+}, 60_000);
 
 const renderTrack = (category: EventCategory) =>
   render(
@@ -109,7 +114,7 @@ describe('EventsSection (accordion gallery)', () => {
     expect(panelOf(container, vizCraft.id)).toHaveAttribute('aria-current', 'true');
   });
 
-  it('gives a technical event its student coordinators at the top, then time, venue with a route map, prizes, each once', () => {
+  it('gives a technical event its student coordinators at the top, then time, venue with a route map, prizes, each once', async () => {
     const { container } = renderTrack('technical');
     const proPitch = events.find((event) => event.id === 'pro-pitch')!;
     const panel = panelOf(container, proPitch.id);
@@ -127,7 +132,7 @@ describe('EventsSection (accordion gallery)', () => {
     expect(heading.compareDocumentPosition(coordinators) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     expect(coordinators.compareDocumentPosition(within(details).getByText('Delta Lab')) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
 
-    expect(within(details).getByText('10:30 AM – 12:00 PM')).toBeInTheDocument();
+    expect(within(details).getByText('Round 1: 10:30 AM – 11:30 AM · Round 2: 12:00 PM – 1:00 PM')).toBeInTheDocument();
     expect(within(details).getByText('Individual or team')).toBeInTheDocument();
     expect(within(details).getByText('₹1,000')).toBeInTheDocument();
     expect(within(details).getByText('Participation certificate for every participant')).toBeInTheDocument();
@@ -135,6 +140,8 @@ describe('EventsSection (accordion gallery)', () => {
     // The route map: the campus map in this window, Delta Lab lit up on its floor, with directions.
     fireEvent.click(within(details).getByRole('button', { name: 'Route map' }));
     const map = within(details).getByRole('region', { name: 'Map to Delta Lab' });
+    // The map is downloaded the first time it is opened.
+    expect(await within(map).findByText(/is on the/)).toBeInTheDocument();
     expect(map).toHaveTextContent('Delta Lab is on the second floor of the main building.');
     expect(within(map).getByRole('tab', { name: /Second floor/ })).toHaveAttribute('aria-selected', 'true');
     expect(within(map).getByRole('list', { name: 'How to get to Delta Lab' })).toBeInTheDocument();

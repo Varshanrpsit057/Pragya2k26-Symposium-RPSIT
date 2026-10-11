@@ -78,15 +78,48 @@ export interface RouteLeg {
   toAt?: [number, number];
 }
 
-/** An event venue (its name as in the event catalog), where it is, and how to get there. */
+/** An event venue (its name as in the event catalog) and its room; the way there is worked out from the walking network. */
 export interface Venue {
   name: string;
   floorId: string;
   roomId: string;
-  steps: string[];
-  /** Which door of the main building to use: the campus tab draws the way to it. */
-  entrance?: 'main' | 'side-1';
+  /** Older layout files: written directions and a drawn way (no longer used). */
+  steps?: string[];
   route?: RouteLeg[];
+}
+
+/** A point of the walking network: on a floor (plan coordinates) or on the campus drawing. */
+export interface NavNode {
+  id: string;
+  floorId: string;
+  x: number;
+  y: number;
+  kind: 'corridor' | 'hallway' | 'door' | 'stairs' | 'entrance' | 'outside' | 'water' | 'campus';
+  /** A ring corner of the corridor ('At the corner, turn …'), or which stairs. */
+  corner?: boolean | string;
+  roomId?: string;
+  label?: string;
+  /** For the stairs and the entrances: how the directions name them. */
+  name?: string;
+  /** What it is, for 'the nearest …': restroom-ladies, restroom-gents, water, canteen, mess, auditorium. */
+  tag?: string;
+}
+
+/** A path between two points, `w` metres long; `say` is what the directions say walking it (a→b, b→a). */
+export interface NavEdge {
+  a: string;
+  b: string;
+  w: number;
+  say?: [string, string];
+}
+
+/** A place to choose in the route finder: a point, or the nearest point with a tag. */
+export interface Place {
+  id: string;
+  label: string;
+  group: 'campus' | 'facility';
+  node?: string;
+  nearest?: string;
 }
 
 /** The building every floor shares: its walls, the courtyard, the amphitheatre and fountain. */
@@ -108,6 +141,8 @@ export interface CampusMap {
   plan: BuildingPlan;
   floors: Floor[];
   venues: Venue[];
+  /** The walking network the routes are found in. */
+  nav: { nodes: NavNode[]; edges: NavEdge[]; places: Place[] };
   /** Photo spots on the campus overview (gates, road, main entrance). */
   campusPhotos: PhotoSpot[];
 }
@@ -141,8 +176,10 @@ export function mapProblem(value: unknown): string | null {
       if (!isObject(photo) || typeof photo.image !== 'string' || ![photo.x, photo.y].every(isNumber)) return `A photo spot on the ${floor.name} is incomplete.`;
     }
   }
+  const nav = value.nav;
+  if (!isObject(nav) || !Array.isArray(nav.nodes) || !Array.isArray(nav.edges) || !Array.isArray(nav.places)) return 'The walking network in the file is missing.';
   for (const venue of value.venues as unknown[]) {
-    if (!isObject(venue) || typeof venue.name !== 'string' || !Array.isArray(venue.steps)) return 'A venue in the file is incomplete.';
+    if (!isObject(venue) || typeof venue.name !== 'string' || typeof venue.roomId !== 'string') return 'A venue in the file is incomplete.';
     const legs = venue.route ?? [];
     const isPoint = (point: unknown) => Array.isArray(point) && point.length === 2 && point.every(isNumber);
     if (!Array.isArray(legs) || !legs.every((leg: unknown) => isObject(leg) && typeof leg.floorId === 'string' && Array.isArray(leg.points) && leg.points.every(isPoint))) {
