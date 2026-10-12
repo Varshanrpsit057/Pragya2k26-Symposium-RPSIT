@@ -55,15 +55,52 @@ const clock = (ms) => `${String(Math.floor(ms / 60_000)).padStart(2, '0')}:${Str
 // ------------------------------------------------------------------------------------------
 // Asking for the admin's details (the password is never echoed or printed)
 
-function ask(question, hidden = false) {
+/** A visible question (the username). */
+function ask(question) {
   return new Promise((resolve) => {
-    const rl = readline.createInterface({ input: process.stdin, output: process.stdout, terminal: true });
-    if (hidden) rl._writeToOutput = (text) => text.includes(question) && rl.output.write(text);
+    const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
     rl.question(question, (answer) => {
       rl.close();
-      if (hidden) process.stdout.write('\n');
       resolve(answer.trim());
     });
+  });
+}
+
+/** The password, typed hidden (nothing is shown, not even stars) and sent exactly as typed. */
+function askHidden(question) {
+  const stdin = process.stdin;
+  process.stdout.write(question);
+  if (!stdin.isTTY) {
+    // Piped in (e.g. from a password manager): the first line.
+    return new Promise((resolve) => {
+      let data = '';
+      stdin.setEncoding('utf8');
+      stdin.on('data', (chunk) => (data += chunk));
+      stdin.on('end', () => resolve(data.split(/\r?\n/)[0]));
+    });
+  }
+  return new Promise((resolve) => {
+    let value = '';
+    const finish = (result) => {
+      stdin.off('data', onData);
+      stdin.setRawMode(false);
+      stdin.pause();
+      process.stdout.write('\n');
+      resolve(result);
+    };
+    const onData = (chunk) => {
+      // Arrow and other special keys arrive as escape sequences: ignore them.
+      for (const char of chunk.replace(new RegExp(`${String.fromCharCode(27)}[[][0-9;]*[A-Za-z~]`, 'g'), '')) {
+        if (char === '\r' || char === '\n') return finish(value);
+        if (char === '\u0003') return finish(null); // Ctrl+C
+        if (char === '\u0008' || char === '\u007f') value = value.slice(0, -1);
+        else if (char >= ' ') value += char;
+      }
+    };
+    stdin.setRawMode(true);
+    stdin.setEncoding('utf8');
+    stdin.resume();
+    stdin.on('data', onData);
   });
 }
 
@@ -302,10 +339,17 @@ async function main() {
   if (health.json?.status !== 'ready') throw new Error(`The API is not ready (${health.status} ${health.code || ''}). Check /api/health first.`);
 
   const adminUser = options.admin || (await ask('Admin username (owner or web assist): '));
-  const adminPassword = process.env.LOADTEST_ADMIN_PASSWORD || (await ask('Admin password (hidden): ', true));
+  const adminPassword = process.env.LOADTEST_ADMIN_PASSWORD || (await askHidden('Admin password (typed hidden, then Enter): '));
+  if (adminPassword === null) throw new Error('Cancelled.');
   const signIn = await call(null, 'POST', '/api/admin/login', { username: adminUser, password: adminPassword });
   const admin = signIn.json?.token;
-  if (!admin) throw new Error(`Admin sign-in failed (${signIn.status} ${signIn.code}).`);
+  if (!admin) {
+    throw new Error(
+      signIn.code === 'RATE_LIMITED'
+        ? 'Too many sign-in attempts for this username from this network: wait 15 minutes, then try again.'
+        : `Admin sign-in failed (${signIn.status} ${signIn.code}). Check the same username and password at https://pragya2k26.online/landing/admin/ first (each wrong try counts: 10 per 15 minutes).`,
+    );
+  }
 
   const session = (await call(null, 'GET', '/api/admin/session', undefined, admin)).json;
   if (!session?.testing?.session) {
@@ -406,7 +450,8 @@ async function main() {
   console.log('\nLast step, in the dashboard: Testing → Delete the test data (type DELETE TEST DATA), and go back to the real schedule.\n');
 }
 
+// No process.exit() here: on Windows it can crash Node while the keyboard input is closing.
 main().catch((error) => {
   console.error(`\n${error.message}\n`);
-  process.exit(1);
+  process.exitCode = 1;
 });
