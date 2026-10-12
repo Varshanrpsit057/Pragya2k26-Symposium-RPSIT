@@ -198,6 +198,28 @@ describe('the overall coordinator', () => {
   });
 });
 
+describe('deleting the test data', () => {
+  it('takes the deleted test registrations off every open phone at its next update', async () => {
+    const h = setup({ at: TIMES.eventDay });
+    const desk = await h.staff('DESK', [], 'cse-desk1', { department: 'CSE', deskNumber: 1 });
+    await h.call('POST', '/api/admin/fest/registrations', { submissionId: 'sub-real-00001', id: 'CSE-0001', participant: { name: 'Real Student', phone: '9840011111', college: 'Sona' }, events: [], payment: { method: 'CASH', confirmed: true } }, { token: desk.token });
+    await h.asOwner('POST', '/api/admin/testing/session', { action: 'start', label: 'Rehearsal' });
+    await h.call('POST', '/api/admin/fest/registrations', { submissionId: 'sub-test-00001', id: 'CSE-0002', participant: { name: 'Test Student', phone: '9840022222', college: 'Sona' }, events: [], payment: { method: 'CASH', confirmed: true } }, { token: desk.token });
+    const overall = await h.staff('OVERALL');
+    backend(h);
+    signIn(overall.token);
+    render(<AdminApp />);
+    const registered = async () => (await screen.findByText('Registered', { selector: '.fest-stat__label' })).parentElement!;
+    await waitFor(async () => expect((await registered()).querySelector('.fest-stat__value')).toHaveTextContent('2'));
+
+    // Deleted elsewhere (e.g. from the Testing panel on another device): gone here at the next update.
+    expect((await h.asOwner('POST', '/api/admin/fest/test-data/clear', {})).body).toMatchObject({ cleared: 1, remaining: 0 });
+    h.setTime(new Date(Date.parse(TIMES.eventDay) + 60_000).toISOString());
+    await act(async () => fireEvent.click(screen.getByRole('button', { name: /Refresh|Updating/ })));
+    await waitFor(async () => expect((await registered()).querySelector('.fest-stat__value')).toHaveTextContent('1'));
+  });
+});
+
 describe('a department admin', () => {
   it('uploads the online form’s CSV: checks it, then imports it with -5001 IDs', async () => {
     const h = setup({ at: TIMES.online });
