@@ -37,7 +37,7 @@ created, downloaded once as a CSV and handed out privately. Settings are named, 
 
 | What | Link | For |
 | --- | --- | --- |
-| Public website | https://pragya2k26.online/ | Everyone |
+| Home page | https://pragya2k26.online/ | The fest's front door: **Staff sign in**, the 8 department staff pages, where students register, and the website notice |
 | Main dashboard | https://pragya2k26.online/landing/admin/ | Web assist team, overall coordinator |
 | API health check | https://683v5yp7k4.execute-api.us-east-1.amazonaws.com/api/health | Web assist team: shows `ready` when the API is up |
 | Live schedule (public) | https://683v5yp7k4.execute-api.us-east-1.amazonaws.com/api/schedule | The registration times the website is following now |
@@ -61,6 +61,18 @@ wrong department's page is told which page is theirs.
 
 **Total: 8 departments, 44 events.** Contacts are from the poster; change them in
 **Departments & events** (section 11).
+
+### The home page and the students' events website
+
+pragya2k26.online's home page is now a light front door (`src/landing/Landing.tsx`): the fest's name
+and date, **Staff sign in** (to `/landing/admin/`), the department staff pages, what students should
+do, the help desk number and the **Notice on the website**. Registration and the public event pages
+are no longer on this site.
+
+Every department's events and the route map move to a separate website run by another team member
+(the `pragya-events-site` project, handed over as a zip). When it has an address, set
+`EVENTS_SITE_URL` at the top of `src/landing/Landing.tsx` to it and deploy: the home page then shows
+an **Events and route map** button.
 
 ### Event links
 
