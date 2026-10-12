@@ -1,0 +1,317 @@
+/*
+ * The front door: one family (Mona Sans) whose width axis carries the headline, the brand's
+ * navy, and the PRAGYA flame's colours on the loop only. No images beyond the crest, no
+ * canvas: it loads in a moment on mobile data.
+ */
+.landing {
+  --l-ink: #edefff;
+  --l-muted: #a3a8cc;
+  --l-line: rgb(160 170 255 / 0.16);
+  --l-line-strong: rgb(160 170 255 / 0.34);
+  --l-surface: #0b0d2b;
+  --l-accent: #8c6cff;
+  --l-measure: 40rem;
+
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+  min-height: 100dvh;
+  width: min(100% - 2rem, 62rem);
+  margin-inline: auto;
+  color: var(--l-ink);
+  font-family: var(--font);
+}
+
+/* Header: the college */
+.landing-top {
+  display: flex;
+  align-items: center;
+  padding-block: 1.1rem;
+}
+
+.landing-college {
+  display: flex;
+  gap: 0.7rem;
+  align-items: center;
+  min-width: 0;
+  color: inherit;
+  text-decoration: none;
+}
+
+.landing-college img {
+  flex: none;
+  border-radius: 50%;
+}
+
+.landing-college span {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  line-height: 1.25;
+}
+
+.landing-college strong {
+  font-size: 0.95rem;
+  font-weight: 650;
+}
+
+.landing-college span span {
+  color: var(--l-muted);
+  font-size: 0.85rem;
+}
+
+/* Buttons: solid for signing in, outlined for the events website */
+.landing-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 3rem;
+  padding: 0.75rem 1.4rem;
+  border: 1px solid transparent;
+  border-radius: 0.8rem;
+  color: #05061a;
+  font-size: 1rem;
+  font-weight: 700;
+  font-stretch: 110%;
+  text-decoration: none;
+  background: var(--l-ink);
+  transition: background-color 0.15s ease;
+}
+
+.landing-button:hover {
+  background: #ffffff;
+}
+
+.landing-button--ghost {
+  border-color: var(--l-line-strong);
+  color: var(--l-ink);
+  background: transparent;
+}
+
+.landing-button--ghost:hover {
+  border-color: var(--l-ink);
+  background: rgb(237 239 255 / 0.06);
+}
+
+.landing-notice {
+  margin: 0.25rem 0 0.5rem;
+}
+
+/* Hero: the loop, then the name set wide and narrow */
+.landing-main {
+  flex: 1;
+}
+
+.landing-hero {
+  padding-block: clamp(1rem, 5vw, 3rem) clamp(2.5rem, 7vw, 4.5rem);
+}
+
+.landing-loop {
+  display: block;
+  width: min(100%, 34rem);
+  height: auto;
+  margin-bottom: clamp(0.5rem, 2vw, 1.25rem);
+  overflow: visible;
+}
+
+.landing-loop__track {
+  fill: none;
+  stroke: var(--l-line);
+  stroke-width: 2;
+}
+
+.landing-loop__line {
+  fill: none;
+  stroke: url(#landing-loop-ink);
+  stroke-width: 5;
+  stroke-linecap: round;
+  stroke-dasharray: 1;
+  stroke-dashoffset: 0;
+  animation: landing-draw 1.6s cubic-bezier(0.65, 0, 0.35, 1) both;
+}
+
+.landing-loop__station {
+  animation: landing-station 0.5s ease-out both;
+}
+
+.landing-loop__station circle {
+  fill: #05061a;
+  stroke: var(--l-ink);
+  stroke-width: 2.5;
+}
+
+.landing-loop__station text {
+  fill: var(--l-muted);
+  font-family: var(--font);
+  font-size: 15px;
+  font-weight: 650;
+  font-stretch: 112%;
+  /* Too small to read on a phone: the department list below says the same */
+  display: none;
+}
+
+@media (min-width: 40rem) {
+  .landing-loop__station text {
+    display: inline;
+  }
+}
+
+@keyframes landing-draw {
+  from {
+    stroke-dashoffset: 1;
+  }
+}
+
+@keyframes landing-station {
+  from {
+    opacity: 0;
+  }
+}
+
+.landing-title {
+  display: flex;
+  flex-direction: column;
+  margin: 0;
+  font-weight: 800;
+  line-height: 0.92;
+  text-transform: uppercase;
+}
+
+.landing-title__wide {
+  font-size: clamp(2.9rem, 16vw, 7.25rem);
+  font-stretch: 125%;
+  letter-spacing: -0.02em;
+}
+
+.landing-title__narrow {
+  font-size: clamp(2.4rem, 14.2vw, 6.25rem);
+  font-weight: 600;
+  font-stretch: 75%;
+  letter-spacing: 0.04em;
+  color: var(--l-muted);
+}
+
+.landing-date {
+  margin: 1.4rem 0 0;
+  font-size: clamp(1.35rem, 1.1rem + 1.2vw, 1.9rem);
+  font-weight: 700;
+  font-stretch: 112%;
+}
+
+.landing-lead {
+  max-width: var(--l-measure);
+  margin: 0.6rem 0 0;
+  color: var(--l-muted);
+  font-size: 1.05rem;
+  line-height: 1.55;
+}
+
+.landing-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  margin-top: 1.75rem;
+}
+
+/* Sections below the hero */
+.landing-block {
+  max-width: var(--l-measure);
+  padding-block: 1.75rem;
+  border-top: 1px solid var(--l-line);
+}
+
+.landing-block h2 {
+  margin: 0 0 0.5rem;
+  font-size: 1.3rem;
+  font-weight: 700;
+  font-stretch: 112%;
+}
+
+.landing-block p {
+  margin: 0 0 0.75rem;
+  color: var(--l-muted);
+  line-height: 1.6;
+}
+
+.landing-block a {
+  color: var(--l-ink);
+}
+
+/* The departments: each row is its staff page */
+.landing-depts {
+  display: grid;
+  margin: 1rem 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.landing-depts li + li {
+  border-top: 1px solid var(--l-line);
+}
+
+.landing-depts a {
+  display: grid;
+  grid-template-columns: 4.25rem 1fr;
+  gap: 0.75rem;
+  align-items: baseline;
+  padding: 0.85rem 0.25rem;
+  color: inherit;
+  text-decoration: none;
+}
+
+.landing-depts a:hover .landing-depts__name {
+  color: var(--l-ink);
+}
+
+.landing-depts__code {
+  font-weight: 800;
+  font-stretch: 125%;
+}
+
+.landing-depts__name {
+  color: var(--l-muted);
+  transition: color 0.15s ease;
+}
+
+.landing-foot {
+  padding-block: 1.5rem 2.5rem;
+  border-top: 1px solid var(--l-line);
+  color: var(--l-muted);
+  font-size: 0.92rem;
+  line-height: 1.6;
+}
+
+.landing-foot p {
+  margin: 0 0 0.4rem;
+}
+
+.landing-foot a {
+  color: var(--l-ink);
+}
+
+.landing-foot__address {
+  font-size: 0.85rem;
+}
+
+@media (min-width: 52rem) {
+  .landing-depts {
+    grid-template-columns: 1fr 1fr;
+    column-gap: 2.5rem;
+  }
+
+  /* Two columns: a rule above every row but the first of each column */
+  .landing-depts li:nth-child(2) {
+    border-top: 0;
+  }
+
+  .landing-block:has(.landing-depts) {
+    max-width: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .landing-loop__line,
+  .landing-loop__station {
+    animation: none;
+  }
+}

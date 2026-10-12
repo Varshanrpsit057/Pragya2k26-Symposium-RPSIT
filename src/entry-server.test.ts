@@ -3,13 +3,14 @@ import { describe, expect, it } from 'vitest';
 import { render } from './entry-server';
 
 describe('prerender', () => {
-  it('renders the page without touching browser-only APIs', () => {
+  it('renders the front door without touching browser-only APIs', () => {
     const html = render();
 
-    expect(html).toContain('PRAGYA');
-    expect(html).toContain('R P Sarathy Institute of Technology, Salem');
-    expect(html).toContain('id="technical"');
-    expect(html).not.toContain('id="non-technical"');
-    expect(html).not.toMatch(/SHORT FILM|E-SPORTS|BRAND IT|EAGLE EYE|VISUAL LOGO/);
+    expect(html).toContain('Techfest’26');
+    expect(html).toContain('R P Sarathy Institute of Technology');
+    expect(html).toContain('href="/landing/admin/"');
+    expect(html).toContain('href="/landing/cse/admin/"');
+    // Registration and the event pages moved to the students' events website.
+    expect(html).not.toMatch(/Register Now|Student login/);
   });
 });
