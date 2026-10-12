@@ -141,8 +141,7 @@ overall coordinator's **Venue** filter, so fill them in before the day.
 ### 2.6 Create the accounts
 
 1. Main dashboard → **Accounts** → **Create a department's accounts** → choose the department →
-   **Create**. It makes the HOD, the department admin, 4 desks and 2 coordinators per event (17
-   accounts for CSE, 138 for all 8 departments) with strong passwords.
+   **Create**. It makes the HOD, the department admin, 4 desks and 2 coordinators per event (18 accounts for CSE, 136 for all 8 departments) with strong passwords.
 2. **Download the logins (CSV) straight away.** The passwords are shown only once.
 3. Repeat for all 8 departments.
 4. Create, by hand, in **Accounts → New account**:
@@ -584,6 +583,7 @@ Changing a password, deactivating or deleting an account signs that person out a
 | **Results need a change after submitting** | Overall coordinator / web assist: **Results → Reopen**; the coordinator submits again. |
 | **The site is slow or errors for everyone** | Check the health link. If the Lambda limit was not raised (2.3), at most 10 requests run at once: raise it. Desks keep working offline meanwhile. |
 | **The dashboard page shows the public site** | The slash at the end is missing: use `…/admin/`. |
+| **"Couldn't reach the server" when signing in, with signal** | You are probably on `www.pragya2k26.online`. Use `https://pragya2k26.online/…` (no www), or add the www address to `ALLOWED_ORIGINS` in Amplify and redeploy. |
 | **Anything else** | The **Contact admin** button on every screen sends the web assist team the screen and the error. |
 
 ---
