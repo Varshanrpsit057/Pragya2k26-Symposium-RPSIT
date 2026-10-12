@@ -54,3 +54,6 @@ ehthumbs.db
 desktop.ini
 *~
 *.swp
+
+# Load test reports (scripts/load-test.mjs)
+load-test-report-*.json
