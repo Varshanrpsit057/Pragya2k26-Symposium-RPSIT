@@ -1,0 +1,656 @@
+# INFINITE TECHFEST'26 · PRAGYA 2K26: fest handbook
+
+This is the one guide for running the college-wide fest on **https://pragya2k26.online**. It covers
+every link, every account, what each person does and what to do when something goes wrong. The
+technical details (architecture, deployment, Google set-up) are in [README.md](README.md).
+
+**No passwords are written here.** Passwords are made in the dashboard when the accounts are
+created, downloaded once as a CSV and handed out privately. Settings are named, never their values.
+
+---
+
+## Contents
+
+1. [The links](#1-the-links)
+2. [Do these first: setup after the deploy](#2-do-these-first-setup-after-the-deploy)
+3. [Who does what (roles)](#3-who-does-what-roles)
+4. [Every account](#4-every-account)
+5. [Every event and its link](#5-every-event-and-its-link)
+6. [Registration IDs, and what happens when a desk runs out](#6-registration-ids-and-what-happens-when-a-desk-runs-out)
+7. [How to: registration desk](#7-how-to-registration-desk)
+8. [How to: event coordinator](#8-how-to-event-coordinator)
+9. [How to: department admin](#9-how-to-department-admin)
+10. [How to: HOD and the overall coordinator](#10-how-to-hod-and-the-overall-coordinator)
+11. [How to: web assist team (on-the-spot changes)](#11-how-to-web-assist-team-on-the-spot-changes)
+12. [Event-day run sheet](#12-event-day-run-sheet)
+13. [When something goes wrong](#13-when-something-goes-wrong)
+14. [Data safety and backups](#14-data-safety-and-backups)
+15. [After the event](#15-after-the-event)
+16. [Numbers, limits and settings](#16-numbers-limits-and-settings)
+17. [For developers](#17-for-developers)
+
+---
+
+## 1. The links
+
+**Always keep the slash at the end of a dashboard address** (`…/admin/`).
+
+| What | Link | For |
+| --- | --- | --- |
+| Public website | https://pragya2k26.online/ | Everyone |
+| Main dashboard | https://pragya2k26.online/landing/admin/ | Web assist team, overall coordinator |
+| API health check | https://683v5yp7k4.execute-api.us-east-1.amazonaws.com/api/health | Web assist team: shows `ready` when the API is up |
+| Live schedule (public) | https://683v5yp7k4.execute-api.us-east-1.amazonaws.com/api/schedule | The registration times the website is following now |
+
+### Department dashboards
+
+The HOD, the department admin, the 4 desks and the event coordinators of a department all sign in on
+their department's page. Each page only opens that department's data. Someone who signs in on the
+wrong department's page is told which page is theirs.
+
+| Code | Department | Dashboard link | Staff coordinator | Student coordinator | Events |
+| --- | --- | --- | --- | --- | --- |
+| **CSE** | Computer Science and Engineering | https://pragya2k26.online/landing/cse/admin/ | Mr. M. Ramesh (9500535551) | Mr. P. Bhuvankumar (9342232411) | 6 |
+| **AIDS** | Artificial Intelligence and Data Science | https://pragya2k26.online/landing/aids/admin/ | Mrs. S. Priyanka (9025593180) | Mr. Balajimanikandhaan S S (7358213736) | 5 |
+| **IT** | Information Technology | https://pragya2k26.online/landing/it/admin/ | Mrs. A. Santhi (8667845282) | Ms. G. Akshaya (6381761876) | 6 |
+| **ECE** | Electronics and Communication Engineering | https://pragya2k26.online/landing/ece/admin/ | Mrs. S. Apshanaparvin (9943044232) | Mr. N. S. Shamraj (9894183263) | 6 |
+| **CYS** | Computer Science and Engineering (Cyber Security) | https://pragya2k26.online/landing/cys/admin/ | Mr. C. Mahavishu (9629039155) | Ms. R. Kavisri (6374794582) | 6 |
+| **EEE** | Electrical and Electronics Engineering | https://pragya2k26.online/landing/eee/admin/ | Mr. M. Dineshkumar (9626132311) | Mr. G. Santhosh (8667685436) | 5 |
+| **MECH** | Mechanical Engineering | https://pragya2k26.online/landing/mech/admin/ | Mr. S. Vijayakumar (9629723720) | Mr. N. Jayanishanth (7200116278) | 6 |
+| **SH** | Science and Humanities | https://pragya2k26.online/landing/sh/admin/ | Dr. K. Saranya (9789158113) | Mr. Shaher (7418119675) | 4 |
+
+**Total: 8 departments, 44 events.** Contacts are from the poster; change them in
+**Departments & events** (section 11).
+
+### Event links
+
+Every event also has its own link: the department page with `?event=<event ID>` at the end, for
+example https://pragya2k26.online/landing/cse/admin/?event=cse-hackathon. After signing in it opens
+straight on that event's window. Send each coordinator their event's link. All 44 are listed in
+[section 5](#5-every-event-and-its-link).
+
+---
+
+## 2. Do these first: setup after the deploy
+
+Do them in this order. Each one is yours: nothing here happens by itself.
+
+### 2.1 Check the deploy (2 minutes)
+
+1. Open the API health check link (section 1). It should say `ready`.
+2. Open https://pragya2k26.online/ and a department page, e.g.
+   https://pragya2k26.online/landing/cse/admin/. The sign-in form should appear.
+3. Sign in at https://pragya2k26.online/landing/admin/ with the owner account (the `ADMIN_USERNAME`
+   set in Amplify). You should see **Overview** with 8 departments and 44 events.
+
+### 2.2 Keep AWS KMS free (5 minutes, once)
+
+The DynamoDB tables now use DynamoDB's own free encryption key, and the API runs its schedule every
+30 minutes instead of every 10, so far fewer KMS requests are made. To cut them further, move the four
+identifiers from secrets to plain environment variables:
+
+1. Amplify console → the app → **Hosting → Environment variables** → for the `main` branch add, with
+   **the same values** as their secrets:
+   - `GOOGLE_CLIENT_ID`
+   - `GOOGLE_SHEET_ID`
+   - `GOOGLE_DRIVE_PAYMENT_FOLDER_ID`
+   - `ADMIN_USERNAME`
+2. **Redeploy** the `main` branch and wait for it to finish. Check 2.1 again.
+3. Only then, in **Hosting → Secrets**, delete those four secrets. Keep the three real credentials as
+   secrets: `GOOGLE_CLIENT_SECRET`, `GOOGLE_REFRESH_TOKEN`, `ADMIN_PASSWORD_HASH`.
+
+Order matters: never delete a secret before its environment variable is set and deployed.
+
+### 2.3 Raise the Lambda limit to 1,000 (do it today: AWS can take a few days)
+
+The AWS account can run only **10** copies of the API at once. With 300 phones that is not enough.
+
+AWS console → **Service Quotas** → **AWS Lambda** → **Concurrent executions** → **Request increase**
+to **1000**, region **us-east-1** (N. Virginia). The text for the request was drafted earlier: one
+college-wide event, ~300 staff phones, 1,000+ registrations in one day, short requests (under a
+second), API Gateway in front. Raising the limit costs nothing by itself: you pay only for requests
+actually made.
+
+### 2.4 Close online registration on the PRAGYA website
+
+Online registration comes only from the Netlify form on the poster, so the PRAGYA website's own
+online form should be closed.
+
+Main dashboard → **Event-day controls** → **Registration times** → **Set all three times**:
+
+| Time | Set it to |
+| --- | --- |
+| Online registration closes | now (or a minute from now) |
+| On-site registration opens | the event day, the time the desks open (e.g. 17 Oct, 8:00 AM) |
+| On-site registration closes | the time the desks stop (e.g. 17 Oct, 1:00 PM) |
+
+The planned times are: online closes 16 Oct 11:59 PM, on-site 17 Oct from midnight to 11:59 AM. The
+desks are refused new registrations after the on-site closing time, so set it to when the desks
+really stop. You can extend it on the day in one tap (section 11).
+
+### 2.5 Fill in the departments and events
+
+Main dashboard → **Departments & events**. For each department: the HOD's name, contacts, number of
+desks (4). For each event: **venue**, **time**, **fee** (₹50 now), **team size** (now "individual or
+team of up to 4" for all), open or closed. The entry fee (₹100 now) is at the top. **Save**: every
+phone sees the change within 15 seconds.
+
+The venue and time appear in the event windows, the overview ("By event and venue") and the
+overall coordinator's **Venue** filter, so fill them in before the day.
+
+### 2.6 Create the accounts
+
+1. Main dashboard → **Accounts** → **Create a department's accounts** → choose the department →
+   **Create**. It makes the HOD, the department admin, 4 desks and 2 coordinators per event (17
+   accounts for CSE, 138 for all 8 departments) with strong passwords.
+2. **Download the logins (CSV) straight away.** The passwords are shown only once.
+3. Repeat for all 8 departments.
+4. Create, by hand, in **Accounts → New account**:
+   - the **overall coordinator** (role *Overall coordinator*), no department;
+   - one account per member of the **web assist team** (role *Admin*).
+5. Hand each person their username, password and link privately (WhatsApp to that person only,
+   or a printed slip). Never post the CSV in a group.
+
+The usernames are listed in [section 4](#4-every-account). Accounts that already exist are skipped,
+so running it again is safe.
+
+### 2.7 Upload the online registrations (each department, before the day)
+
+Each department admin downloads their department's registrations from the Netlify form as CSV and
+uploads it: department page → **Online & paper** → **Online registrations** (section 9). Ask for one
+sample CSV first so the column matching can be checked.
+
+### 2.8 Rehearse, then delete the test data
+
+1. Main dashboard → **Testing** → **Start an event-day test**. Everything registered while the test
+   session is on is marked **TEST**. Every dashboard shows a yellow banner.
+2. Get one desk, one coordinator and the HOD of a department on their own phones, **on mobile data**,
+   and run the whole flow: register, check in, take a fee, mark present, submit winners. Switch a
+   desk phone to airplane mode, register two students, switch it back and watch them send.
+3. **Testing → Delete the test data** (type `DELETE TEST DATA`), tick **end the session and go back
+   to the real schedule**. Test records are saved to a private backup first, then deleted, and the
+   ID counters start again from 0001 where nothing real was registered.
+4. Check that the yellow banner has gone.
+
+Note: a test timeline changes the public website's registration times for everyone while it is on.
+
+### 2.9 Before the day (physical)
+
+- Two phones at each desk, on **different carriers** (Jio + Airtel, for example), charged, with
+  power banks.
+- **Paper slips** printed for each department (section 9), in case every phone at a desk fails.
+- Every desk, coordinator and HOD has signed in once on the phone they will use, before the day.
+- One web assist member per two or three departments, reachable by phone.
+
+---
+
+## 3. Who does what (roles)
+
+| Role | Signs in at | Sees these sections | Can do |
+| --- | --- | --- | --- |
+| **Owner** (the `ADMIN_USERNAME` account) and **Admin** (web assist team) | `/landing/admin/` (or any department page) | Everything: Overview, Registrations, Results, Register, Event windows, Online & paper, Departments & events, Accounts, Event-day controls, Help requests, System status, Testing, Roles | Everything, in every department, on the spot |
+| **Overall coordinator** | `/landing/admin/` | Overview, Registrations, Results, Roles | Every department live, with filters; winners; downloads; reopen submitted results; cancel an event fee recorded by mistake |
+| **HOD** | their department page | Overview, Registrations, Results, Roles | Their department live, read only |
+| **Department admin** | their department page | Overview, Registrations, Results, Register, Event windows, Online & paper, Roles | Upload online registrations, paper slips, register, correct details, change events, cancel, any event of the department |
+| **Registration desk** | their department page | Registration desk, Roles | Register (works with no signal), find and check in online registrants, add events to a student, desk totals |
+| **Event coordinator** | their department page (or their event link) | My events, Roles | Their event: students, ₹50 fee, attendance, add a department student, winners, submit |
+
+- The **Roles** section in the dashboard shows the same list, read from the code the server enforces.
+- Department roles (HOD, department admin, desk, coordinator) only ever see their own department,
+  whichever page they open.
+- Nobody outside the web assist team can make or change accounts.
+
+---
+
+## 4. Every account
+
+These are the usernames **Create a department's accounts** makes. Passwords are in the CSV
+downloaded when they were created.
+
+| Code | HOD | Department admin | Desks (desk number is fixed) |
+| --- | --- | --- | --- |
+| CSE | `cse-hod` | `cse-admin` | `cse-desk1`, `cse-desk2`, `cse-desk3`, `cse-desk4` |
+| AIDS | `aids-hod` | `aids-admin` | `aids-desk1`, `aids-desk2`, `aids-desk3`, `aids-desk4` |
+| IT | `it-hod` | `it-admin` | `it-desk1`, `it-desk2`, `it-desk3`, `it-desk4` |
+| ECE | `ece-hod` | `ece-admin` | `ece-desk1`, `ece-desk2`, `ece-desk3`, `ece-desk4` |
+| CYS | `cys-hod` | `cys-admin` | `cys-desk1`, `cys-desk2`, `cys-desk3`, `cys-desk4` |
+| EEE | `eee-hod` | `eee-admin` | `eee-desk1`, `eee-desk2`, `eee-desk3`, `eee-desk4` |
+| MECH | `mech-hod` | `mech-admin` | `mech-desk1`, `mech-desk2`, `mech-desk3`, `mech-desk4` |
+| SH | `sh-hod` | `sh-admin` | `sh-desk1`, `sh-desk2`, `sh-desk3`, `sh-desk4` |
+
+Event coordinators: two per event, `<dept>-<event>-1` and `<dept>-<event>-2`, listed with each event
+in section 5. The overall coordinator and the web assist team's accounts are made by hand (2.6); pick
+usernames such as `overall` and `webassist-<name>`.
+
+**Counts:** 8 HODs + 8 department admins + 32 desks + 88 coordinators = **136** department accounts,
+plus the overall coordinator and the web assist team.
+
+**If two people share a desk phone**, they use the same desk account. **If a desk needs a 5th
+phone**, raise the department's desk count in **Departments & events**, then run **Create a
+department's accounts** again: only the new desk is made.
+
+---
+
+## 5. Every event and its link
+
+Each event's link opens that event's window after signing in. Coordinators see only their own
+events; the department admin and the web assist team can open any event of the department.
+
+#### CSE · Computer Science and Engineering (6 events)
+
+Department page: https://pragya2k26.online/landing/cse/admin/
+
+| # | Event | Event ID | Event link | Coordinator usernames |
+| --- | --- | --- | --- | --- |
+| 1 | Future Minds (Ideathon) | `cse-future-minds` | https://pragya2k26.online/landing/cse/admin/?event=cse-future-minds | `cse-future-minds-1`, `cse-future-minds-2` |
+| 2 | Hackathon | `cse-hackathon` | https://pragya2k26.online/landing/cse/admin/?event=cse-hackathon | `cse-hackathon-1`, `cse-hackathon-2` |
+| 3 | Project Expo (Mobile Application Development) | `cse-project-expo` | https://pragya2k26.online/landing/cse/admin/?event=cse-project-expo | `cse-project-expo-1`, `cse-project-expo-2` |
+| 4 | Snap with AI (Poster Making) | `cse-snap-with-ai` | https://pragya2k26.online/landing/cse/admin/?event=cse-snap-with-ai | `cse-snap-with-ai-1`, `cse-snap-with-ai-2` |
+| 5 | Cyber Hunt (Technical Quiz) | `cse-cyber-hunt` | https://pragya2k26.online/landing/cse/admin/?event=cse-cyber-hunt | `cse-cyber-hunt-1`, `cse-cyber-hunt-2` |
+| 6 | AI Prompt Battle (Using Claude AI) | `cse-ai-prompt-battle` | https://pragya2k26.online/landing/cse/admin/?event=cse-ai-prompt-battle | `cse-ai-prompt-battle-1`, `cse-ai-prompt-battle-2` |
+
+#### AIDS · Artificial Intelligence and Data Science (5 events)
+
+Department page: https://pragya2k26.online/landing/aids/admin/
+
+| # | Event | Event ID | Event link | Coordinator usernames |
+| --- | --- | --- | --- | --- |
+| 1 | Paper Presentation | `aids-paper-presentation` | https://pragya2k26.online/landing/aids/admin/?event=aids-paper-presentation | `aids-paper-presentation-1`, `aids-paper-presentation-2` |
+| 2 | Pro-pitch (Prompt to app) | `aids-pro-pitch` | https://pragya2k26.online/landing/aids/admin/?event=aids-pro-pitch | `aids-pro-pitch-1`, `aids-pro-pitch-2` |
+| 3 | Viz Craft (Data visualization) | `aids-viz-craft` | https://pragya2k26.online/landing/aids/admin/?event=aids-viz-craft | `aids-viz-craft-1`, `aids-viz-craft-2` |
+| 4 | Code Flex (Multi-language coding challenge) | `aids-code-flex` | https://pragya2k26.online/landing/aids/admin/?event=aids-code-flex | `aids-code-flex-1`, `aids-code-flex-2` |
+| 5 | Cognix (Quiz) | `aids-cognix` | https://pragya2k26.online/landing/aids/admin/?event=aids-cognix | `aids-cognix-1`, `aids-cognix-2` |
+
+#### IT · Information Technology (6 events)
+
+Department page: https://pragya2k26.online/landing/it/admin/
+
+| # | Event | Event ID | Event link | Coordinator usernames |
+| --- | --- | --- | --- | --- |
+| 1 | Paper Presentation (Inno Papers – The Spectrum of Innovation) | `it-inno-papers` | https://pragya2k26.online/landing/it/admin/?event=it-inno-papers | `it-inno-papers-1`, `it-inno-papers-2` |
+| 2 | Claude Prompt Battle | `it-claude-prompt-battle` | https://pragya2k26.online/landing/it/admin/?event=it-claude-prompt-battle | `it-claude-prompt-battle-1`, `it-claude-prompt-battle-2` |
+| 3 | Web Architects | `it-web-architects` | https://pragya2k26.online/landing/it/admin/?event=it-web-architects | `it-web-architects-1`, `it-web-architects-2` |
+| 4 | Code Debugging | `it-code-debugging` | https://pragya2k26.online/landing/it/admin/?event=it-code-debugging | `it-code-debugging-1`, `it-code-debugging-2` |
+| 5 | Poster Pitch | `it-poster-pitch` | https://pragya2k26.online/landing/it/admin/?event=it-poster-pitch | `it-poster-pitch-1`, `it-poster-pitch-2` |
+| 6 | Project Presentation | `it-project-presentation` | https://pragya2k26.online/landing/it/admin/?event=it-project-presentation | `it-project-presentation-1`, `it-project-presentation-2` |
+
+#### ECE · Electronics and Communication Engineering (6 events)
+
+Department page: https://pragya2k26.online/landing/ece/admin/
+
+| # | Event | Event ID | Event link | Coordinator usernames |
+| --- | --- | --- | --- | --- |
+| 1 | Paper Presentation | `ece-paper-presentation` | https://pragya2k26.online/landing/ece/admin/?event=ece-paper-presentation | `ece-paper-presentation-1`, `ece-paper-presentation-2` |
+| 2 | Project Expo | `ece-project-expo` | https://pragya2k26.online/landing/ece/admin/?event=ece-project-expo | `ece-project-expo-1`, `ece-project-expo-2` |
+| 3 | Circuit Debugging | `ece-circuit-debugging` | https://pragya2k26.online/landing/ece/admin/?event=ece-circuit-debugging | `ece-circuit-debugging-1`, `ece-circuit-debugging-2` |
+| 4 | Dronova | `ece-dronova` | https://pragya2k26.online/landing/ece/admin/?event=ece-dronova | `ece-dronova-1`, `ece-dronova-2` |
+| 5 | Tech Escape Room | `ece-tech-escape-room` | https://pragya2k26.online/landing/ece/admin/?event=ece-tech-escape-room | `ece-tech-escape-room-1`, `ece-tech-escape-room-2` |
+| 6 | ECE Hackathon | `ece-ece-hackathon` | https://pragya2k26.online/landing/ece/admin/?event=ece-ece-hackathon | `ece-ece-hackathon-1`, `ece-ece-hackathon-2` |
+
+#### CYS · Computer Science and Engineering (Cyber Security) (6 events)
+
+Department page: https://pragya2k26.online/landing/cys/admin/
+
+| # | Event | Event ID | Event link | Coordinator usernames |
+| --- | --- | --- | --- | --- |
+| 1 | Cyber Paper Presentation | `cys-cyber-paper-presentation` | https://pragya2k26.online/landing/cys/admin/?event=cys-cyber-paper-presentation | `cys-cyber-paper-presentati-1`, `cys-cyber-paper-presentati-2` |
+| 2 | Cyber Hunt (Technical Quiz) | `cys-cyber-hunt` | https://pragya2k26.online/landing/cys/admin/?event=cys-cyber-hunt | `cys-cyber-hunt-1`, `cys-cyber-hunt-2` |
+| 3 | PhishGuard (Phishing Website Detection) | `cys-phishguard` | https://pragya2k26.online/landing/cys/admin/?event=cys-phishguard | `cys-phishguard-1`, `cys-phishguard-2` |
+| 4 | Cyber Escape Room | `cys-cyber-escape-room` | https://pragya2k26.online/landing/cys/admin/?event=cys-cyber-escape-room | `cys-cyber-escape-room-1`, `cys-cyber-escape-room-2` |
+| 5 | Cybersecurity Spotlight (Tech Talks) | `cys-cybersecurity-spotlight` | https://pragya2k26.online/landing/cys/admin/?event=cys-cybersecurity-spotlight | `cys-cybersecurity-spotligh-1`, `cys-cybersecurity-spotligh-2` |
+| 6 | CyberSecure Hackathon | `cys-cybersecure-hackathon` | https://pragya2k26.online/landing/cys/admin/?event=cys-cybersecure-hackathon | `cys-cybersecure-hackathon-1`, `cys-cybersecure-hackathon-2` |
+
+(Two CYS usernames are cut short on purpose: usernames stop at 22 characters of the event's name.)
+
+#### EEE · Electrical and Electronics Engineering (5 events)
+
+Department page: https://pragya2k26.online/landing/eee/admin/
+
+| # | Event | Event ID | Event link | Coordinator usernames |
+| --- | --- | --- | --- | --- |
+| 1 | Paper Presentation | `eee-paper-presentation` | https://pragya2k26.online/landing/eee/admin/?event=eee-paper-presentation | `eee-paper-presentation-1`, `eee-paper-presentation-2` |
+| 2 | Project Expo | `eee-project-expo` | https://pragya2k26.online/landing/eee/admin/?event=eee-project-expo | `eee-project-expo-1`, `eee-project-expo-2` |
+| 3 | Technical Quiz | `eee-technical-quiz` | https://pragya2k26.online/landing/eee/admin/?event=eee-technical-quiz | `eee-technical-quiz-1`, `eee-technical-quiz-2` |
+| 4 | Circuit Warriors | `eee-circuit-warriors` | https://pragya2k26.online/landing/eee/admin/?event=eee-circuit-warriors | `eee-circuit-warriors-1`, `eee-circuit-warriors-2` |
+| 5 | Machine Master | `eee-machine-master` | https://pragya2k26.online/landing/eee/admin/?event=eee-machine-master | `eee-machine-master-1`, `eee-machine-master-2` |
+
+#### MECH · Mechanical Engineering (6 events)
+
+Department page: https://pragya2k26.online/landing/mech/admin/
+
+| # | Event | Event ID | Event link | Coordinator usernames |
+| --- | --- | --- | --- | --- |
+| 1 | Paper Presentation | `mech-paper-presentation` | https://pragya2k26.online/landing/mech/admin/?event=mech-paper-presentation | `mech-paper-presentation-1`, `mech-paper-presentation-2` |
+| 2 | Mech Hack X | `mech-mech-hack-x` | https://pragya2k26.online/landing/mech/admin/?event=mech-mech-hack-x | `mech-mech-hack-x-1`, `mech-mech-hack-x-2` |
+| 3 | Project Xplore | `mech-project-xplore` | https://pragya2k26.online/landing/mech/admin/?event=mech-project-xplore | `mech-project-xplore-1`, `mech-project-xplore-2` |
+| 4 | Poster Pro | `mech-poster-pro` | https://pragya2k26.online/landing/mech/admin/?event=mech-poster-pro | `mech-poster-pro-1`, `mech-poster-pro-2` |
+| 5 | Quiz – Brain Bolt | `mech-brain-bolt` | https://pragya2k26.online/landing/mech/admin/?event=mech-brain-bolt | `mech-brain-bolt-1`, `mech-brain-bolt-2` |
+| 6 | Aqua Rocket | `mech-aqua-rocket` | https://pragya2k26.online/landing/mech/admin/?event=mech-aqua-rocket | `mech-aqua-rocket-1`, `mech-aqua-rocket-2` |
+
+#### SH · Science and Humanities (4 events)
+
+Department page: https://pragya2k26.online/landing/sh/admin/
+
+| # | Event | Event ID | Event link | Coordinator usernames |
+| --- | --- | --- | --- | --- |
+| 1 | Paper Presentation (Physics) | `sh-paper-presentation-physics` | https://pragya2k26.online/landing/sh/admin/?event=sh-paper-presentation-physics | `sh-paper-presentation-phy-1`, `sh-paper-presentation-phy-2` |
+| 2 | Poster Presentation (Chemistry) | `sh-poster-presentation-chemistry` | https://pragya2k26.online/landing/sh/admin/?event=sh-poster-presentation-chemistry | `sh-poster-presentation-ch-1`, `sh-poster-presentation-ch-2` |
+| 3 | Extempore Speech (English) | `sh-extempore-speech` | https://pragya2k26.online/landing/sh/admin/?event=sh-extempore-speech | `sh-extempore-speech-1`, `sh-extempore-speech-2` |
+| 4 | Math Puzzles & Logic Quiz (Maths) | `sh-math-puzzles` | https://pragya2k26.online/landing/sh/admin/?event=sh-math-puzzles | `sh-math-puzzles-1`, `sh-math-puzzles-2` |
+
+**An event added later** in **Departments & events** gets its link the same way:
+`https://pragya2k26.online/landing/<dept>/admin/?event=<event ID>`. Its coordinators are made by
+running **Create a department's accounts** again (only the missing accounts are made), or by hand in
+**Accounts → New account** (role *Event coordinator*, the department, tick the event).
+
+---
+
+## 6. Registration IDs, and what happens when a desk runs out
+
+Every student gets one ID in the department they register with. The ID tells you where it came from:
+
+| ID | Where it came from |
+| --- | --- |
+| `CSE-0001` … `CSE-4999` | Registered at a desk |
+| `CSE-5001` … `CSE-8999` | Online (Netlify form), uploaded by the department admin |
+| `CSE-9001` … `CSE-9999` | Paper slip (when the phones could not be used) |
+
+- **One mobile number is registered once per department.** Registering it again shows the existing
+  ID instead.
+- A student registers in one department and takes part in that department's events (no cross-
+  department entries).
+- IDs can be typed loosely anywhere: `cse 12`, `cse12` and `CSE-0012` are the same.
+
+### Will a desk run out of IDs?
+
+**No: a desk is never stuck.** Each desk phone holds its own small block of IDs so it can register
+with no signal:
+
+1. When a desk phone signs in it takes a block of **50 IDs** (for example `CSE-0051` to `CSE-0100`).
+2. When **15** are left, it takes the next 50 by itself the next time it has signal. You don't do
+   anything, and nobody else gets the same numbers.
+3. A department has **4,999 desk IDs** in total, far more than needed.
+
+So the gaps you may see (desk 1 used 0001–0037, desk 2 started at 0051) are normal: IDs are unique,
+not consecutive.
+
+The only time a desk could run out: a phone with **no signal at all** registers 50 students in a row
+(it cannot take a new block without signal). Then:
+
+- move to the second phone (other carrier) at the desk; it has its own block; or
+- use **paper slips** (`CSE-9001…`, printed beforehand) and the department admin types them in later.
+
+If the same ID is somehow used twice, the second one is moved to the next free ID automatically and
+the desk sees the new ID.
+
+---
+
+## 7. How to: registration desk
+
+Sign in on the department page with the desk's account (e.g. `cse-desk2`). The desk number is fixed
+to the account. Keep the page open all day; no need to refresh.
+
+### Register a student (on-site)
+
+1. **Registration desk → Register**.
+2. Fill in: name with initial, mobile number, college (branch, year, email and team name if known),
+   tick the events.
+3. Take the **entry fee (₹100)**: **Cash** (tick "I have received ₹100 in cash") or **UPI** (type the
+   UPI transaction ID from the student's payment screen and tick that you have seen it).
+4. **Register**. Tell the student their ID (e.g. `CSE-0057`); they give it at every event.
+
+The event fees (₹50 each) are taken by the event coordinators at the venue, not at the desk.
+
+### With no signal
+
+Keep registering. The bar at the top shows **offline** and how many registrations are waiting. They
+are sent in order as soon as the signal is back, and a retry never registers anyone twice. **Do not
+close the tab or sign out while anything is waiting to send.** If the phone switches off, sign in
+again on the same phone with the same account and the waiting ones are sent.
+
+### An online registrant arrives
+
+**Find & check in** → search by ID, name or mobile number → **Check in (paid online)**. Online
+registrants have already paid the entry fee. If one shows the entry fee as due, take it and check
+them in in the same step.
+
+### Add an event, or correct a mistake
+
+**Find & check in** → find the student → add the event. A wrong name or mobile number, removing an
+event or cancelling a registration: call the department admin (they do it in **Registrations**).
+
+### Cash handover
+
+**Desk N totals** shows how many registered at this desk and the cash and UPI totals. Hand over the
+cash with this screen.
+
+---
+
+## 8. How to: event coordinator
+
+Sign in on the department page (or the event's link) with your coordinator account. **My events**
+opens on your event.
+
+1. The event's students are listed, with **Find a student** to search by ID, name or phone.
+2. **Take ₹50**: choose Cash or UPI, confirm, **Save the fee**.
+3. **Mark present** when the student is at the venue. Attendance needs the registration paid and the
+   event fee taken.
+4. **A student who came straight to the venue** but is registered in the department: search them
+   (under "In the department but not in this event") and **Add** them to the event, then take the fee.
+   Someone not registered at all is sent to the desk first.
+5. **Winners**: type the IDs for 1st, 2nd and 3rd place (a team: several IDs separated by commas;
+   `cse 12` is fine). Winners must be marked present. **Save winners** keeps a draft; **Submit results**
+   when final. Submitted results go to the overall coordinator and are locked. To change them, ask
+   the overall coordinator or the web assist team to **Reopen**.
+
+Mistake with a fee? Only the overall coordinator or the web assist team can cancel a fee recorded by
+mistake.
+
+---
+
+## 9. How to: department admin
+
+Sign in on the department page with `<dept>-admin`.
+
+### Upload the online registrations (before the day)
+
+1. Download the department's registrations from the Netlify form as **CSV**.
+2. **Online & paper → Online registrations** → choose the file.
+3. Check the **column matching**: Name, Phone, College and Events are needed; Email, Branch, Year,
+   Team name and Reference are optional. Change a column if it guessed wrong.
+4. **Check the file**: it lists unknown event names and duplicates (same phone already registered)
+   before anything is saved. Fix the event names in the CSV if needed.
+5. Tick **event fees were paid online too** if the online form collected them.
+6. **Import**. Students get IDs from `<DEPT>-5001`. Download the list to share. Uploading a newer CSV
+   later adds only the new students.
+
+Every imported student counts as having paid the entry fee.
+
+### Paper slips (backup)
+
+**Online & paper → Paper slips** → **Get slip numbers** → **Download the slips to print (CSV)**.
+Print them before the day. When a desk used slips, type each one in here after the rush (the slip's
+ID, the details, events and payment), or upload them as CSV.
+
+### Corrections
+
+**Registrations** → open a student → correct details, change events, cancel (with a reason) or undo
+a cancellation. Deleting a registration is for the web assist team.
+
+You can also register students yourself (**Register**) and run any event of the department
+(**Event windows**).
+
+---
+
+## 10. How to: HOD and the overall coordinator
+
+### HOD
+
+Sign in on the department page with `<dept>-hod`. Read only, updated every 15 seconds:
+
+- **Overview**: Registered, On campus, Entry fees, Event fees, Present at events; then by event and
+  venue, and by desk.
+- **Registrations**: every student, with filters and **Download these (CSV for Excel)**.
+- **Results**: each event's winners once submitted.
+
+### Overall coordinator
+
+Sign in at https://pragya2k26.online/landing/admin/. Everything above for **all 8 departments**,
+with university-portal style filters at the top of each screen:
+
+| Filter | Choices |
+| --- | --- |
+| Department | All, or one of the 8 |
+| Event | The department's events |
+| Venue | From the event venues |
+| Registered | At a desk, Online, Paper slip |
+| Desk | Desk 1–4 |
+| Entry fee | Paid, Due |
+| Status | Active, Cancelled, Deleted, Everything |
+| Search | ID, name, mobile number, college |
+
+- **Overview**: totals and money for the filter, by department, by event and venue, by desk.
+- **Registrations**: the filtered list; **Download these (CSV for Excel)** downloads exactly what the
+  filters show.
+- **Results**: every event's winners with their details; **Download winners (CSV for Excel)**;
+  **Reopen** a submitted event (with a reason) so its coordinator can correct it.
+- **Cancel this fee** (with a reason) for an event fee recorded by mistake: **Registrations** → the
+  student → their events.
+
+---
+
+## 11. How to: web assist team (on-the-spot changes)
+
+Sign in at https://pragya2k26.online/landing/admin/ with an Admin account (or the owner). You can
+also open any department page and act as that department's admin, desk or coordinator.
+
+| On the day you need to… | Go to |
+| --- | --- |
+| Keep the desks open longer | **Event-day controls → Registration times → Reopen or extend on-site registration**: +30 min, +1 h, +2 h, or "open until" a time |
+| Stop all registration now | **Event-day controls → Close registration now** |
+| Undo every time change | **Event-day controls → Back to the planned times** |
+| Show a line on the website (venue or time change) | **Event-day controls → Notice on the website** (up to 300 characters; every open page shows it within two minutes; take it down afterwards) |
+| Change a venue, time, fee or team size; close an event; add an event or a desk | **Departments & events** → change → **Save** (every phone within 15 s) |
+| A new person at a desk or event | **Accounts → New account** (role, department, desk number or events) |
+| A forgotten password | **Accounts** → the account → **New password** → save; tell them privately |
+| A lost or stolen phone | **Accounts → Signed in now → Sign out** (every device), then a new password |
+| Someone should stop entirely | **Accounts** → the account → untick **Active**, or **Delete** |
+| Move a coordinator to another event | **Accounts** → the account → tick the events |
+| Fix any registration | **Registrations** → the student → edit, change events, cancel, delete or restore |
+| Wrong fee recorded | **Registrations** → the student → **Cancel this fee** (with a reason) |
+| Results submitted wrongly | **Results → Reopen** |
+| Help requests from staff ("Contact admin" button) | **Help requests** → reply |
+| Is everything working? | **System status**, and the API health check link |
+
+Changing a password, deactivating or deleting an account signs that person out at once.
+
+---
+
+## 12. Event-day run sheet
+
+| When | Who | What |
+| --- | --- | --- |
+| Day before | Web assist | Section 2 done: accounts handed out, online CSVs uploaded, venues and times filled in, test data deleted, registration times set, paper slips printed |
+| Day before | Everyone | Sign in once on the phone they will use; open their link; check it shows their department |
+| Morning, before opening | Web assist | **System status** green; health check `ready`; the registration times right in **Event-day controls** |
+| Morning | Desks | Sign in, open **Registration desk**; check the bar says connected; second phone signed in too |
+| Opening | Desks | Register, check in online registrants |
+| During | Coordinators | Fees, attendance at the venue |
+| During | HODs / overall | Watch Overview; call the web assist team for anything odd |
+| Before the planned closing time | Web assist | Extend if the desks still have queues (one tap) |
+| Closing time | Desks | **Desk N totals** → hand over cash; make sure nothing is "waiting to send" |
+| After the closing time | Department admins | Type in any paper slips |
+| After each event | Coordinators | Enter and **Submit results** |
+| End of day | Overall coordinator | **Results → Download winners**; **Registrations → Download** (all departments) |
+
+---
+
+## 13. When something goes wrong
+
+| Problem | What to do |
+| --- | --- |
+| **No signal at a desk** | Keep registering: it is saved on the phone and sent later. Switch to the second phone (other carrier) if you need to look anything up. |
+| **"Waiting to send" does not go down** | Move to better signal. If it says a registration failed, open it: it says why (e.g. the mobile number is already registered, with that ID). Fix it or dismiss it. |
+| **Mobile number already registered** | The desk shows the existing ID. Use that ID; do not register again. |
+| **Phone switched off with registrations waiting** | Charge it, open the same page, sign in with the same account: they are sent. Do not clear the browser's data. |
+| **Phone lost** | Web assist: **Accounts → Signed in now → Sign out** for that account, set a new password, sign in on another phone. Anything that was waiting on the lost phone is lost: re-register those students (their mobile number tells you if they are already in). |
+| **Every phone at a desk fails** | Paper slips (`<DEPT>-9001…`); the department admin types them in later. |
+| **"Registration is closed"** at a desk | The on-site closing time has passed. Web assist: **Event-day controls → Reopen or extend**. |
+| **Signed in on the wrong department's page** | The page says which is theirs; open that link. |
+| **Coordinator sees no event** | Web assist: **Accounts** → tick the event on their account. |
+| **Forgot password** | Web assist sets a new one (section 11). |
+| **Signed out after many hours** | Sessions last 16 hours. Sign in again. |
+| **Wrong fee recorded** | Overall coordinator / web assist cancels it with a reason. |
+| **Results need a change after submitting** | Overall coordinator / web assist: **Results → Reopen**; the coordinator submits again. |
+| **The site is slow or errors for everyone** | Check the health link. If the Lambda limit was not raised (2.3), at most 10 requests run at once: raise it. Desks keep working offline meanwhile. |
+| **The dashboard page shows the public site** | The slash at the end is missing: use `…/admin/`. |
+| **Anything else** | The **Contact admin** button on every screen sends the web assist team the screen and the error. |
+
+---
+
+## 14. Data safety and backups
+
+- **Every registration is in DynamoDB** (the `FestRecords` table): point-in-time recovery (any second
+  in the last 35 days), deletion protection, and kept even if the app is deleted.
+- **Every 30 minutes** a full copy of every department's data is written to the private files bucket
+  (`backups/fest/all.json`); every earlier version is kept.
+- **Test data** is saved to `backups/fest-test-data-*.json` before it is deleted.
+- **Each phone** keeps a copy of its department and everything not yet sent.
+- **Your own copy**: download **Registrations** (all departments) and **Results** as CSV at the end of
+  the day and keep them.
+- Cancelled and deleted registrations keep their whole record with who did it, when and why; deleted
+  ones can be restored.
+
+---
+
+## 15. After the event
+
+1. Overall coordinator: download **Results → winners** and **Registrations** (all departments).
+2. Departments: reconcile cash with **Desk N totals** and the Overview's money.
+3. Web assist: in **Accounts**, deactivate or delete the department accounts once the results are
+   final (or set **Close registration now** so nothing new can be registered).
+4. There is no need to lower the Lambda limit afterwards: it costs nothing when idle.
+
+---
+
+## 16. Numbers, limits and settings
+
+| Item | Value |
+| --- | --- |
+| Departments / events | 8 / 44 |
+| Desks per department | 4 (changeable) |
+| Coordinators per event | 2 (more can be added) |
+| Entry fee / event fee | ₹100 / ₹50 (changeable in **Departments & events**) |
+| Phones at once | built for ~300, on mobile data |
+| Registrations | 1,000+ (each department up to 4,999 desk, 3,999 online and 999 paper IDs) |
+| Live updates | every 15 seconds, only what changed |
+| Session length | 16 hours |
+| IDs per desk phone block | 50, topped up at 15 left |
+| Import | up to 200 rows per upload step (the page splits bigger files) |
+| Backups | every 30 minutes, every version kept |
+| AWS cost when idle | nothing for Lambda and API Gateway; DynamoDB on-demand and S3 cost cents for this size |
+
+### Settings (names only)
+
+Secrets (Amplify → Hosting → Secrets): `GOOGLE_CLIENT_SECRET`, `GOOGLE_REFRESH_TOKEN`,
+`ADMIN_PASSWORD_HASH`.
+
+Environment variables (Amplify → Hosting → Environment variables): `GOOGLE_CLIENT_ID`,
+`GOOGLE_SHEET_ID`, `GOOGLE_DRIVE_PAYMENT_FOLDER_ID`, `ADMIN_USERNAME` (until they are set here, the
+secrets of the same name are used), and the optional ones in [README.md](README.md) section 3.
+
+Set by the app itself: `FEST_TABLE`, `REGISTRATIONS_TABLE`, `CONTROL_TABLE`, the files bucket.
+
+---
+
+## 17. For developers
+
+- Code: `src/lib/fest.ts` (catalog, IDs, rules), `server/fest.ts` (the API's fest rules),
+  `src/admin/fest/` (the screens), `amplify/backend.ts` (AWS resources).
+- Checks before any push: `npm run check` (lint, all tests, build, secret check). Never run
+  `npm run google:check` casually: it touches the real Drive, Gmail and Sheet.
+- **Deploying = pushing `main`.** Amplify builds and deploys it (about 10 minutes). Work on a feature
+  branch; merge into `main` only when ready.
+- Check a deploy from outside with the live schedule link (section 1).
+- Local run: `npm run dev` with `DEV_API_PROXY` pointing to a local API (see
+  [README.md](README.md), *Local development*).
