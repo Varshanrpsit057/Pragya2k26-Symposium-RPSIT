@@ -195,6 +195,44 @@ Note: a test timeline changes the public website's registration times for everyo
 
 ---
 
+### 2.10 Load test: 300 phones at once (once, before the day)
+
+`scripts/load-test.mjs` acts like 300 staff phones using the dashboard on the day: every phone
+signs in and asks for changes every 15 seconds; 64 desk phones register students; coordinator phones
+take event fees and mark attendance; HODs, admins and the overall coordinator watch. About 25–40
+requests a second, about 1,000 test registrations in 10 minutes.
+
+**Safe by design:** it refuses to start unless a test session is on (so everything it registers is
+marked TEST), makes its own `lt-…` accounts with a random password it never shows, deletes them at
+the end (also on Ctrl+C), and stops by itself if more than half the requests fail for a minute.
+**Cost:** about 20,000 requests, a few rupees at most (most likely inside the AWS free tier).
+
+1. Pick a quiet time (nobody using the dashboard for real) and tell the team it may be slow for 15
+   minutes.
+2. Note the Lambda limit (AWS console → Service Quotas → AWS Lambda → Concurrent executions →
+   *Applied quota value*). Run the test either way: at 10 it shows whether 10 is enough.
+3. Dashboard → **Testing → Start an event-day test** (label it "Load test").
+4. On a laptop with good internet (Wi-Fi or wired), in this folder:
+   ```bash
+   npm run load-test -- --admin YOUR_ADMIN_USERNAME
+   ```
+   Type the admin password when asked (hidden). It waits 10 seconds (Ctrl+C cancels), makes the
+   accounts, brings the 300 phones in over 2 minutes, then runs 10 minutes at full load, printing a
+   line every 15 seconds.
+5. While it runs, open the dashboard **on a phone on mobile data** as the overall coordinator and
+   check it stays quick: that is the real test.
+6. At the end it prints a table (each kind of request: how many, how many failed, how long they
+   took: p50 = typical, p95 = slowest 1 in 20), a verdict (PASS: under 1% failed, changes p95
+   under 2 s, register p95 under 3 s), saves `load-test-report-….json`, and deletes the `lt-`
+   accounts.
+7. Dashboard → **Testing → Delete the test data** (type `DELETE TEST DATA`), tick going back to the
+   real schedule. Check the yellow banner has gone.
+
+Reading the result: 429, 503 or 500 answers mean the server turned requests away, usually the Lambda
+limit (10 until AWS raises it) or a route throttle. On the day the desks would retry by themselves,
+but raise the limit before the day. Options: `--devices 150`, `--minutes 5`, `--ramp 60`. To run it
+again, wait 15 minutes (each account may sign in 10 times per 15 minutes from one address).
+
 ## 3. Who does what (roles)
 
 | Role | Signs in at | Sees these sections | Can do |

@@ -14,6 +14,7 @@
     "test:watch": "vitest",
     "check": "npm run lint && npm run test && npm run build && npm run check:secrets",
     "check:secrets": "node scripts/check-secrets.mjs",
+    "load-test": "node scripts/load-test.mjs",
     "sandbox": "ampx sandbox",
     "admin:password": "tsx scripts/admin-password.ts",
     "google:auth": "node scripts/google-auth.mjs",
