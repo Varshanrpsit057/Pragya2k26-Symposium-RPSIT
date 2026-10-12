@@ -93,8 +93,14 @@ export function TestingPanel({ token, onSignedOut, onSession }: PanelProps) {
           if (result.remaining === 0 || result.cleared === 0) break;
         }
         setCleared(rounds);
-        // The fest's test registrations (every department) too.
-        setFestCleared(await clearFestTestData(token, options.results));
+        // The fest's test registrations (every department) too, a batch per call until none are left.
+        let fest = { cleared: 0, results: 0, restarted: [] as string[] };
+        for (let round = 0; round < 40; round += 1) {
+          const result = await clearFestTestData(token, options.results);
+          fest = { cleared: fest.cleared + result.cleared, results: fest.results + (result.results ?? 0), restarted: result.restarted?.length ? result.restarted : fest.restarted };
+          if (!result.remaining || !result.cleared) break;
+        }
+        setFestCleared(fest);
         if (options.finish) {
           await stopTestSession(token);
           await setTimeline(token, { mode: 'standard' });

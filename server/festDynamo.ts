@@ -181,10 +181,11 @@ export class DynamoFestStore implements FestStore {
 
   async purgeRegistration(registration: FestRegistration) {
     const { dept, id, phone } = registration;
+    const [phoneOwner, submissionOwner] = await Promise.all([this.findPhone(dept, phone), registration.sid ? this.findSubmission(dept, registration.sid) : null]);
     const keys = [`R#${id}`];
-    if ((await this.findPhone(dept, phone)) === id) keys.push(`P#${phone}`);
-    if (registration.sid && (await this.findSubmission(dept, registration.sid)) === id) keys.push(`X#${registration.sid}`);
-    for (const sk of keys) await this.db.send(new DeleteCommand({ TableName: this.table, Key: { pk: pk(dept), sk } }));
+    if (phoneOwner === id) keys.push(`P#${phone}`);
+    if (registration.sid && submissionOwner === id) keys.push(`X#${registration.sid}`);
+    await Promise.all(keys.map((sk) => this.db.send(new DeleteCommand({ TableName: this.table, Key: { pk: pk(dept), sk } }))));
   }
 
   async purgeResult(dept: string, eventId: string) {

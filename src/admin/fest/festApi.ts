@@ -9,6 +9,8 @@ export interface SyncAnswer {
   results: FestResult[];
   cursor: string;
   catalogRevision: number;
+  /** When test data was last deleted: a new value means "drop your copy and load afresh". */
+  resetAt?: string | null;
   serverTime: string;
 }
 
@@ -40,8 +42,9 @@ export interface ImportOutcome {
 }
 export const importFest = (token: string, body: { dept?: string; rows: ImportRow[]; dryRun: boolean; eventFeesPaid?: boolean }) =>
   request<{ outcomes: ImportOutcome[] }>('/api/admin/fest/import', { method: 'POST', body, token }).then((data) => data.outcomes);
+/** Deletes a batch of test registrations; `remaining` says how many are left for the next call. */
 export const clearFestTestData = (token: string, results: boolean) =>
-  request<{ cleared: number; results: number; restarted: string[] }>('/api/admin/fest/test-data/clear', { method: 'POST', body: { results }, token });
+  request<{ cleared: number; remaining?: number; results: number; restarted: string[] }>('/api/admin/fest/test-data/clear', { method: 'POST', body: { results }, token });
 
 /** A change the outbox sends (path and body), answered with the registration or the results. */
 export const festWrite = (token: string, path: `/api/admin/fest/${string}`, body: unknown) =>

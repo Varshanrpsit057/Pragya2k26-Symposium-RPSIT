@@ -56,6 +56,8 @@ interface Cache {
   registrations: FestRegistration[];
   results: FestResult[];
   cursor: string;
+  /** The server's "test data deleted at" when this copy was loaded. */
+  resetAt?: string | null;
   savedAt: number;
 }
 
@@ -139,7 +141,7 @@ export function FestProvider({ token, session, pageDept = null, onSignedOut, chi
   const [filters, setFilters] = useState<FestFilters>(() => ({ ...NO_FILTERS, dept: session.department ?? pageDept ?? '' }));
 
   // The latest values, for the timers and the outbox (which run outside renders).
-  const state = useRef({ cursor: initial?.cursor ?? '', catalog, registrations, results, outbox, flushing: false, syncing: false, retry: 0 });
+  const state = useRef({ cursor: initial?.cursor ?? '', resetAt: initial?.resetAt ?? null, catalog, registrations, results, outbox, flushing: false, syncing: false, retry: 0 });
   useEffect(() => {
     state.current.catalog = catalog;
     state.current.registrations = registrations;
@@ -157,8 +159,8 @@ export function FestProvider({ token, session, pageDept = null, onSignedOut, chi
   );
 
   const saveCache = useCallback(() => {
-    const { catalog: currentCatalog, registrations: regs, results: res, cursor } = state.current;
-    write(keys.cache, { catalog: currentCatalog, registrations: [...regs.values()], results: [...res.values()], cursor, savedAt: Date.now() } satisfies Cache);
+    const { catalog: currentCatalog, registrations: regs, results: res, cursor, resetAt } = state.current;
+    write(keys.cache, { catalog: currentCatalog, registrations: [...regs.values()], results: [...res.values()], cursor, resetAt, savedAt: Date.now() } satisfies Cache);
   }, [keys.cache]);
 
   const putRegistration = useCallback((registration: FestRegistration, replaces?: string) => {
@@ -186,7 +188,11 @@ export function FestProvider({ token, session, pageDept = null, onSignedOut, chi
     state.current.syncing = true;
     setSyncing(true);
     try {
-      const answer = await festSync(token, state.current.cursor);
+      let answer = await festSync(token, state.current.cursor);
+      // Test data was deleted since this copy was loaded: records that are gone never come as
+      // changes, so load everything afresh (what waits to be sent stays).
+      if (!answer.full && (answer.resetAt ?? null) !== state.current.resetAt) answer = await festSync(token, '');
+      state.current.resetAt = answer.resetAt ?? null;
       const waiting = new Set(state.current.outbox.filter((op) => !op.failed).map((op) => op.target));
       setRegistrations((current) => {
         const next = answer.full ? new Map<string, FestRegistration>() : new Map(current);

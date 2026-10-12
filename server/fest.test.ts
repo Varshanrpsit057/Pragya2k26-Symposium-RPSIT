@@ -309,13 +309,34 @@ describe('test data', () => {
     await register(h, cse.desk.token, 'CSE-0001', []);
     await register(h, it_.desk.token, 'IT-0002', []);
     const cleared = await h.asOwner('POST', '/api/admin/fest/test-data/clear', {});
-    expect(cleared.body).toMatchObject({ cleared: 2 });
+    expect(cleared.body).toMatchObject({ cleared: 2, remaining: 0 });
     expect(cleared.body.restarted).toContain('CSE');
     expect(cleared.body.restarted).not.toContain('IT');
     const left = await h.asOwner('POST', '/api/admin/fest/sync', {});
     expect(left.body.registrations.map((item: FestRegistration) => item.id)).toEqual(['IT-0001']);
     expect([...h.files.objects.keys()].some((key) => key.startsWith('backups/fest-test-data-'))).toBe(true);
     expect((await h.call('POST', '/api/admin/fest/blocks', {}, { token: cse.desk.token })).body.first).toBe(1);
+  });
+
+  it('deletes a batch per call (inside the API’s time limit), and only the last call restarts IDs and tells every phone to reload', async () => {
+    const h = setup({ at: TIMES.eventDay });
+    const cse = await department(h, 'CSE');
+    await h.asOwner('POST', '/api/admin/testing/session', { action: 'start', label: 'Load test' });
+    for (const id of ['CSE-0001', 'CSE-0002', 'CSE-0003']) await register(h, cse.desk.token, id, []);
+    const before = (await h.asOwner('POST', '/api/admin/fest/sync', {})).body.resetAt;
+
+    const first = await h.asOwner('POST', '/api/admin/fest/test-data/clear', { limit: 2 });
+    expect(first.body).toMatchObject({ cleared: 2, remaining: 1, restarted: [] });
+    expect((await h.asOwner('POST', '/api/admin/fest/sync', {})).body.resetAt).toBe(before);
+
+    const second = await h.asOwner('POST', '/api/admin/fest/test-data/clear', { limit: 2 });
+    expect(second.body).toMatchObject({ cleared: 1, remaining: 0 });
+    expect(second.body.restarted).toContain('CSE');
+    h.setTime(new Date(Date.parse(TIMES.eventDay) + 60_000).toISOString());
+    const after = (await h.asOwner('POST', '/api/admin/fest/sync', {})).body;
+    expect(after.registrations).toEqual([]);
+    expect(after.resetAt).toEqual(expect.any(String));
+    expect(after.resetAt).not.toBe(before);
   });
 });
 

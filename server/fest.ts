@@ -50,6 +50,11 @@ import { requirePermission, type Actor } from './roles';
 import type { Store } from './store';
 
 export const CATALOG_SETTING = 'fest-catalog';
+/** When test data was last deleted: every phone that sees a new value drops its copy and loads afresh. */
+export const RESET_SETTING = 'fest-reset';
+/** Test registrations deleted per call (the dashboard calls again until none are left), several at a time. */
+const CLEAR_BATCH = 250;
+const PURGE_PARALLEL = 20;
 /** How long an instance trusts the catalog it read. */
 const CATALOG_TTL_MS = 10_000;
 /** Each sync returns what changed since a little before the last one, so nothing written meanwhile is missed. */
@@ -77,6 +82,7 @@ const int = (value: unknown, fallback: number) => (typeof value === 'number' && 
 
 export class FestService {
   private cached: { at: number; catalog: FestCatalog } | null = null;
+  private resetCached: { at: number; value: string | null } | null = null;
 
   constructor(private readonly deps: FestDeps) {}
 
@@ -195,6 +201,19 @@ export class FestService {
   // -----------------------------------------------------------------------------------------
   // Live data
 
+  /** When test data was last deleted (read at most every few seconds). */
+  private async resetMark(): Promise<string | null> {
+    const now = this.deps.now();
+    if (this.resetCached && now - this.resetCached.at < CATALOG_TTL_MS) return this.resetCached.value;
+    try {
+      const value = (await this.deps.settings.getSetting(RESET_SETTING)) ?? null;
+      this.resetCached = { at: now, value };
+      return value;
+    } catch {
+      return this.resetCached?.value ?? null;
+    }
+  }
+
   async sync(actor: Actor, body: unknown) {
     const since = isObject(body) && typeof body.since === 'string' && /^\d{4}-\d{2}-\d{2}T[\d:.]+Z$/.test(body.since) ? body.since : '';
     const departments = await this.viewDepartments(actor, isObject(body) ? body.dept : undefined);
@@ -208,6 +227,7 @@ export class FestService {
       results: parts.flatMap((part) => part.results),
       cursor: this.iso(-SYNC_OVERLAP_MS),
       catalogRevision: catalog.revision,
+      resetAt: await this.resetMark(),
       serverTime: this.iso(),
     };
   }
@@ -652,32 +672,47 @@ export class FestService {
   // Test data and backups
 
   /** Deletes the registrations made in test sessions (after saving them to a backup file). */
+  /**
+   * Deletes the registrations made in test sessions, a batch per call (well inside the API's time
+   * limit); the dashboard calls again while some remain. The last call also clears event results
+   * if asked, starts IDs again where nothing real is left, and tells every phone to load afresh.
+   */
   async clearTest(actor: Actor, body: unknown) {
     const catalog = await this.catalog();
     const withResults = isObject(body) && body.results === true;
+    const limit = Math.min(Math.max(int(isObject(body) ? body.limit : undefined, CLEAR_BATCH), 1), 500);
     const everything = await Promise.all(catalog.departments.map(async (dept) => ({ dept: dept.code, ...(await this.deps.store.changes(dept.code, '')) })));
     const tests = everything.flatMap((part) => part.registrations.filter((registration) => registration.test));
-    const stamp = this.iso().replace(/[:.]/g, '-');
-    await this.deps.files.put(`backups/fest-test-data-${stamp}.json`, new TextEncoder().encode(JSON.stringify({ at: this.iso(), by: actor.username, registrations: tests, results: withResults ? everything.flatMap((part) => part.results) : [] })), 'application/json');
-    for (const registration of tests) await this.deps.store.purgeRegistration(registration);
+    const batch = tests.slice(0, limit);
+    const remaining = tests.length - batch.length;
+    const last = remaining === 0;
+    if (batch.length || (last && withResults)) {
+      const stamp = this.iso().replace(/[:.]/g, '-');
+      const saved = { at: this.iso(), by: actor.username, registrations: batch, results: last && withResults ? everything.flatMap((part) => part.results) : [] };
+      await this.deps.files.put(`backups/fest-test-data-${stamp}.json`, new TextEncoder().encode(JSON.stringify(saved)), 'application/json');
+    }
+    for (let index = 0; index < batch.length; index += PURGE_PARALLEL) {
+      await Promise.all(batch.slice(index, index + PURGE_PARALLEL).map((registration) => this.deps.store.purgeRegistration(registration)));
+    }
     let results = 0;
-    if (withResults) {
-      for (const part of everything) {
-        for (const result of part.results) {
-          await this.deps.store.purgeResult(part.dept, result.eventId);
-          results += 1;
-        }
-      }
-    }
-    // Departments left with no registrations start their IDs again.
     const restarted: string[] = [];
-    for (const part of everything) {
-      if (part.registrations.some((registration) => !registration.test)) continue;
-      for (const source of ['DESK', 'ONLINE', 'PAPER'] as const) await this.deps.store.resetCounter(part.dept, source);
-      restarted.push(part.dept);
+    if (last) {
+      if (withResults) {
+        const all = everything.flatMap((part) => part.results.map((result) => ({ dept: part.dept, eventId: result.eventId })));
+        await Promise.all(all.map((result) => this.deps.store.purgeResult(result.dept, result.eventId)));
+        results = all.length;
+      }
+      // Departments left with no registrations start their IDs again.
+      for (const part of everything) {
+        if (part.registrations.some((registration) => !registration.test)) continue;
+        await Promise.all((['DESK', 'ONLINE', 'PAPER'] as const).map((source) => this.deps.store.resetCounter(part.dept, source)));
+        restarted.push(part.dept);
+      }
+      await this.deps.settings.putSetting(RESET_SETTING, this.iso());
+      this.resetCached = null;
     }
-    this.deps.log('Fest test data deleted', { registrations: tests.length, results, restarted, by: actor.username });
-    return { success: true as const, cleared: tests.length, results, restarted };
+    this.deps.log('Fest test data deleted', { registrations: batch.length, remaining, results, restarted, by: actor.username });
+    return { success: true as const, cleared: batch.length, remaining, results, restarted };
   }
 
   /** Every department's data to a private file (S3 keeps each earlier version): run by the schedule. */
