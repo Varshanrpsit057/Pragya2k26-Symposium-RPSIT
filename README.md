@@ -5,6 +5,10 @@ Department of Artificial Intelligence and Data Science, **R P Sarathy Institute 
 
 It is deployed straight from GitHub to **AWS Amplify**: no servers to run, no SSH, no manual uploads.
 
+**Running the college-wide fest?** Start with [README-FEST.md](README-FEST.md): every link (each
+department and each of the 44 events), every account, the setup after a deploy, how each role works
+and what to do when something goes wrong.
+
 ## 0. The college-wide fest (INFINITE TECHFEST'26)
 
 The staff dashboard runs the whole college's fest: **8 departments** (CSE, AIDS, IT, ECE, CYS, EEE,
@@ -20,7 +24,8 @@ for about 300 phones on mobile data.
 | Registration desk | `/landing/<dept>/admin/` | Register (works offline), find and check in online registrants, desk totals for the cash handover |
 | Event coordinator | `/landing/<dept>/admin/` | Their event: students, ₹ fee, attendance, add a department student, winners and submit |
 
-`<dept>` is `cse`, `aids`, `it`, `ece`, `cys`, `eee`, `mech` or `sh` (use the trailing slash).
+`<dept>` is `cse`, `aids`, `it`, `ece`, `cys`, `eee`, `mech` or `sh` (use the trailing slash). Each event
+also has its own link, `/landing/<dept>/admin/?event=<event id>`, which opens on that event's window.
 
 - **Registration IDs** carry the department: `CSE-0001…` at the desks, `CSE-5001…` imported from the
   online form, `CSE-9001…` paper slips. One phone number is registered once per department; a
