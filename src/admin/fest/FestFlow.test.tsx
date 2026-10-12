@@ -5,7 +5,7 @@
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { route } from '../../../server/http';
-import { TIMES, setup } from '../../../server/testing';
+import { STAFF_PASSWORD, TIMES, setup } from '../../../server/testing';
 import type { FestRegistration } from '../../lib/fest';
 import { AdminApp } from '../AdminApp';
 
@@ -91,6 +91,39 @@ describe('a registration desk', () => {
     await act(async () => fireEvent.click(screen.getByRole('button', { name: /Refresh|Updating/ })));
     await waitFor(async () => expect((await sync(h, desk.token)).map((item) => item.id).sort()).toEqual(['CSE-0001', 'CSE-0002']));
     await waitFor(() => expect(screen.queryByText('1 waiting to send')).toBeNull());
+  });
+
+  it('loses nothing when the phone switches off with registrations waiting: they are sent when the desk signs in again', async () => {
+    const h = setup({ at: TIMES.eventDay });
+    const desk = await h.staff('DESK', [], 'cse-desk1', { department: 'CSE', deskNumber: 1 });
+    const network = backend(h);
+    signIn(desk.token);
+    const before = render(<AdminApp />);
+    expect(await screen.findByText('50 IDs on this phone')).toBeInTheDocument();
+
+    network.offline();
+    await fillStudent('Asha K', '9840022222');
+    fireEvent.click(screen.getByRole('button', { name: 'Register · ₹100 received' }));
+    expect(await screen.findByText('CSE-0001')).toBeInTheDocument();
+    expect(await screen.findByText('1 waiting to send')).toBeInTheDocument();
+
+    // Signing out first says what happens to it (here the desk stays).
+    const confirm = vi.spyOn(window, 'confirm').mockReturnValue(false);
+    fireEvent.click(screen.getByRole('button', { name: 'Sign out' }));
+    expect(confirm.mock.calls[0][0]).toMatch(/^1 change is still waiting to send from this device\. They stay saved here and are sent the next time cse-desk1 signs in/);
+    expect(screen.getByText('1 waiting to send')).toBeInTheDocument();
+
+    // The phone switches off: the page and its sign-in are gone; the server has nothing yet.
+    before.unmount();
+    sessionStorage.clear();
+    expect(await sync(h, desk.token)).toEqual([]);
+
+    // Back on, with signal: the same desk signs in again on the same phone, and it is sent.
+    network.online();
+    signIn(await h.loginAs('cse-desk1', STAFF_PASSWORD));
+    render(<AdminApp />);
+    await waitFor(async () => expect((await sync(h, desk.token)).map((item) => item.id)).toEqual(['CSE-0001']));
+    expect((await sync(h, desk.token))[0]).toMatchObject({ name: 'Asha K', desk: 1, entry: { payment: { method: 'CASH', amount: 100 } } });
   });
 });
 
