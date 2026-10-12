@@ -23,6 +23,9 @@ import { DeptPicker, useWorkDept } from './DeskView';
 import { useFest } from './FestData';
 import { NO_PAYMENT, PaymentChoice, RegistrationCard, ShortList, Stat, matches, paymentBody, paymentReady, stampNow, type PaymentDraft } from './festUi';
 
+/** The event an address names ('/landing/cse/admin/?event=cse-hackathon'), or ''. */
+export const linkedEvent = () => new URLSearchParams(window.location.search).get('event')?.trim().toLowerCase() ?? '';
+
 export function EventWindow() {
   const { catalog, session } = useFest();
   const [dept, setDept, canPick] = useWorkDept();
@@ -32,7 +35,7 @@ export function EventWindow() {
     if (mine) return catalog.events.filter((event) => session.eventIds.includes(event.id));
     return dept ? eventsOf(catalog, dept, { all: true }) : [];
   }, [catalog, mine, session.eventIds, dept]);
-  const [chosen, setChosen] = useState('');
+  const [chosen, setChosen] = useState(linkedEvent);
   const event = choices.find((item) => item.id === chosen) ?? choices[0] ?? null;
 
   if (!catalog) return <p className="adm-loading">Loading…</p>;

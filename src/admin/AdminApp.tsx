@@ -5,7 +5,7 @@ import { ROLE_INFO, hasPermission, type Permission, type SessionInfo } from '../
 import { SignedOut, currentAdmin, listHelp, myHelp, savedToken, setDeskNumber, signIn, signOut } from './adminApi';
 import { CatalogEditor } from './fest/CatalogEditor';
 import { DeskView } from './fest/DeskView';
-import { EventWindow } from './fest/EventWindow';
+import { EventWindow, linkedEvent } from './fest/EventWindow';
 import { FestProvider } from './fest/FestData';
 import { SyncBar } from './fest/festUi';
 import { ImportView } from './fest/ImportView';
@@ -243,7 +243,8 @@ function ShellBody({ token, session, onSession, onSignOut, onSignedOut }: ShellP
   const tabs = TABS.filter((tab) => tab.show(session));
   const pageDept = pageDepartment(window.location.pathname);
   const wrongPage = Boolean(session.department && pageDept && session.department !== pageDept);
-  const [tab, setTab] = useState<TabId>(tabs[0].id);
+  // An event's own address (?event=cse-hackathon) opens straight on its window.
+  const [tab, setTab] = useState<TabId>(() => (linkedEvent() && tabs.some((item) => item.id === 'event') ? 'event' : tabs[0].id));
   const current = tabs.some((item) => item.id === tab) ? tab : tabs[0].id;
   const currentLabel = tabs.find((item) => item.id === current)?.label(session) ?? '';
   const panel = { token, session, onSignedOut };

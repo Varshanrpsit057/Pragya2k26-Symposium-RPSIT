@@ -122,6 +122,21 @@ describe('an event coordinator', () => {
     });
     expect(await within(winners).findByText(/CSE-0001 Kavin R/)).toBeInTheDocument();
   });
+
+  it('opens straight on the event its link names', async () => {
+    const h = setup({ at: TIMES.eventDay });
+    const admin = await h.staff('DEPT_ADMIN', [], 'cse-admin', { department: 'CSE' });
+    backend(h);
+    signIn(admin.token);
+    window.history.pushState({}, '', '/landing/cse/admin/?event=cse-cyber-hunt');
+    try {
+      render(<AdminApp />);
+      expect(await screen.findByRole('heading', { name: 'Cyber Hunt (Technical Quiz)' })).toBeInTheDocument();
+      expect(screen.getByLabelText('Event')).toHaveValue('cse-cyber-hunt');
+    } finally {
+      window.history.pushState({}, '', '/');
+    }
+  });
 });
 
 describe('the overall coordinator', () => {
