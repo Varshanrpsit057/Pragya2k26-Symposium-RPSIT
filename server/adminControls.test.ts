@@ -3,7 +3,7 @@
  * close it, set new times, back to the plan) and deleting staff accounts.
  */
 import { describe, expect, it } from 'vitest';
-import { ROLE_PERMISSIONS, STAFF_ROLES } from '../src/lib/staff';
+import { DEPARTMENT_ROLES, ROLE_PERMISSIONS, STAFF_ROLES } from '../src/lib/staff';
 import { STAFF_PASSWORD, TIMES, setup } from './testing';
 
 const WINDOW = '/api/admin/registration-window';
@@ -84,7 +84,8 @@ describe('the registration times', () => {
   it('is for admins only', async () => {
     const h = setup({ at: TIMES.eventDay });
     for (const role of STAFF_ROLES.filter((item) => item !== 'ADMIN')) {
-      const other = await h.staff(role, role === 'COORDINATOR' ? ['cognix'] : []);
+      const scoped = DEPARTMENT_ROLES.includes(role) ? { department: 'AIDS', deskNumber: 1 } : {};
+      const other = await h.staff(role, role === 'COORDINATOR' ? ['aids-cognix'] : [], undefined, scoped);
       expect((await h.call('GET', WINDOW, undefined, { token: other.token })).status, role).toBe(403);
       expect((await h.call('POST', WINDOW, { action: 'close-now' }, { token: other.token })).status, role).toBe(403);
     }

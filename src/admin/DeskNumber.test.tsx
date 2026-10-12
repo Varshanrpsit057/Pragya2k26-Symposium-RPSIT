@@ -44,7 +44,7 @@ describe('the desk number of each desk sign-in', () => {
     const sent = api((url) => (url.endsWith('/api/admin/login') ? { token: 'x'.repeat(43) } : url.endsWith('/api/admin/session') ? session('DESK', 2) : undefined));
     render(<AdminApp />);
     fireEvent.change(screen.getByLabelText('Username'), { target: { value: 'desk2' } });
-    expect(screen.getByLabelText('Desk number (registration desk only)')).toHaveValue('2');
+    expect(screen.getByLabelText('Desk number (only if your account does not have one)')).toHaveValue('2');
     fireEvent.change(screen.getByLabelText('Password'), { target: { value: 'Preview-Staff-Pass-2026' } });
     fireEvent.click(screen.getByRole('button', { name: 'Sign in' }));
     // Signed in: the header shows the desk.
@@ -88,7 +88,7 @@ describe('the desk number of each desk sign-in', () => {
             : undefined,
     );
     render(<AdminApp />);
-    fireEvent.click(within(await screen.findByRole('navigation', { name: 'Sections' })).getByRole('button', { name: 'Student coordinators' }));
+    fireEvent.click(within(await screen.findByRole('navigation', { name: 'Sections' })).getByRole('button', { name: 'Accounts' }));
     const signedIn = await screen.findByRole('region', { name: 'Signed in now' });
     await waitFor(() => expect(within(signedIn).getAllByRole('row')).toHaveLength(4));
     const rows = within(signedIn).getAllByRole('row').map((row) => row.textContent);

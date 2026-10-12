@@ -4,7 +4,8 @@
  * never stored here. Passwords are kept only as scrypt hashes, made on the server.
  */
 import { eventCatalog } from '../src/content/eventCatalog';
-import { STAFF_USERNAME, isStaffRole, type StaffAccountView, type StaffRole } from '../src/lib/staff';
+import { departmentOf, type FestCatalog } from '../src/lib/fest';
+import { DEPARTMENT_REQUIRED, DEPARTMENT_ROLES, STAFF_USERNAME, isStaffRole, type StaffAccountView, type StaffRole } from '../src/lib/staff';
 import { hashPassword, passwordProblem, sha256 } from './auth';
 import { ApiError } from './errors';
 import type { Actor } from './roles';
@@ -25,6 +26,8 @@ export function staffView(account: StaffAccount): StaffAccountView {
     displayName: account.displayName,
     role: account.role,
     eventIds: account.eventIds,
+    department: account.department ?? null,
+    deskNumber: account.deskNumber ?? null,
     active: account.active,
     createdAt: account.createdAt,
     createdBy: account.createdBy,
@@ -35,20 +38,45 @@ export function staffView(account: StaffAccount): StaffAccountView {
 }
 
 function readRole(value: unknown): StaffRole {
-  if (!isStaffRole(value)) throw new ApiError(400, 'INVALID', 'Choose a role: Admin, Registration desk, Event coordinator, Certificate team or Web assistant team.');
+  if (!isStaffRole(value)) throw new ApiError(400, 'INVALID', 'Choose a role: Web assist team, Overall coordinator, Department HOD, Department admin, Registration desk or Event coordinator.');
   return value;
 }
 
-/** Coordinators need at least one event; every other role sees all events, so it keeps none. */
-function readEvents(value: unknown, role: StaffRole): string[] {
+/** The department of a department role (from the catalog); null for roles that see every department. */
+function readDepartment(catalog: FestCatalog, value: unknown, role: StaffRole): string | null {
+  if (!DEPARTMENT_ROLES.includes(role)) return null;
+  const code = typeof value === 'string' ? value.trim().toUpperCase() : '';
+  if (!code) {
+    if (DEPARTMENT_REQUIRED.includes(role)) throw new ApiError(400, 'INVALID', 'Choose the department.');
+    return null;
+  }
+  if (!departmentOf(catalog, code)) throw new ApiError(400, 'INVALID', 'Choose a department from the list.');
+  return code;
+}
+
+/**
+ * Coordinators need at least one event: of their department (from the catalog), or, for an
+ * account with no department, of the symposium's own list. Every other role keeps none.
+ */
+function readEvents(catalog: FestCatalog, value: unknown, role: StaffRole, department: string | null): string[] {
   if (role !== 'COORDINATOR') return [];
   const requested = Array.isArray(value) ? value.filter((id): id is string => typeof id === 'string') : [];
-  if (requested.some((id) => !eventCatalog.some((event) => event.id === id))) {
-    throw new ApiError(400, 'INVALID', 'Assign events from the list only.');
+  const allowed = department ? catalog.events.filter((event) => event.dept === department).map((event) => event.id) : eventCatalog.map((event) => event.id);
+  if (requested.some((id) => !allowed.includes(id))) {
+    throw new ApiError(400, 'INVALID', department ? `Assign ${department} events only.` : 'Assign events from the list only.');
   }
-  const eventIds = eventCatalog.filter((event) => requested.includes(event.id)).map((event) => event.id);
+  const eventIds = allowed.filter((id) => requested.includes(id));
   if (!eventIds.length) throw new ApiError(400, 'INVALID', 'Assign at least one event to a coordinator.');
   return eventIds;
+}
+
+/** A department's desk accounts are desks 1..its number of desks. */
+function readDesk(catalog: FestCatalog, value: unknown, role: StaffRole, department: string | null): number | undefined {
+  if (role !== 'DESK' || !department) return undefined;
+  const desks = departmentOf(catalog, department)?.desks ?? 0;
+  const number = typeof value === 'number' ? value : Number(value);
+  if (!Number.isInteger(number) || number < 1 || number > desks) throw new ApiError(400, 'INVALID', `Choose the desk: 1 to ${desks}.`);
+  return number;
 }
 
 function readDisplayName(value: unknown): string {
@@ -70,6 +98,8 @@ export class StaffAccounts {
       store: Store;
       /** The owner's username (ADMIN_USERNAME): no staff account may use it. */
       ownerUsername: string;
+      /** The fest's departments and events (for department roles). */
+      catalog: () => Promise<FestCatalog>;
       now: () => number;
       log: (message: string, details?: Record<string, unknown>) => void;
     },
@@ -93,12 +123,17 @@ export class StaffAccounts {
       throw new ApiError(409, 'USERNAME_TAKEN', 'That username is already in use.');
     }
     const role = readRole(body.role);
+    const catalog = await this.deps.catalog();
+    const department = readDepartment(catalog, body.department, role);
+    const deskNumber = readDesk(catalog, body.deskNumber, role, department);
     const now = this.iso();
     const account: StaffAccount = {
       username,
       displayName: readDisplayName(body.displayName),
       role,
-      eventIds: readEvents(body.eventIds, role),
+      eventIds: readEvents(catalog, body.eventIds, role, department),
+      ...(department && { department }),
+      ...(deskNumber && { deskNumber }),
       passwordHash: await readPassword(body.password),
       active: true,
       createdAt: now,
@@ -120,6 +155,7 @@ export class StaffAccounts {
     if (!isObject(body)) throw new ApiError(400, 'INVALID', 'The change could not be read.');
     const key = username.toLowerCase();
     const passwordHash = body.password === undefined ? null : await readPassword(body.password);
+    const catalog = await this.deps.catalog();
     for (let attempt = 0; attempt < 3; attempt += 1) {
       const current = await this.deps.store.getStaff(key);
       if (!current) throw new ApiError(404, 'NOT_FOUND', 'There is no such student coordinator account.');
@@ -129,11 +165,18 @@ export class StaffAccounts {
         throw new ApiError(400, 'INVALID', 'You cannot remove your own admin access. Ask another admin.');
       }
       const now = this.iso();
+      const sameScope = role === current.role && body.department === undefined;
+      const department = sameScope ? (current.department ?? null) : readDepartment(catalog, body.department ?? current.department, role);
+      const deskNumber =
+        role === current.role && body.deskNumber === undefined && department === (current.department ?? null) ? current.deskNumber : readDesk(catalog, body.deskNumber ?? current.deskNumber, role, department);
       const next: StaffAccount = {
         ...current,
         displayName: body.displayName === undefined ? current.displayName : readDisplayName(body.displayName),
         role,
-        eventIds: body.eventIds === undefined && role === current.role ? current.eventIds : readEvents(body.eventIds ?? current.eventIds, role),
+        eventIds:
+          body.eventIds === undefined && sameScope ? current.eventIds : readEvents(catalog, body.eventIds ?? current.eventIds, role, department),
+        department: department ?? undefined,
+        deskNumber,
         active,
         ...(passwordHash && { passwordHash, passwordChangedAt: now }),
         updatedAt: now,

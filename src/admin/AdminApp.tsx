@@ -1,54 +1,52 @@
-import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react';
-import type { AdminRegistration } from '../lib/admin';
+import { useCallback, useEffect, useState, type FormEvent } from 'react';
 import { formatIst, parseEventStart } from '../lib/countdown';
-import type { RegistrationStatus } from '../lib/registration';
+import { DEFAULT_CATALOG } from '../lib/fest';
 import { ROLE_INFO, hasPermission, type Permission, type SessionInfo } from '../lib/staff';
-import type { StudentPortalState } from '../lib/student';
-import { SignedOut, currentAdmin, listHelp, listRegistrations, myHelp, savedToken, setDeskNumber, setStudentPortal, signIn, signOut, studentPortal } from './adminApi';
-import { DeletedPanel } from './DeletedPanel';
-import { DeskPanel } from './DeskPanel';
-import { EventsPanel } from './EventsPanel';
+import { SignedOut, currentAdmin, listHelp, myHelp, savedToken, setDeskNumber, signIn, signOut } from './adminApi';
+import { CatalogEditor } from './fest/CatalogEditor';
+import { DeskView } from './fest/DeskView';
+import { EventWindow } from './fest/EventWindow';
+import { FestProvider } from './fest/FestData';
+import { SyncBar } from './fest/festUi';
+import { ImportView } from './fest/ImportView';
+import { FestOverview, FestRegistrations, FestResults } from './fest/OverviewViews';
 import { HelpDialog, repliesSeenAt, type HelpContext } from './HelpDialog';
 import { HelpPanel } from './HelpPanel';
-import { MapEditor } from './MapEditor';
-import { RegistrationDialog } from './RegistrationDialog';
 import { RegistrationWindowPanel } from './RegistrationWindowPanel';
-import { ReportsPanel } from './ReportsPanel';
-import { ResultsPanel } from './ResultsPanel';
 import { RolesPanel } from './RolesPanel';
 import { StaffPanel } from './StaffPanel';
 import { SystemPanel } from './SystemPanel';
 import { TestingPanel } from './TestingPanel';
-import { Badge, ErrorNote, HELP_EVENT, LiveStatus, StatusBadge, messageOf, useLiveData, when } from './ui';
+import { Badge, ErrorNote, HELP_EVENT, messageOf, useLiveData, when } from './ui';
 
-type Filter = RegistrationStatus | 'ALL';
+type TabId = 'overview' | 'registrations' | 'results' | 'desk' | 'event' | 'import' | 'catalog' | 'window' | 'help' | 'system' | 'staff' | 'testing' | 'roles';
 
-const FILTERS: { value: Filter; label: string }[] = [
-  { value: 'PENDING', label: 'GPay to verify' },
-  { value: 'APPROVED', label: 'Approved' },
-  { value: 'REJECTED', label: 'Rejected' },
-  { value: 'CANCELLED', label: 'Cancelled' },
-  { value: 'ALL', label: 'All' },
-];
-
-type TabId = 'review' | 'desk' | 'window' | 'events' | 'results' | 'help' | 'system' | 'deleted' | 'map' | 'staff' | 'reports' | 'testing' | 'roles';
+/** Roles that watch (every department, or their own) rather than work at a desk or an event. */
+const watches = (session: SessionInfo) => can(session, 'fest.viewAll') || session.role === 'HOD' || session.role === 'DEPT_ADMIN';
 
 /** The dashboard's sections, each shown only to the roles it is for (the server checks again). */
 const TABS: { id: TabId; label: (session: SessionInfo) => string; show: (session: SessionInfo) => boolean }[] = [
-  { id: 'desk', label: (session) => (can(session, 'registrations.onsite') ? 'Registration desk' : 'Registrations'), show: (session) => can(session, 'registrations.list') },
-  { id: 'review', label: () => 'Online payments', show: (session) => session.role === 'ADMIN' },
+  { id: 'overview', label: () => 'Overview', show: watches },
+  { id: 'registrations', label: () => 'Registrations', show: watches },
+  { id: 'results', label: () => 'Results', show: watches },
+  { id: 'desk', label: (session) => (session.role === 'DESK' ? 'Registration desk' : 'Register'), show: (session) => can(session, 'fest.register') },
+  { id: 'event', label: (session) => (session.role === 'COORDINATOR' ? 'My events' : 'Event windows'), show: (session) => can(session, 'fest.event') },
+  { id: 'import', label: () => 'Online & paper', show: (session) => can(session, 'fest.import') },
+  { id: 'catalog', label: () => 'Departments & events', show: (session) => can(session, 'fest.catalog') },
+  { id: 'staff', label: () => 'Accounts', show: (session) => can(session, 'staff.manage') },
   { id: 'window', label: () => 'Event-day controls', show: (session) => can(session, 'registration.window') || can(session, 'site.notice') },
-  { id: 'events', label: () => 'Events', show: (session) => can(session, 'events.operate') },
-  { id: 'results', label: () => 'Results & certificates', show: (session) => can(session, 'results.view') },
   { id: 'help', label: () => 'Help requests', show: (session) => can(session, 'help.manage') },
   { id: 'system', label: () => 'System status', show: (session) => can(session, 'system.view') },
-  { id: 'deleted', label: () => 'Deleted', show: (session) => can(session, 'registrations.delete') },
-  { id: 'map', label: () => 'Campus map', show: (session) => can(session, 'map.edit') },
-  { id: 'staff', label: () => 'Student coordinators', show: (session) => can(session, 'staff.manage') },
-  { id: 'reports', label: () => 'Reports', show: (session) => can(session, 'reports.view') },
   { id: 'testing', label: () => 'Testing', show: (session) => can(session, 'system.testing') },
   { id: 'roles', label: () => 'Roles', show: () => true },
 ];
+
+/** '/landing/cse/admin/' → 'CSE' (each department's own address); null on /landing/admin/. */
+export const pageDepartment = (path: string) => {
+  const code = /\/landing\/([a-z]{2,6})\/admin/i.exec(path)?.[1]?.toUpperCase() ?? null;
+  return code && code !== 'ADMIN' ? code : null;
+};
+const deptTitle = (code: string | null) => (code ? `${code} · ${DEFAULT_CATALOG.departments.find((dept) => dept.code === code)?.name ?? ''}` : '');
 
 const can = (session: SessionInfo, permission: Permission) => hasPermission(session.role, permission);
 
@@ -59,12 +57,35 @@ const PHASE_LABEL: Record<SessionInfo['phase'], string> = {
   closed: 'Registration closed',
 };
 
+const LAST_SESSION = 'pragya-admin-last-session';
+/** The session as last confirmed by the server, for opening the dashboard with no signal. */
+function rememberSession(info: SessionInfo) {
+  try {
+    sessionStorage.setItem(LAST_SESSION, JSON.stringify(info));
+  } catch {
+    // Storage blocked: only the online check is used.
+  }
+}
+function lastSession(): SessionInfo | null {
+  try {
+    const saved = sessionStorage.getItem(LAST_SESSION);
+    return saved ? (JSON.parse(saved) as SessionInfo) : null;
+  } catch {
+    return null;
+  }
+}
+
 export function AdminApp() {
   const [token, setToken] = useState<string | null>(savedToken);
   const [session, setSession] = useState<SessionInfo | null>(null);
   const [notice, setNotice] = useState('');
 
   const signedOut = useCallback((message = '') => {
+    try {
+      sessionStorage.removeItem(LAST_SESSION);
+    } catch {
+      // Nothing saved.
+    }
     setToken(null);
     setSession(null);
     setNotice(message);
@@ -77,8 +98,18 @@ export function AdminApp() {
     if (!token) return;
     let active = true;
     currentAdmin(token)
-      .then((info) => active && setSession(info))
-      .catch((error: unknown) => active && signedOut(error instanceof SignedOut ? 'Your session has ended. Please sign in again.' : messageOf(error)));
+      .then((info) => {
+        if (!active) return;
+        setSession(info);
+        rememberSession(info);
+      })
+      .catch((error: unknown) => {
+        if (!active) return;
+        // No signal: carry on with the session last confirmed on this phone (the server still checks every change).
+        const last = error instanceof SignedOut ? null : lastSession();
+        if (last) setSession((current) => current ?? last);
+        else signedOut(error instanceof SignedOut ? 'Your session has ended. Please sign in again.' : messageOf(error));
+      });
     return () => {
       active = false;
     };
@@ -116,6 +147,7 @@ export function AdminApp() {
 }
 
 function LoginForm({ notice, onSignedIn }: { notice: string; onSignedIn: (token: string) => void }) {
+  const pageDept = pageDepartment(window.location.pathname);
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [desk, setDesk] = useState('');
@@ -147,6 +179,7 @@ function LoginForm({ notice, onSignedIn }: { notice: string; onSignedIn: (token:
     <main className="adm-login">
       <form className="adm-card adm-login__card" onSubmit={submit}>
         <h1 className="adm-login__title">PRAGYA 2026 · Student coordinators</h1>
+        {pageDept && <p className="adm-login__dept">{deptTitle(pageDept)}</p>}
         <p className="adm-muted">Sign in with your own student coordinator account.</p>
         {notice && <p className="adm-note">{notice}</p>}
         <label className="adm-field">
@@ -158,7 +191,7 @@ function LoginForm({ notice, onSignedIn }: { notice: string; onSignedIn: (token:
           <input type="password" value={password} onChange={(event) => setPassword(event.target.value)} autoComplete="current-password" required />
         </label>
         <label className="adm-field">
-          <span>Desk number (registration desk only)</span>
+          <span>Desk number (only if your account does not have one)</span>
           <select value={desk} onChange={(event) => setDesk(event.target.value)}>
             <option value="">Not at a registration desk</option>
             {Array.from({ length: DESK_CHOICES }, (_, index) => index + 1).map((number) => (
@@ -197,8 +230,19 @@ interface ShellProps {
   onSignedOut: () => void;
 }
 
-function Shell({ token, session, onSession, onSignOut, onSignedOut }: ShellProps) {
+function Shell(props: ShellProps) {
+  if (!can(props.session, 'fest.view')) return <ShellBody {...props} />;
+  return (
+    <FestProvider token={props.token} session={{ ...props.session, department: props.session.department ?? null }} pageDept={pageDepartment(window.location.pathname)} onSignedOut={props.onSignedOut}>
+      <ShellBody {...props} />
+    </FestProvider>
+  );
+}
+
+function ShellBody({ token, session, onSession, onSignOut, onSignedOut }: ShellProps) {
   const tabs = TABS.filter((tab) => tab.show(session));
+  const pageDept = pageDepartment(window.location.pathname);
+  const wrongPage = Boolean(session.department && pageDept && session.department !== pageDept);
   const [tab, setTab] = useState<TabId>(tabs[0].id);
   const current = tabs.some((item) => item.id === tab) ? tab : tabs[0].id;
   const currentLabel = tabs.find((item) => item.id === current)?.label(session) ?? '';
@@ -216,7 +260,7 @@ function Shell({ token, session, onSession, onSignOut, onSignedOut }: ShellProps
     <div className="adm">
       <header className="adm-bar">
         <div>
-          <h1 className="adm-bar__title">PRAGYA 2026 · Student coordinators</h1>
+          <h1 className="adm-bar__title">PRAGYA 2026 · {session.department ? deptTitle(session.department) : 'All departments'}</h1>
           <p className="adm-muted adm-bar__phase">
             <Badge tone={session.phase === 'closed' ? 'bad' : session.phase === 'between' ? 'warn' : 'good'}>{PHASE_LABEL[session.phase]}</Badge>
             {session.phase === 'online' && session.schedule.onlineClosesAt && <> until {formatIst(parseEventStart(session.schedule.onlineClosesAt)!)}</>}
@@ -227,7 +271,10 @@ function Shell({ token, session, onSession, onSignOut, onSignedOut }: ShellProps
           <span className="adm-muted">
             {session.displayName} · {ROLE_INFO[session.role].label}
           </span>
-          {session.role === 'DESK' && session.deskNumber && <DeskChip token={token} deskNumber={session.deskNumber} onSession={onSession} onSignedOut={onSignedOut} />}
+          {session.role === 'DESK' &&
+            session.deskNumber &&
+            // A department's desk account is that desk for good; older desk accounts choose it.
+            (session.department ? <Badge tone="good">Desk {session.deskNumber}</Badge> : <DeskChip token={token} deskNumber={session.deskNumber} onSession={onSession} onSignedOut={onSignedOut} />)}
           <button className="adm-button adm-button--help" type="button" onClick={() => setHelp({ page: currentLabel })}>
             Contact admin
             {!help && <NewReplies token={token} username={session.username} onSignedOut={onSignedOut} />}
@@ -258,8 +305,13 @@ function Shell({ token, session, onSession, onSignOut, onSignedOut }: ShellProps
           {session.schedule.onsiteClosesAt ? `closes ${formatIst(parseEventStart(session.schedule.onsiteClosesAt)!)}` : 'has no closing time'}.
         </p>
       )}
-      {can(session, 'portal.manage') && <StudentPortalSwitch token={token} onSignedOut={onSignedOut} />}
-      {session.role === 'DESK' && !session.deskNumber && <DeskChooser token={token} onSession={onSession} onSignedOut={onSignedOut} />}
+      {wrongPage && (
+        <p className="adm-note" role="status">
+          This page is for {pageDept}; your account is for {session.department}. Use <a href={`/landing/${session.department!.toLowerCase()}/admin/`}>the {session.department} page</a>.
+        </p>
+      )}
+      {session.role === 'DESK' && !session.deskNumber && !session.department && <DeskChooser token={token} onSession={onSession} onSignedOut={onSignedOut} />}
+      {can(session, 'fest.view') && <SyncBar />}
 
       <nav className="adm-nav" aria-label="Sections">
         {tabs.map((item) => (
@@ -270,18 +322,18 @@ function Shell({ token, session, onSession, onSignOut, onSignedOut }: ShellProps
         ))}
       </nav>
 
-      {current === 'review' && <Dashboard {...panel} />}
-      {current === 'desk' && <DeskPanel {...panel} />}
+      {current === 'overview' && <FestOverview />}
+      {current === 'registrations' && <FestRegistrations />}
+      {current === 'results' && <FestResults />}
+      {current === 'desk' && <DeskView />}
+      {current === 'event' && <EventWindow />}
+      {current === 'import' && <ImportView token={token} onSignedOut={onSignedOut} />}
+      {current === 'catalog' && <CatalogEditor token={token} onSignedOut={onSignedOut} />}
       {current === 'window' && <RegistrationWindowPanel {...panel} onSession={onSession} />}
-      {current === 'events' && <EventsPanel {...panel} />}
-      {current === 'results' && <ResultsPanel {...panel} />}
       {current === 'help' && <HelpPanel {...panel} />}
       {current === 'system' && <SystemPanel {...panel} />}
-      {current === 'deleted' && <DeletedPanel {...panel} />}
       {current === 'testing' && <TestingPanel {...panel} onSession={onSession} />}
-      {current === 'map' && <MapEditor />}
       {current === 'staff' && <StaffPanel {...panel} />}
-      {current === 'reports' && <ReportsPanel {...panel} />}
       {current === 'roles' && <RolesPanel session={session} />}
 
       {help && <HelpDialog token={token} signedInAs={session.displayName} username={session.username} context={help} onClose={() => setHelp(null)} />}
@@ -359,190 +411,4 @@ function OpenHelpCount({ token, onSignedOut }: { token: string; onSignedOut: () 
   const live = useLiveData(load, onSignedOut, 30_000);
   const open = live.data?.filter((request) => request.status === 'OPEN').length ?? 0;
   return open ? <span className="adm-nav__count">{open}</span> : null;
-}
-
-/**
- * Admins and the web assistant team: the event-day student page (pass, events, timings) on or
- * off. Off by default: turn it on once the desks have network to spare, pause it if the
- * pages of the student coordinators get slow.
- */
-function StudentPortalSwitch({ token, onSignedOut }: { token: string; onSignedOut: () => void }) {
-  const [state, setState] = useState<StudentPortalState | null>(null);
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState('');
-
-  useEffect(() => {
-    let active = true;
-    studentPortal(token).then(
-      (value) => {
-        if (active) setState(value);
-      },
-      (failure: unknown) => {
-        if (!active) return;
-        if (failure instanceof SignedOut) onSignedOut();
-        else setError(messageOf(failure));
-      },
-    );
-    return () => {
-      active = false;
-    };
-  }, [token, onSignedOut]);
-
-  const toggle = async () => {
-    if (!state) return;
-    const enabled = !state.enabled;
-    const question = enabled
-      ? 'Turn on Student login on the website?\n\nStudents can then sign in with their Registration ID and phone number to download their pass and see their event timings.'
-      : 'Pause Student login?\n\nStudents will see a short message instead, until you turn it on again.';
-    if (!window.confirm(question)) return;
-    setBusy(true);
-    setError('');
-    try {
-      setState(await setStudentPortal(token, enabled));
-    } catch (failure) {
-      if (failure instanceof SignedOut) onSignedOut();
-      else setError(messageOf(failure));
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  return (
-    <section className="adm-portal" aria-label="Student login on the website">
-      <span className="adm-portal__label">Student login on the website</span>
-      {state ? <Badge tone={state.enabled ? 'good' : 'warn'}>{state.enabled ? 'On' : 'Paused'}</Badge> : <span className="adm-muted">…</span>}
-      {state?.changedBy && (
-        <span className="adm-muted">
-          by {state.changedBy} {when(state.changedAt)}
-        </span>
-      )}
-      <button className="adm-button adm-button--small" type="button" disabled={!state || busy} onClick={() => void toggle()}>
-        {busy ? 'Saving…' : state?.enabled ? 'Pause' : 'Turn on'}
-      </button>
-      <small className="adm-muted adm-portal__hint">Turn it on once the desks have network to spare; pause it if the pages of the student coordinators get slow.</small>
-      {error && <span className="adm-error">{error}</span>}
-    </section>
-  );
-}
-
-interface DashboardProps {
-  token: string;
-  session: SessionInfo;
-  onSignedOut: () => void;
-}
-
-/** Admins: every registration by status, GPay payments to verify first; each opens in a pop-up. */
-function Dashboard({ token, session, onSignedOut }: DashboardProps) {
-  const [filter, setFilter] = useState<Filter>('PENDING');
-  const [query, setQuery] = useState('');
-  const [selectedId, setSelectedId] = useState<string | null>(null);
-  const load = useCallback(() => listRegistrations(token), [token]);
-  const live = useLiveData(load, onSignedOut);
-  const registrations = live.data;
-
-  const counts = useMemo(() => {
-    const all = registrations ?? [];
-    return {
-      PENDING: all.filter((item) => item.status === 'PENDING').length,
-      APPROVED: all.filter((item) => item.status === 'APPROVED').length,
-      REJECTED: all.filter((item) => item.status === 'REJECTED').length,
-      CANCELLED: all.filter((item) => item.status === 'CANCELLED').length,
-      ALL: all.length,
-    };
-  }, [registrations]);
-
-  const shown = useMemo(() => {
-    const needle = query.trim().toLowerCase();
-    return (registrations ?? []).filter((item) => {
-      if (filter !== 'ALL' && item.status !== filter) return false;
-      if (!needle) return true;
-      const { participant, payment } = item;
-      return [item.registrationId, participant.name, participant.email, participant.phone, participant.college, payment.transactionId].some((value) => value.toLowerCase().includes(needle));
-    });
-  }, [registrations, filter, query]);
-
-  const selected = registrations?.find((item) => item.registrationId === selectedId) ?? null;
-  const replace = (updated: AdminRegistration) => live.setData((current) => current?.map((item) => (item.registrationId === updated.registrationId ? updated : item)) ?? null);
-
-  return (
-    <main className="adm-page">
-      <section className="adm-card adm-pad" aria-label="Registrations">
-        <div className="adm-toolbar">
-          <div className="adm-tabs" role="tablist" aria-label="Filter by status">
-            {FILTERS.map(({ value, label }) => (
-              <button key={value} type="button" role="tab" aria-selected={filter === value} className="adm-tab" onClick={() => setFilter(value)}>
-                {label} <span className="adm-tab__count">{counts[value]}</span>
-              </button>
-            ))}
-          </div>
-          <input
-            className="adm-search"
-            type="search"
-            placeholder="Search ID, name, email, phone, transaction ID"
-            aria-label="Search registrations"
-            value={query}
-            onChange={(event) => setQuery(event.target.value)}
-          />
-          <LiveStatus updatedAt={live.updatedAt} loading={live.loading} onRefresh={live.refresh} />
-        </div>
-
-        <ErrorNote error={live.error} />
-
-        {registrations === null ? (
-          <p className="adm-muted adm-empty">{live.loading ? 'Loading registrations…' : 'Registrations could not be loaded.'}</p>
-        ) : shown.length === 0 ? (
-          <p className="adm-muted adm-empty">No registrations here.</p>
-        ) : (
-          <div className="adm-table-wrap">
-            <table className="adm-table">
-              <thead>
-                <tr>
-                  <th scope="col">Registration ID</th>
-                  <th scope="col">Name</th>
-                  <th scope="col">College</th>
-                  <th scope="col">Transaction ID</th>
-                  <th scope="col">Submitted</th>
-                  <th scope="col">Status</th>
-                </tr>
-              </thead>
-              <tbody>
-                {shown.map((item) => (
-                  <tr key={item.registrationId} onClick={() => setSelectedId(item.registrationId)}>
-                    <td>
-                      <button type="button" className="adm-link" onClick={() => setSelectedId(item.registrationId)}>
-                        {item.registrationId}
-                      </button>
-                    </td>
-                    <td>{item.participant.name}</td>
-                    <td>{item.participant.college}</td>
-                    <td className="adm-mono">{item.source === 'ONSITE' ? 'Paid at desk' : item.payment.transactionId}</td>
-                    <td>{when(item.submittedAt)}</td>
-                    <td>
-                      <StatusBadge status={item.status} />
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </section>
-
-      {selected && (
-        <RegistrationDialog
-          key={selected.registrationId}
-          registration={selected}
-          token={token}
-          session={session}
-          onChange={replace}
-          onDeleted={(registrationId) => {
-            setSelectedId(null);
-            live.setData((current) => current?.filter((item) => item.registrationId !== registrationId) ?? null);
-          }}
-          onClose={() => setSelectedId(null)}
-          onSignedOut={onSignedOut}
-        />
-      )}
-    </main>
-  );
 }

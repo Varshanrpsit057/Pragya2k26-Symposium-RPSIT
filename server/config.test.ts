@@ -11,6 +11,7 @@ const required = {
   ADMIN_PASSWORD_HASH: 'scrypt$32768$8$1$salt$hash',
   REGISTRATIONS_TABLE: 'Registrations',
   CONTROL_TABLE: 'Control',
+  FEST_TABLE: 'FestRecords',
   FILES_BUCKET: 'private-files',
 };
 
@@ -27,6 +28,7 @@ describe('readConfig', () => {
         'ADMIN_PASSWORD_HASH',
         'REGISTRATIONS_TABLE',
         'CONTROL_TABLE',
+        'FEST_TABLE',
         'FILES_BUCKET',
       ],
     });

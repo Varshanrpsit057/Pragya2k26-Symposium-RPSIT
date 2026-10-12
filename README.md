@@ -5,6 +5,51 @@ Department of Artificial Intelligence and Data Science, **R P Sarathy Institute 
 
 It is deployed straight from GitHub to **AWS Amplify**: no servers to run, no SSH, no manual uploads.
 
+## 0. The college-wide fest (INFINITE TECHFEST'26)
+
+The staff dashboard runs the whole college's fest: **8 departments** (CSE, AIDS, IT, ECE, CYS, EEE,
+MECH, SH), **44 events**, 4 registration desks per department and 2 coordinators per event, built
+for about 300 phones on mobile data.
+
+| Who | Address | What they get |
+| --- | --- | --- |
+| Web assist team (Admin role, and the owner account) | `/landing/admin/` | Everything: departments and events, accounts, registration times, website notice, registrations, event windows, corrections, test sessions, system status |
+| Overall coordinator | `/landing/admin/` | Every department live: filters (department, event, venue, registered at, desk, entry fee, status, search), totals, by department / event and venue / desk, registrations with details, results and winners, CSV downloads; reopen results, cancel a fee recorded by mistake |
+| Department HOD | `/landing/<dept>/admin/` | The same views for their department, read only |
+| Department admin | `/landing/<dept>/admin/` | Their department: upload online registrations, paper slips, register, correct, cancel, any event window |
+| Registration desk | `/landing/<dept>/admin/` | Register (works offline), find and check in online registrants, desk totals for the cash handover |
+| Event coordinator | `/landing/<dept>/admin/` | Their event: students, ₹ fee, attendance, add a department student, winners and submit |
+
+`<dept>` is `cse`, `aids`, `it`, `ece`, `cys`, `eee`, `mech` or `sh` (use the trailing slash).
+
+- **Registration IDs** carry the department: `CSE-0001…` at the desks, `CSE-5001…` imported from the
+  online form, `CSE-9001…` paper slips. One phone number is registered once per department; a
+  student registers in one department and takes part in its events.
+- **Desk phones hold their own IDs**: 50 at a time, the next 50 taken by themselves when 15 are left,
+  so a desk keeps registering with no signal. Everything done offline waits on the phone (the bar at
+  the top says how many) and is sent in order when the signal returns; a retry never registers
+  anyone twice. If a phone uses all its IDs with no signal, the desk uses paper slips.
+- **Live updates**: each phone keeps a copy of its department (or, for the overall coordinator, all
+  departments) and every 15 seconds asks only for what changed, a few KB instead of whole lists.
+- **Online registrations**: export the online form (Netlify) per department as CSV and upload it in
+  **Online & paper**: check the file (unknown events and duplicates are shown), then import. Each
+  student counts as paid; tick if the event fees were paid online too. Uploading again adds only
+  new students.
+- **Departments and events** (names, HODs, contacts, desks, venues, times, fees, team sizes, open or
+  closed) are edited by the web assist team in **Departments & events**, for everyone at once.
+- **Accounts**: **Accounts → Create a department’s accounts** makes a department's HOD, admin, desks
+  and coordinators in one go; download the logins then (the passwords are not shown again).
+- **Backups**: every 10 minutes the schedule writes every department's data to
+  `backups/fest/all.json` in the private bucket (every earlier version is kept), on top of
+  DynamoDB's point-in-time recovery (the `FestRecords` table, deletion protected). Test data is
+  saved to `backups/fest-test-data-*.json` before it is deleted.
+
+**Before the day**: AWS Lambda concurrent executions raised to 1,000 (Service Quotas); accounts
+made and logins handed out; online registrations uploaded; venues and times filled in; online
+registration on this website closed in **Event-day controls → Registration times** (the online
+form is the only online channel); a rehearsal with real phones on mobile data, then **Testing →
+Delete the test data**; two phones on different carriers at each desk; paper slips printed.
+
 ## 1. Project overview
 
 - **Public website** (React + TypeScript + Vite, prerendered): the hero with the PRAGYA 2K26 emblem

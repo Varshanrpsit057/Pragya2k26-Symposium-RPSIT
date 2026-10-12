@@ -1,9 +1,11 @@
 /** Staff accounts (admins): create, set roles, assign events, reset passwords, deactivate, delete. */
 import { useCallback, useState, type FormEvent } from 'react';
 import { events as allEvents } from '../content/events';
-import { ROLE_INFO, STAFF_ROLES, type SessionInfo, type StaffAccountView, type StaffRole } from '../lib/staff';
-import { SignedOut, createStaff, deleteStaff, listStaff, signOutStaff, signedInNow, updateStaff, type StaffChange } from './adminApi';
-import { Badge, ErrorNote, LiveStatus, useLiveData, when } from './ui';
+import { eventLabel, toCsv, type FestCatalog } from '../lib/fest';
+import { CREATABLE_ROLES, DEPARTMENT_ROLES, ROLE_INFO, type SessionInfo, type StaffAccountView, type StaffRole } from '../lib/staff';
+import { ApiFailure, SignedOut, createStaff, deleteStaff, listStaff, signOutStaff, signedInNow, updateStaff, type StaffChange } from './adminApi';
+import { useFestCatalog } from './fest/FestData';
+import { Badge, ErrorNote, LiveStatus, saveFile, useLiveData, when } from './ui';
 
 interface PanelProps {
   token: string;
@@ -19,13 +21,17 @@ function generatePassword(): string {
   return `${body.slice(0, 7)}-${body.slice(7)}-9`;
 }
 
-const eventName = (id: string) => allEvents.find((event) => event.id === id)?.name ?? id;
+const eventName = (catalog: FestCatalog, id: string) => catalog.events.find((event) => event.id === id)?.name ?? allEvents.find((event) => event.id === id)?.name ?? id;
 
-function EventChoice({ value, onChange }: { value: string[]; onChange: (next: string[]) => void }) {
+/** The events a coordinator may be given: their department's (or, with no department, the symposium's own). */
+function EventChoice({ value, onChange, department }: { value: string[]; onChange: (next: string[]) => void; department: string | null | undefined }) {
+  const catalog = useFestCatalog();
+  const choices = department ? catalog.events.filter((event) => event.dept === department).map((event) => ({ id: event.id, name: eventLabel(event) })) : allEvents.map((event) => ({ id: event.id, name: event.name }));
   return (
     <fieldset className="adm-events">
       <legend>Assigned events</legend>
-      {allEvents.map((event) => (
+      {!choices.length && <span className="adm-muted">Choose the department first.</span>}
+      {choices.map((event) => (
         <label key={event.id} className="adm-check">
           <input
             type="checkbox"
@@ -71,9 +77,11 @@ export function StaffPanel({ token, session, onSignedOut }: PanelProps) {
       return list.some((item) => item.username === account.username) ? list.map((item) => (item.username === account.username ? account : item)) : [...list, account];
     });
 
+  const catalog = useFestCatalog();
   return (
     <main className="adm-page">
       <SignedInNow token={token} session={session} onSignedOut={onSignedOut} />
+      <DepartmentAccounts token={token} existing={live.data ?? []} onCreated={replace} onSignedOut={onSignedOut} />
       <NewAccount token={token} onCreated={replace} onSignedOut={onSignedOut} />
       <section className="adm-card adm-pad">
         <div className="adm-toolbar">
@@ -98,6 +106,7 @@ export function StaffPanel({ token, session, onSignedOut }: PanelProps) {
                 <th scope="col">Username</th>
                 <th scope="col">Name</th>
                 <th scope="col">Role</th>
+                <th scope="col">Department</th>
                 <th scope="col">Events</th>
                 <th scope="col">Status</th>
                 <th scope="col">Changed</th>
@@ -112,8 +121,12 @@ export function StaffPanel({ token, session, onSignedOut }: PanelProps) {
                   <tr key={account.username}>
                     <td className="adm-mono">{account.username}</td>
                     <td>{account.displayName}</td>
-                    <td>{ROLE_INFO[account.role].label}</td>
-                    <td>{account.role === 'COORDINATOR' ? account.eventIds.map(eventName).join(', ') : 'All'}</td>
+                    <td>{ROLE_INFO[account.role]?.label ?? account.role}</td>
+                    <td>
+                      {account.department ?? (DEPARTMENT_ROLES.includes(account.role) ? '—' : 'All')}
+                      {account.deskNumber ? ` · desk ${account.deskNumber}` : ''}
+                    </td>
+                    <td>{account.role === 'COORDINATOR' ? account.eventIds.map((id) => eventName(catalog, id)).join(', ') : 'All'}</td>
                     <td>{account.active ? <Badge tone="good">Active</Badge> : <Badge tone="bad">Deactivated</Badge>}</td>
                     <td className="adm-muted">
                       {when(account.updatedAt)} by {account.updatedBy}
@@ -148,8 +161,42 @@ export function StaffPanel({ token, session, onSignedOut }: PanelProps) {
   );
 }
 
+/** Department and desk choices for a department role. */
+function ScopeFields({ role, department, deskNumber, onChange }: { role: StaffRole; department: string; deskNumber: number; onChange: (next: { department: string; deskNumber: number }) => void }) {
+  const catalog = useFestCatalog();
+  if (!DEPARTMENT_ROLES.includes(role)) return null;
+  const desks = catalog.departments.find((dept) => dept.code === department)?.desks ?? 0;
+  return (
+    <>
+      <label className="adm-field">
+        <span>Department</span>
+        <select value={department} onChange={(event) => onChange({ department: event.target.value, deskNumber: 1 })}>
+          <option value="">Choose…</option>
+          {catalog.departments.map((dept) => (
+            <option key={dept.code} value={dept.code}>
+              {dept.code} · {dept.name}
+            </option>
+          ))}
+        </select>
+      </label>
+      {role === 'DESK' && department && (
+        <label className="adm-field">
+          <span>Desk</span>
+          <select value={deskNumber} onChange={(event) => onChange({ department, deskNumber: Number(event.target.value) })}>
+            {Array.from({ length: desks }, (_, index) => index + 1).map((desk) => (
+              <option key={desk} value={desk}>
+                Desk {desk}
+              </option>
+            ))}
+          </select>
+        </label>
+      )}
+    </>
+  );
+}
+
 function NewAccount({ token, onCreated, onSignedOut }: { token: string; onCreated: (account: StaffAccountView) => void; onSignedOut: () => void }) {
-  const [form, setForm] = useState({ username: '', displayName: '', role: 'DESK' as StaffRole, eventIds: [] as string[], password: '' });
+  const [form, setForm] = useState({ username: '', displayName: '', role: 'DESK' as StaffRole, eventIds: [] as string[], password: '', department: '', deskNumber: 1 });
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<unknown>(null);
   const [created, setCreated] = useState<{ username: string; password: string } | null>(null);
@@ -159,10 +206,16 @@ function NewAccount({ token, onCreated, onSignedOut }: { token: string; onCreate
     setBusy(true);
     setError(null);
     try {
-      const account = await createStaff(token, { ...form, eventIds: form.role === 'COORDINATOR' ? form.eventIds : [] });
+      const scoped = DEPARTMENT_ROLES.includes(form.role);
+      const account = await createStaff(token, {
+        ...form,
+        eventIds: form.role === 'COORDINATOR' ? form.eventIds : [],
+        department: scoped ? form.department || null : null,
+        deskNumber: form.role === 'DESK' && form.department ? form.deskNumber : null,
+      });
       onCreated(account);
       setCreated({ username: account.username, password: form.password });
-      setForm({ username: '', displayName: '', role: form.role, eventIds: [], password: '' });
+      setForm({ ...form, username: '', displayName: '', eventIds: [], password: '' });
     } catch (failure) {
       if (failure instanceof SignedOut) onSignedOut();
       else setError(failure);
@@ -185,14 +238,15 @@ function NewAccount({ token, onCreated, onSignedOut }: { token: string; onCreate
         </label>
         <label className="adm-field">
           <span>Role</span>
-          <select value={form.role} onChange={(event) => setForm({ ...form, role: event.target.value as StaffRole })}>
-            {STAFF_ROLES.map((role) => (
+          <select value={form.role} onChange={(event) => setForm({ ...form, role: event.target.value as StaffRole, eventIds: [] })}>
+            {CREATABLE_ROLES.map((role) => (
               <option key={role} value={role}>
                 {ROLE_INFO[role].label}
               </option>
             ))}
           </select>
         </label>
+        <ScopeFields role={form.role} department={form.department} deskNumber={form.deskNumber} onChange={(next) => setForm({ ...form, ...next, eventIds: [] })} />
         <label className="adm-field">
           <span>Password (at least 14 characters)</span>
           <span className="adm-inline">
@@ -204,7 +258,7 @@ function NewAccount({ token, onCreated, onSignedOut }: { token: string; onCreate
         </label>
         {form.role === 'COORDINATOR' && (
           <div className="adm-form__wide">
-            <EventChoice value={form.eventIds} onChange={(eventIds) => setForm({ ...form, eventIds })} />
+            <EventChoice value={form.eventIds} department={form.department} onChange={(eventIds) => setForm({ ...form, eventIds })} />
           </div>
         )}
         <p className="adm-muted adm-form__wide">{ROLE_INFO[form.role].summary}</p>
@@ -226,7 +280,14 @@ function NewAccount({ token, onCreated, onSignedOut }: { token: string; onCreate
 }
 
 function EditAccount({ token, account, onDone, onSignedOut }: { token: string; account: StaffAccountView; onDone: (updated: StaffAccountView | null) => void; onSignedOut: () => void }) {
-  const [change, setChange] = useState<StaffChange>({ displayName: account.displayName, role: account.role, eventIds: account.eventIds, active: account.active });
+  const [change, setChange] = useState<StaffChange>({
+    displayName: account.displayName,
+    role: account.role,
+    eventIds: account.eventIds,
+    active: account.active,
+    department: account.department,
+    deskNumber: account.deskNumber,
+  });
   const [password, setPassword] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<unknown>(null);
@@ -235,7 +296,16 @@ function EditAccount({ token, account, onDone, onSignedOut }: { token: string; a
     setBusy(true);
     setError(null);
     try {
-      onDone(await updateStaff(token, account.username, { ...change, ...(password && { password }) }));
+      const role = change.role ?? account.role;
+      const scoped = DEPARTMENT_ROLES.includes(role);
+      onDone(
+        await updateStaff(token, account.username, {
+          ...change,
+          department: scoped ? (change.department ?? null) : null,
+          deskNumber: role === 'DESK' && change.department ? (change.deskNumber ?? 1) : null,
+          ...(password && { password }),
+        }),
+      );
     } catch (failure) {
       if (failure instanceof SignedOut) onSignedOut();
       else setError(failure);
@@ -254,14 +324,20 @@ function EditAccount({ token, account, onDone, onSignedOut }: { token: string; a
           </label>
           <label className="adm-field">
             <span>Role</span>
-            <select value={change.role} onChange={(event) => setChange({ ...change, role: event.target.value as StaffRole })}>
-              {STAFF_ROLES.map((role) => (
+            <select value={change.role} onChange={(event) => setChange({ ...change, role: event.target.value as StaffRole, eventIds: [] })}>
+              {[...new Set([...CREATABLE_ROLES, account.role])].map((role) => (
                 <option key={role} value={role}>
-                  {ROLE_INFO[role].label}
+                  {ROLE_INFO[role]?.label ?? role}
                 </option>
               ))}
             </select>
           </label>
+          <ScopeFields
+            role={change.role ?? account.role}
+            department={change.department ?? ''}
+            deskNumber={change.deskNumber ?? 1}
+            onChange={(next) => setChange({ ...change, department: next.department || null, deskNumber: next.deskNumber, eventIds: [] })}
+          />
           <label className="adm-check">
             <input type="checkbox" checked={change.active} onChange={(event) => setChange({ ...change, active: event.target.checked })} />
             <span>Active (untick to sign them out and block sign-in)</span>
@@ -277,7 +353,7 @@ function EditAccount({ token, account, onDone, onSignedOut }: { token: string; a
           </label>
           {change.role === 'COORDINATOR' && (
             <div className="adm-form__wide">
-              <EventChoice value={change.eventIds ?? []} onChange={(eventIds) => setChange({ ...change, eventIds })} />
+              <EventChoice value={change.eventIds ?? []} department={change.department} onChange={(eventIds) => setChange({ ...change, eventIds })} />
             </div>
           )}
           <div className="adm-form__wide adm-actions__row">
@@ -363,6 +439,173 @@ function SignedInNow({ token, session, onSignedOut }: { token: string; session: 
             </tbody>
           </table>
         </div>
+      )}
+    </section>
+  );
+}
+
+interface PlannedAccount {
+  username: string;
+  displayName: string;
+  role: StaffRole;
+  department: string;
+  deskNumber?: number;
+  eventIds: string[];
+  password: string;
+  status?: 'created' | 'exists' | 'failed';
+  message?: string;
+}
+
+/** The accounts a department needs: HOD, department admin, each desk, two coordinators per event. */
+function planFor(catalog: FestCatalog, code: string): PlannedAccount[] {
+  const dept = catalog.departments.find((item) => item.code === code);
+  if (!dept) return [];
+  const lower = code.toLowerCase();
+  const plan: PlannedAccount[] = [
+    { username: `${lower}-hod`, displayName: `${code} HOD`, role: 'HOD', department: code, eventIds: [], password: generatePassword() },
+    { username: `${lower}-admin`, displayName: `${code} Department admin`, role: 'DEPT_ADMIN', department: code, eventIds: [], password: generatePassword() },
+    ...Array.from({ length: dept.desks }, (_, index) => ({
+      username: `${lower}-desk${index + 1}`,
+      displayName: `${code} Desk ${index + 1}`,
+      role: 'DESK' as StaffRole,
+      department: code,
+      deskNumber: index + 1,
+      eventIds: [],
+      password: generatePassword(),
+    })),
+  ];
+  for (const event of catalog.events.filter((item) => item.dept === code)) {
+    const slug = event.id.replace(new RegExp(`^${lower}-`), '').slice(0, 22).replace(/-+$/, '');
+    for (const n of [1, 2]) {
+      plan.push({
+        username: `${lower}-${slug}-${n}`,
+        displayName: `${event.name.replace(/[^\p{L}\p{N} .'()&-]/gu, ' ').replace(/\s+/g, ' ').trim().slice(0, 40)} coordinator ${n}`,
+        role: 'COORDINATOR',
+        department: code,
+        eventIds: [event.id],
+        password: generatePassword(),
+      });
+    }
+  }
+  return plan;
+}
+
+/**
+ * Makes a department's accounts in one go (those that do not exist yet), with strong
+ * passwords shown once and downloadable to print and hand out.
+ */
+function DepartmentAccounts({ token, existing, onCreated, onSignedOut }: { token: string; existing: StaffAccountView[]; onCreated: (account: StaffAccountView) => void; onSignedOut: () => void }) {
+  const catalog = useFestCatalog();
+  const [code, setCode] = useState('');
+  const [plan, setPlan] = useState<PlannedAccount[]>([]);
+  const [busy, setBusy] = useState(false);
+  const taken = new Set(existing.map((account) => account.username));
+  const choose = (next: string) => {
+    setCode(next);
+    setPlan(next ? planFor(catalog, next).map((item) => (taken.has(item.username) ? { ...item, status: 'exists' as const } : item)) : []);
+  };
+  const create = async () => {
+    setBusy(true);
+    const next = [...plan];
+    for (const [index, item] of next.entries()) {
+      if (item.status) continue;
+      try {
+        const account = await createStaff(token, { username: item.username, displayName: item.displayName, role: item.role, department: item.department, deskNumber: item.deskNumber ?? null, eventIds: item.eventIds, password: item.password });
+        onCreated(account);
+        next[index] = { ...item, status: 'created' };
+      } catch (failure) {
+        if (failure instanceof SignedOut) {
+          onSignedOut();
+          return;
+        }
+        next[index] = { ...item, status: failure instanceof ApiFailure && failure.code === 'USERNAME_TAKEN' ? 'exists' : 'failed', message: failure instanceof Error ? failure.message : '' };
+      }
+      setPlan([...next]);
+    }
+    setBusy(false);
+  };
+  const created = plan.filter((item) => item.status === 'created');
+  const toCreate = plan.filter((item) => !item.status).length;
+
+  return (
+    <section className="adm-card adm-pad">
+      <h2 className="adm-h2">Create a department’s accounts</h2>
+      <p className="adm-muted">The HOD, the department admin, every desk and two coordinators for each event, with strong passwords. Accounts that already exist are left as they are.</p>
+      <label className="adm-field">
+        <span>Department</span>
+        <select value={code} onChange={(event) => choose(event.target.value)} disabled={busy}>
+          <option value="">Choose…</option>
+          {catalog.departments.map((dept) => (
+            <option key={dept.code} value={dept.code}>
+              {dept.code} · {dept.name}
+            </option>
+          ))}
+        </select>
+      </label>
+      {plan.length > 0 && (
+        <>
+          <div className="adm-table-wrap">
+            <table className="adm-table adm-table--static">
+              <thead>
+                <tr>
+                  <th scope="col">Username</th>
+                  <th scope="col">Name</th>
+                  <th scope="col">Role</th>
+                  <th scope="col" />
+                </tr>
+              </thead>
+              <tbody>
+                {plan.map((item) => (
+                  <tr key={item.username}>
+                    <td className="adm-mono">{item.username}</td>
+                    <td>{item.displayName}</td>
+                    <td>
+                      {ROLE_INFO[item.role].label}
+                      {item.deskNumber ? ` ${item.deskNumber}` : ''}
+                    </td>
+                    <td>
+                      {item.status === 'created' && <Badge tone="good">Created</Badge>}
+                      {item.status === 'exists' && <Badge tone="plain">Already exists</Badge>}
+                      {item.status === 'failed' && <Badge tone="bad">{item.message || 'Failed'}</Badge>}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <div className="adm-inline adm-inline--wrap">
+            <button className="adm-button adm-button--primary" type="button" disabled={busy || toCreate === 0} onClick={() => void create()}>
+              {busy ? 'Creating…' : `Create ${toCreate} accounts`}
+            </button>
+            <button
+              className="adm-button"
+              type="button"
+              disabled={!created.length}
+              onClick={() =>
+                saveFile(
+                  `${code}-accounts.csv`,
+                  toCsv([
+                    ['Department', 'Role', 'Name', 'Username', 'Password', 'Desk', 'Events', 'Sign in at'],
+                    ...created.map((item) => [
+                      item.department,
+                      ROLE_INFO[item.role].label,
+                      item.displayName,
+                      item.username,
+                      item.password,
+                      item.deskNumber ?? '',
+                      item.eventIds.map((id) => eventName(catalog, id)).join('; '),
+                      `${window.location.origin}/landing/${item.department.toLowerCase()}/admin/`,
+                    ]),
+                  ]),
+                  'text/csv;charset=utf-8',
+                )
+              }
+            >
+              Download the new logins (CSV)
+            </button>
+          </div>
+          {created.length > 0 && <p className="adm-note">Download the logins now: the passwords are not shown again. Give each person their own login privately.</p>}
+        </>
       )}
     </section>
   );

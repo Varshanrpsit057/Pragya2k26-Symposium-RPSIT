@@ -13,6 +13,7 @@ import { readConfig } from '../../../server/config';
 import { encodeResponse } from '../../../server/compress';
 import { DriveStore } from '../../../server/drive';
 import { DynamoStore } from '../../../server/dynamoStore';
+import { DynamoFestStore } from '../../../server/festDynamo';
 import { S3Files } from '../../../server/files';
 import { sendMail } from '../../../server/gmail';
 import { GoogleClient } from '../../../server/google';
@@ -42,6 +43,7 @@ function getService(): Service | null {
   const google = new GoogleClient(config.google);
   service = new Service({
     store: new DynamoStore(config.tables),
+    fest: new DynamoFestStore(config.tables.fest),
     files: new S3Files(config.bucket),
     sheets: new SheetsStore(google, config.sheetId, config.sheetTab),
     drive: new DriveStore(google),
@@ -85,6 +87,15 @@ export const handler = async (
     return { statusCode: response.status, ...encodeResponse(response, headers['accept-encoding']) };
   }
 
-  // The schedule: retry what failed earlier.
-  await getService()?.runScheduled();
+  // The schedule (every 10 minutes): a backup of every department's fest data to the private
+  // bucket (it keeps each earlier version), then retry what failed earlier.
+  const current = getService();
+  if (!current) return;
+  try {
+    const saved = await current.fest.backup();
+    log('Fest backup saved', saved);
+  } catch (error) {
+    log('Fest backup failed', { error: error instanceof Error ? error.message : String(error) });
+  }
+  await current.runScheduled();
 };

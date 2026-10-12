@@ -82,6 +82,7 @@ interface StaffRoute {
 const ID = '([A-Za-z0-9-]{1,20})';
 const EVENT = '([a-z0-9-]{1,40})';
 const USER = '([A-Za-z0-9._-]{1,40})';
+const FEST_ID = '([A-Za-z]{2,6}-?\\d{1,4})';
 const route_ = (pattern: string) => new RegExp(`^/api/admin${pattern}$`);
 
 /** Every staff route and the permission it requires. */
@@ -183,6 +184,28 @@ export const STAFF_ROUTES: readonly StaffRoute[] = [
     run: (s, { actor, body, params: [id] }) => s.testing.setMark(actor, id, !(isObject(body) && body.test === false)),
   },
   { method: 'POST', path: route_('/testing/clear'), permission: 'system.testing', run: (s, { actor, body }) => s.testing.clear(actor, body) },
+
+  // The college-wide fest: catalog, live data, desks, event windows, results, online imports.
+  { method: 'GET', path: route_('/fest/catalog'), permission: 'fest.view', run: (s) => s.fest.catalogView() },
+  { method: 'POST', path: route_('/fest/catalog'), permission: 'fest.catalog', run: (s, { actor, body }) => s.fest.saveCatalog(actor, body) },
+  { method: 'POST', path: route_('/fest/sync'), permission: 'fest.view', run: (s, { actor, body }) => s.fest.sync(actor, body) },
+  { method: 'POST', path: route_('/fest/blocks'), permission: 'fest.register', run: (s, { actor, body }) => s.fest.takeBlock(actor, body) },
+  { method: 'POST', path: route_('/fest/registrations'), permission: 'fest.register', run: (s, { actor, body }) => s.fest.register(actor, body) },
+  {
+    method: 'POST',
+    path: route_(`/fest/registrations/${FEST_ID}`),
+    permission: ['fest.register', 'fest.edit', 'fest.cancel', 'fest.delete'],
+    run: (s, { actor, body, params: [id] }) => s.fest.act(actor, id, body),
+  },
+  {
+    method: 'POST',
+    path: route_(`/fest/registrations/${FEST_ID}/events/${EVENT}`),
+    permission: ['fest.event', 'fest.correct'],
+    run: (s, { actor, body, params: [id, eventId] }) => s.fest.eventAct(actor, id, eventId, body),
+  },
+  { method: 'POST', path: route_(`/fest/events/${EVENT}/results`), permission: ['fest.event', 'fest.correct'], run: (s, { actor, body, params: [eventId] }) => s.fest.results(actor, eventId, body) },
+  { method: 'POST', path: route_('/fest/import'), permission: 'fest.import', run: (s, { actor, body }) => s.fest.importRows(actor, body) },
+  { method: 'POST', path: route_('/fest/test-data/clear'), permission: 'system.testing', run: (s, { actor, body }) => s.fest.clearTest(actor, body) },
 ];
 
 const isObject = (value: unknown): value is Record<string, unknown> => typeof value === 'object' && value !== null && !Array.isArray(value);

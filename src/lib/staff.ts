@@ -7,8 +7,16 @@
  * Types only and plain data: nothing here reaches the public site's bundle.
  */
 
-export const STAFF_ROLES = ['ADMIN', 'DESK', 'COORDINATOR', 'CERTIFICATE', 'SUPPORT'] as const;
+export const STAFF_ROLES = ['ADMIN', 'OVERALL', 'HOD', 'DEPT_ADMIN', 'DESK', 'COORDINATOR', 'CERTIFICATE', 'SUPPORT'] as const;
 export type StaffRole = (typeof STAFF_ROLES)[number];
+
+/** The roles new accounts are made with (the certificate team was dropped; the web assist team is Admin). */
+export const CREATABLE_ROLES: readonly StaffRole[] = ['ADMIN', 'OVERALL', 'HOD', 'DEPT_ADMIN', 'DESK', 'COORDINATOR'];
+
+/** Roles that belong to one department: they see and work on that department only. */
+export const DEPARTMENT_ROLES: readonly StaffRole[] = ['HOD', 'DEPT_ADMIN', 'DESK', 'COORDINATOR'];
+/** Roles that need a department when an account is made (desks and coordinators made before the fest have none). */
+export const DEPARTMENT_REQUIRED: readonly StaffRole[] = ['HOD', 'DEPT_ADMIN'];
 
 export type Permission =
   | 'registrations.list'
@@ -31,7 +39,17 @@ export type Permission =
   | 'map.edit'
   | 'registration.window'
   | 'site.notice'
-  | 'system.testing';
+  | 'system.testing'
+  | 'fest.view'
+  | 'fest.viewAll'
+  | 'fest.register'
+  | 'fest.import'
+  | 'fest.edit'
+  | 'fest.cancel'
+  | 'fest.delete'
+  | 'fest.event'
+  | 'fest.correct'
+  | 'fest.catalog';
 
 /** What each permission allows, as the dashboard explains it. */
 export const PERMISSION_LABELS: Record<Permission, string> = {
@@ -56,7 +74,37 @@ export const PERMISSION_LABELS: Record<Permission, string> = {
   'registration.window': 'Change the registration times: reopen or extend on-site registration, close registration now, or set new times; the website, the desks and the API follow within seconds',
   'site.notice': 'Post a notice on the website and the student page (e.g. a venue or time change); every open page shows it within two minutes',
   'system.testing': 'Test sessions: set the timeline the website follows, mark records made while testing, and delete that test data',
+  'fest.view': "See the live registrations, events, money and results (department roles: their own department only)",
+  'fest.viewAll': 'See every department, with filters by department, event, venue and desk',
+  'fest.register': 'Register students at a desk (works offline: it sends when the network is back) and check in online registrants',
+  'fest.import': 'Upload the online registrations (the CSV from the online form) before the event day',
+  'fest.edit': "Correct a student's details and change their events",
+  'fest.cancel': 'Cancel a registration, or undo a cancellation',
+  'fest.delete': 'Delete a registration (it can be restored), and restore it',
+  'fest.event': 'Event window: search students, take the event fee, add a student to the event, mark attendance, enter and submit winners (coordinators: their own events)',
+  'fest.correct': 'Corrections: cancel an event fee recorded by mistake, reopen submitted results',
+  'fest.catalog': 'Edit departments and events: names, venues, times, fees, team sizes, desks',
 };
+
+/** The permissions of today's system, as the Roles page lists them (the others belong to retired screens). */
+export const CURRENT_PERMISSIONS: readonly Permission[] = [
+  'fest.view',
+  'fest.viewAll',
+  'fest.register',
+  'fest.import',
+  'fest.edit',
+  'fest.cancel',
+  'fest.delete',
+  'fest.event',
+  'fest.correct',
+  'fest.catalog',
+  'staff.manage',
+  'registration.window',
+  'site.notice',
+  'help.manage',
+  'system.view',
+  'system.testing',
+];
 
 export const ROLE_PERMISSIONS: Record<StaffRole, readonly Permission[]> = {
   ADMIN: [
@@ -81,12 +129,26 @@ export const ROLE_PERMISSIONS: Record<StaffRole, readonly Permission[]> = {
     'registration.window',
     'site.notice',
     'system.testing',
+    'fest.view',
+    'fest.viewAll',
+    'fest.register',
+    'fest.import',
+    'fest.edit',
+    'fest.cancel',
+    'fest.delete',
+    'fest.event',
+    'fest.correct',
+    'fest.catalog',
   ],
+  // The overall coordinator: every department's live data and results, and the corrections.
+  OVERALL: ['fest.view', 'fest.viewAll', 'fest.correct'],
+  HOD: ['fest.view'],
+  DEPT_ADMIN: ['fest.view', 'fest.register', 'fest.import', 'fest.edit', 'fest.cancel', 'fest.event'],
   // Passes are the students' own (Student login): the desk and the web team do not download them.
-  DESK: ['registrations.list', 'registrations.approve', 'registrations.onsite', 'registrations.events', 'registrations.edit'],
-  COORDINATOR: ['registrations.approve', 'events.operate', 'results.view'],
+  DESK: ['registrations.list', 'registrations.approve', 'registrations.onsite', 'registrations.events', 'registrations.edit', 'fest.view', 'fest.register', 'fest.edit'],
+  COORDINATOR: ['registrations.approve', 'events.operate', 'results.view', 'fest.view', 'fest.event'],
   CERTIFICATE: ['results.view'],
-  SUPPORT: ['registrations.list', 'registrations.edit', 'registrations.retry', 'registrations.delete', 'portal.manage', 'help.manage', 'system.view', 'map.edit'],
+  SUPPORT: ['registrations.list', 'registrations.edit', 'registrations.retry', 'registrations.delete', 'portal.manage', 'help.manage', 'system.view', 'map.edit', 'fest.view', 'fest.viewAll'],
 };
 
 /** Roles whose event permissions cover only the events assigned to the account. */
@@ -94,8 +156,21 @@ export const EVENT_SCOPED_ROLES: readonly StaffRole[] = ['COORDINATOR'];
 
 export const ROLE_INFO: Record<StaffRole, { label: string; summary: string }> = {
   ADMIN: {
-    label: 'Admin',
-    summary: 'Full control: everything the other roles do, plus the registration times (reopen or extend on-site registration), a notice on the website, student coordinator accounts (create, change, sign out, delete), cancelling or deleting records, corrections, reports and test sessions. Every event.',
+    label: 'Web assist team',
+    summary:
+      'Full control of the system: departments and events, accounts (create, change, sign out, delete), registration times, the website notice, registrations (register, import, correct, cancel, delete, restore), event windows, corrections, test sessions and system status. Every department.',
+  },
+  OVERALL: {
+    label: 'Overall coordinator',
+    summary: 'Every department live, with filters by department, event, venue and desk: registrations, money, attendance and each event’s winners; corrections (cancel a fee recorded by mistake, reopen results); downloads.',
+  },
+  HOD: {
+    label: 'Department HOD',
+    summary: 'Their department live: registrations at each desk, money, every event’s attendance and winners. View only.',
+  },
+  DEPT_ADMIN: {
+    label: 'Department admin',
+    summary: 'Their department: upload the online registrations, watch the desks and events, register students, correct details, cancel registrations, help at any of the department’s events.',
   },
   DESK: {
     label: 'Registration desk',
@@ -110,12 +185,12 @@ export const ROLE_INFO: Record<StaffRole, { label: string; summary: string }> = 
     summary: 'Read-only: event-wise participant, attendance and winner lists with submission times, downloaded as Excel.',
   },
   SUPPORT: {
-    label: 'Web assistant team',
-    summary: 'Keeps the website running: help requests, system status, failed emails, passes and Sheet copies, correcting or deleting student records (and restoring deleted ones), the student login switch and the campus map.',
+    label: 'Website helper',
+    summary: 'An earlier, limited role (new web assist accounts are Web assist team): help requests, system status, the student login switch and the campus map; sees every department’s live data.',
   },
 };
 
-export const hasPermission = (role: StaffRole, permission: Permission) => ROLE_PERMISSIONS[role].includes(permission);
+export const hasPermission = (role: StaffRole, permission: Permission) => (ROLE_PERMISSIONS[role] ?? []).includes(permission);
 
 /** Staff usernames: lower-case letters, digits, dot, dash or underscore; 3 to 32 long. */
 export const STAFF_USERNAME = /^[a-z0-9][a-z0-9._-]{2,31}$/;
@@ -129,6 +204,9 @@ export interface StaffAccountView {
   role: StaffRole;
   /** Assigned events (coordinators only). */
   eventIds: string[];
+  /** The department (department roles), and the desk (desk accounts). */
+  department: string | null;
+  deskNumber: number | null;
   active: boolean;
   createdAt: string;
   createdBy: string;
@@ -145,6 +223,8 @@ export interface SessionInfo {
   /** 'owner': the ADMIN_USERNAME account from the Amplify secrets; 'staff': an account made in the dashboard. */
   kind: 'owner' | 'staff';
   eventIds: string[];
+  /** The department (department roles); null or missing for roles that see every department. */
+  department?: string | null;
   permissions: Permission[];
   expiresAt: string;
   /** The server's time (ISO), the phase it gives and the schedule it enforces. */
@@ -176,6 +256,7 @@ export interface SignedInView {
   displayName: string;
   role: StaffRole;
   kind: 'owner' | 'staff';
+  department: string | null;
   deskNumber: number | null;
   since: string;
   until: string;

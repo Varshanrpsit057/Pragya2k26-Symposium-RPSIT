@@ -189,6 +189,9 @@ export interface StaffAccount {
   displayName: string;
   role: StaffRole;
   eventIds: string[];
+  /** The department (department roles) and the desk (desk accounts). */
+  department?: string;
+  deskNumber?: number;
   /** scrypt, as made by hashPassword; never leaves the server. */
   passwordHash: string;
   active: boolean;

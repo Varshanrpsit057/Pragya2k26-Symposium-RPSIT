@@ -75,7 +75,7 @@ describe('Testing (admins)', () => {
     fireEvent.change(screen.getByLabelText('On-site open for'), { target: { value: '4' } });
     fireEvent.click(screen.getByRole('button', { name: 'Start an event-day test' }));
     expect(await screen.findByText(/Event-day test started: the website is in on-site mode for 4 hours/)).toBeInTheDocument();
-    expect(sent.map((call) => [call.url.replace(/.*\/api/, '/api'), call.body])).toEqual([
+    expect(sent.map((call) => [call.url.replace(/.*\/api/, '/api'), call.body]).filter(([url]) => String(url).includes('/testing/'))).toEqual([
       ['/api/admin/testing/session', { action: 'start', label: 'Rehearsal 1' }],
       ['/api/admin/testing/timeline', { mode: 'onsite-now', hours: 4 }],
     ]);
@@ -91,6 +91,7 @@ describe('Testing (admins)', () => {
           ? { cleared: 40, remaining: 3, backup: 'backups/test-data-a.json', results: 0, helpRequests: 0, deskIdsRestarted: false }
           : { cleared: 3, remaining: 0, backup: 'backups/test-data-b.json', results: 1, helpRequests: 1, deskIdsRestarted: true };
       }
+      if (url.endsWith('/fest/test-data/clear')) return { cleared: 12, results: 2, restarted: ['CSE', 'IT'] };
       return undefined;
     });
     render(<AdminApp />);
@@ -106,11 +107,13 @@ describe('Testing (admins)', () => {
     fireEvent.change(within(remove).getByLabelText(/to confirm/), { target: { value: CLEAR_PHRASE } });
     fireEvent.click(button);
     expect(await within(remove).findByText(/Deleted 43 test records, 1 event results, 1 help requests; desk IDs start again at 262001/)).toBeInTheDocument();
-    // Twice (40, then the last 3), then the session ended and the real schedule back.
-    const calls = sent.map((call) => call.url.replace(/.*\/api/, '/api')).filter((url) => !url.includes('/records/'));
-    expect(calls).toEqual(['/api/admin/testing/clear', '/api/admin/testing/clear', '/api/admin/testing/session', '/api/admin/testing/timeline']);
+    // The fest's test registrations in every department too.
+    expect(within(remove).getByText('Fest: deleted 12 test registrations and 2 event results; IDs start again at -0001 in CSE, IT.')).toBeInTheDocument();
+    // Twice (40, then the last 3), the fest's, then the session ended and the real schedule back.
+    const calls = sent.map((call) => call.url.replace(/.*\/api/, '/api')).filter((url) => (url.includes('/testing/') || url.includes('/test-data/')) && !url.includes('/records/'));
+    expect(calls).toEqual(['/api/admin/testing/clear', '/api/admin/testing/clear', '/api/admin/fest/test-data/clear', '/api/admin/testing/session', '/api/admin/testing/timeline']);
     expect(sent.find((call) => call.url.endsWith('/testing/clear'))?.body).toEqual({ confirm: CLEAR_PHRASE, results: true, helpRequests: true, restartDeskIds: true });
-    expect(sent[sent.length - 1].body).toEqual({ mode: 'standard' });
+    expect(sent.filter((call) => call.url.endsWith('/testing/timeline')).pop()?.body).toEqual({ mode: 'standard' });
   });
 
   it('tells every signed-in coordinator while a test session or timeline is on', async () => {
@@ -120,29 +123,6 @@ describe('Testing (admins)', () => {
     expect(banner.closest('p')).toHaveTextContent('Everything registered now is test data');
     expect(banner.closest('p')).toHaveTextContent('The website is following a test timeline.');
     expect(screen.queryByRole('button', { name: 'Testing' })).toBeNull();
-  });
-});
-
-describe('Deleted (web assistant team)', () => {
-  it('lists the deleted students and restores one', async () => {
-    vi.spyOn(window, 'confirm').mockReturnValue(true);
-    let restored = false;
-    const sent = api(session('SUPPORT'), (url) =>
-      url.endsWith('/api/admin/deleted')
-        ? { deleted: restored ? [] : [{ registrationId: '262004', name: 'Asha K', phone: '9840022222', email: 'asha@example.com', college: 'Sona College', source: 'ONSITE', status: 'APPROVED', deletedAt: '2026-10-12T05:00:00.000Z', deletedBy: 'support1', reason: 'Registered twice' }] }
-        : url.endsWith('/restore')
-          ? ((restored = true), { registration: { registrationId: '262004' } })
-          : undefined,
-    );
-    render(<AdminApp />);
-    await open('Deleted');
-    const panel = await screen.findByRole('region', { name: 'Deleted students' });
-    expect(await within(panel).findByText('Asha K')).toBeInTheDocument();
-    expect(within(panel).getByText('Registered twice')).toBeInTheDocument();
-    fireEvent.click(within(panel).getByRole('button', { name: 'Restore' }));
-    expect(await within(panel).findByText('262004 (Asha K) is back on the lists.')).toBeInTheDocument();
-    expect(sent.map((call) => call.url.replace(/.*\/api/, '/api'))).toEqual(['/api/admin/deleted/262004/restore']);
-    expect(await within(panel).findByText('No deleted students.')).toBeInTheDocument();
   });
 });
 

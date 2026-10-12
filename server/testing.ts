@@ -261,16 +261,17 @@ export function setup(overrides: Partial<ServiceDeps> & { at?: string } = {}) {
   };
 
   let staffCount = 0;
-  /** A new staff account with this role (created by the owner admin), signed in. */
-  const staff = async (role: StaffRole, eventIds: string[] = [], username?: string) => {
+  /** A new staff account with this role (created by the owner admin), signed in; `extra` adds e.g. department and desk. */
+  const staff = async (role: StaffRole, eventIds: string[] = [], username?: string, extra: Record<string, unknown> = {}) => {
     staffCount += 1;
-    const name = username ?? `${role.toLowerCase()}${staffCount}`;
+    const name = username ?? `${role.toLowerCase().replace(/_/g, '-')}${staffCount}`;
     const created = await asOwner('POST', '/api/admin/staff', {
       username: name,
       displayName: `Staff ${staffCount}`,
       role,
       eventIds,
       password: STAFF_PASSWORD,
+      ...extra,
     });
     expect(created.status).toBe(200);
     return { username: name, token: await loginAs(name, STAFF_PASSWORD) };

@@ -68,7 +68,8 @@ function saveToken(token: string | null) {
 
 type Failure = { success: false; error?: string; code?: string; details?: Record<string, string>; fieldErrors?: RegistrationErrors };
 
-async function request<T>(path: `/api/${string}`, { method = 'GET', body, token }: { method?: string; body?: unknown; token?: string | null } = {}): Promise<T> {
+/** A request to the API (fest calls use it too). */
+export async function request<T>(path: `/api/${string}`, { method = 'GET', body, token }: { method?: string; body?: unknown; token?: string | null } = {}): Promise<T> {
   let response: Response;
   try {
     response = await fetch(apiUrl(API_BASE, path), {
@@ -311,6 +312,9 @@ export interface StaffChange {
   displayName?: string;
   role?: StaffRole;
   eventIds?: string[];
+  /** The department (department roles) and the desk (desk accounts). */
+  department?: string | null;
+  deskNumber?: number | null;
   active?: boolean;
   password?: string;
 }

@@ -1,0 +1,476 @@
+/* The fest screens: phone first (desks and coordinators work on their phones), big tap targets. */
+
+/* Live status */
+.fest-sync {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem 0.75rem;
+  align-items: center;
+  margin: 0 0 0.75rem;
+  padding: 0.55rem 0.85rem;
+  border: 1px solid var(--adm-line);
+  border-radius: 10px;
+  background: var(--adm-surface);
+}
+
+.fest-sync__state {
+  display: inline-flex;
+  gap: 0.4rem;
+  align-items: center;
+  font-weight: 600;
+}
+
+.fest-sync__dot {
+  width: 0.6rem;
+  height: 0.6rem;
+  border-radius: 50%;
+  background: var(--adm-green);
+}
+
+.fest-sync.is-offline {
+  border-color: var(--adm-amber);
+  background: var(--adm-amber-soft);
+}
+
+.fest-sync.is-offline .fest-sync__dot {
+  background: var(--adm-amber);
+}
+
+.fest-sync__hint {
+  flex: 1 1 16rem;
+}
+
+.fest-sync__failed {
+  flex: 1 1 100%;
+  padding: 0.5rem 0.65rem;
+  border-radius: 8px;
+  color: var(--adm-red);
+  background: var(--adm-red-soft);
+}
+
+.fest-sync__failed ul {
+  display: grid;
+  gap: 0.35rem;
+  margin: 0.35rem 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.fest-sync__failed li {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem 0.75rem;
+  align-items: center;
+  justify-content: space-between;
+}
+
+/* Filters (UMIS style) */
+.fest-filters {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(11rem, 1fr));
+  gap: 0.5rem 0.75rem;
+  align-items: end;
+  margin-bottom: 1rem;
+}
+
+.fest-filters .adm-field select,
+.fest-filters .adm-field input {
+  width: 100%;
+}
+
+.fest-filters__search {
+  grid-column: span 2;
+}
+
+/* Totals */
+.fest-stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(10rem, 1fr));
+  gap: 0.6rem;
+  margin: 0.5rem 0;
+}
+
+.fest-stat {
+  display: grid;
+  gap: 0.1rem;
+  padding: 0.7rem 0.85rem;
+  border: 1px solid var(--adm-line);
+  border-radius: 10px;
+  background: #fafbff;
+}
+
+.fest-stat__value {
+  font-size: 1.45rem;
+  font-weight: 750;
+  line-height: 1.2;
+}
+
+.fest-stat__label {
+  font-weight: 600;
+}
+
+.fest-stat__sub {
+  color: var(--adm-muted);
+  font-size: 0.82rem;
+}
+
+.fest-table th[scope='row'] {
+  text-align: left;
+}
+
+.fest-row-link {
+  cursor: pointer;
+}
+
+.fest-row-link:hover {
+  background: var(--adm-select);
+}
+
+.fest-row-link.is-inactive,
+.fest-card.is-inactive {
+  opacity: 0.6;
+}
+
+/* Tabs inside a screen */
+.fest-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin-bottom: 0.75rem;
+}
+
+.fest-tabs__tab {
+  min-height: 2.6rem;
+  padding: 0.45rem 0.9rem;
+  border: 1px solid var(--adm-line);
+  border-radius: 999px;
+  color: var(--adm-text);
+  font-weight: 600;
+  background: var(--adm-surface);
+  cursor: pointer;
+}
+
+.fest-tabs__tab[aria-current='page'] {
+  border-color: var(--adm-primary);
+  color: #fff;
+  background: var(--adm-primary);
+}
+
+/* Forms */
+.fest-form {
+  display: grid;
+  gap: 0.8rem;
+  max-width: 38rem;
+}
+
+.fest-form .adm-field input,
+.fest-form .adm-field select {
+  min-height: 2.75rem;
+  font-size: 16px;
+}
+
+.fest-form__row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr));
+  gap: 0.75rem;
+}
+
+.fest-ids {
+  padding: 0.35rem 0.6rem;
+  border-radius: 8px;
+  color: var(--adm-green);
+  font-weight: 600;
+  background: var(--adm-green-soft);
+}
+
+.fest-ids.is-low {
+  color: var(--adm-amber);
+  background: var(--adm-amber-soft);
+}
+
+.fest-events,
+.fest-pay {
+  display: grid;
+  gap: 0.45rem;
+  margin: 0;
+  padding: 0.6rem 0.75rem;
+  border: 1px solid var(--adm-line);
+  border-radius: 10px;
+}
+
+.fest-events legend,
+.fest-pay legend {
+  padding: 0 0.3rem;
+  font-weight: 650;
+}
+
+.fest-event-pick {
+  display: flex;
+  gap: 0.6rem;
+  align-items: flex-start;
+  padding: 0.55rem 0.6rem;
+  border: 1px solid var(--adm-line);
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.fest-event-pick input {
+  width: 1.25rem;
+  height: 1.25rem;
+  margin-top: 0.15rem;
+}
+
+.fest-event-pick span {
+  display: grid;
+}
+
+.fest-event-pick small {
+  color: var(--adm-muted);
+}
+
+.fest-event-pick.is-on {
+  border-color: var(--adm-primary);
+  background: var(--adm-select);
+}
+
+.fest-choice {
+  display: inline-flex;
+  gap: 0.45rem;
+  align-items: center;
+  min-height: 2.75rem;
+  padding: 0.4rem 0.9rem;
+  border: 1px solid var(--adm-line);
+  border-radius: 999px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.fest-choice.is-on {
+  border-color: var(--adm-primary);
+  background: var(--adm-select);
+}
+
+.fest-inline-form {
+  display: grid;
+  gap: 0.5rem;
+  width: 100%;
+}
+
+.fest-done {
+  display: grid;
+  gap: 0.6rem;
+  justify-items: start;
+  max-width: 38rem;
+}
+
+.fest-done__id {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: clamp(2.2rem, 10vw, 3.4rem);
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  line-height: 1.1;
+}
+
+/* Cards and lists */
+.fest-list {
+  display: grid;
+  gap: 0.6rem;
+  margin-top: 0.75rem;
+}
+
+.fest-card {
+  display: grid;
+  gap: 0.35rem;
+  padding: 0.7rem 0.85rem;
+  border: 1px solid var(--adm-line);
+  border-radius: 10px;
+  background: var(--adm-surface);
+}
+
+.fest-card__head {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem 0.5rem;
+  align-items: center;
+}
+
+.fest-card__id {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-weight: 750;
+}
+
+.fest-card__meta {
+  color: var(--adm-muted);
+  font-size: 0.9rem;
+  overflow-wrap: anywhere;
+}
+
+.fest-card__events {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+}
+
+.fest-card__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+  align-items: center;
+  margin-top: 0.2rem;
+}
+
+.fest-card__actions .adm-button {
+  min-height: 2.6rem;
+}
+
+.fest-chip {
+  padding: 0.1rem 0.55rem;
+  border: 1px solid var(--adm-line);
+  border-radius: 999px;
+  font-size: 0.82rem;
+  background: #f7f8fc;
+}
+
+.fest-chip.is-paid {
+  border-color: #b9e2c7;
+  background: var(--adm-green-soft);
+}
+
+.fest-chip.is-present {
+  border-color: var(--adm-green);
+  color: var(--adm-green);
+  font-weight: 650;
+  background: var(--adm-green-soft);
+}
+
+.fest-more {
+  width: 100%;
+  margin-top: 0.6rem;
+}
+
+.fest-winners {
+  display: grid;
+  gap: 0.3rem;
+  margin: 0.5rem 0;
+  padding-left: 1.2rem;
+}
+
+/* The details panel */
+.fest-drawer {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  display: flex;
+  justify-content: flex-end;
+  background: rgb(10 12 30 / 0.4);
+}
+
+.fest-drawer__panel {
+  display: grid;
+  gap: 0.9rem;
+  align-content: start;
+  width: min(100%, 36rem);
+  height: 100%;
+  padding: 1rem;
+  overflow-y: auto;
+  background: var(--adm-surface);
+}
+
+.fest-facts {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 0.3rem 0.9rem;
+}
+
+.fest-facts dt {
+  color: var(--adm-muted);
+}
+
+.fest-entries {
+  display: grid;
+  gap: 0.45rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.fest-danger {
+  display: grid;
+  gap: 0.5rem;
+  padding-top: 0.75rem;
+  border-top: 1px solid var(--adm-line);
+}
+
+/* Import and the catalog */
+.fest-columns {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(12rem, 1fr));
+  gap: 0.5rem 0.75rem;
+  margin: 0.75rem 0;
+}
+
+.fest-columns select,
+.fest-columns input {
+  width: 100%;
+}
+
+.fest-catalog__head {
+  width: 100%;
+  padding: 0.3rem 0;
+  border: 0;
+  color: var(--adm-text);
+  text-align: left;
+  background: none;
+  cursor: pointer;
+}
+
+.fest-catalog__events input:not([type='checkbox']) {
+  width: 100%;
+  min-width: 7rem;
+}
+
+.fest-catalog__events .fest-num {
+  width: 4.2rem;
+  min-width: 0;
+}
+
+.fest-id-input {
+  margin-top: 0.25rem;
+  font-size: 0.8rem;
+}
+
+.fest-nowrap {
+  white-space: nowrap;
+}
+
+.fest-narrow {
+  max-width: 14rem;
+}
+
+.fest-dept-pick {
+  max-width: 26rem;
+}
+
+.adm-login__dept {
+  margin: -0.25rem 0 0.5rem;
+  font-size: 1.05rem;
+  font-weight: 650;
+}
+
+@media (max-width: 640px) {
+  .fest-filters {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .fest-filters__search {
+    grid-column: 1 / -1;
+  }
+
+  .fest-stats {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .fest-stat__value {
+    font-size: 1.2rem;
+  }
+}
