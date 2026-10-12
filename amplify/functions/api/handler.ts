@@ -3,7 +3,7 @@
  *
  * Invoked two ways:
  *   - by API Gateway (HTTP API) for every /api/* request: see server/http.ts for the routes;
- *   - by an EventBridge schedule every 10 minutes: retries whatever failed earlier (the
+ *   - by an EventBridge schedule every 30 minutes: backs up the fest, retries whatever failed earlier (the
  *     Google Drive / Sheets copy, or the pass and email of an approved registration).
  *
  * Secrets arrive in process.env (Amplify resolves them from SSM before this code runs).
@@ -87,7 +87,7 @@ export const handler = async (
     return { statusCode: response.status, ...encodeResponse(response, headers['accept-encoding']) };
   }
 
-  // The schedule (every 10 minutes): a backup of every department's fest data to the private
+  // The schedule (every 30 minutes): a backup of every department's fest data to the private
   // bucket (it keeps each earlier version), then retry what failed earlier.
   const current = getService();
   if (!current) return;

@@ -2,7 +2,7 @@
  * The PRAGYA 2026 backend on AWS (Amplify Gen 2), deployed by Amplify Hosting with each push:
  *
  *   HTTP API (API Gateway)  /api/*  →  Lambda "pragya-api"  →  DynamoDB, S3, Google APIs
- *   EventBridge schedule (every 10 min)  →  the same Lambda: retries
+ *   EventBridge schedule (every 30 min)  →  the same Lambda: backups, retries
  *   DynamoDB "Registrations" + "Control"  the approval workflow (authoritative state)
  *   S3 (private)            payment screenshots and participant passes
  *
@@ -46,11 +46,13 @@ const allowedOrigins = [...origins];
 
 // --- DynamoDB: the workflow state ------------------------------------------------------
 // Kept if the stack is ever deleted (registrations are irreplaceable), with point-in-time
-// recovery, and protected from being deleted by hand.
+// recovery, and protected from being deleted by hand. Encrypted at rest with DynamoDB's own
+// key (AES-256, free): an AWS managed key would call AWS KMS for this account all day long,
+// past its free requests.
 const registrations = new Table(stack, 'Registrations', {
   partitionKey: { name: 'registrationId', type: AttributeType.STRING },
   billingMode: BillingMode.PAY_PER_REQUEST,
-  encryption: TableEncryption.AWS_MANAGED,
+  encryption: TableEncryption.DEFAULT,
   pointInTimeRecoverySpecification: { pointInTimeRecoveryEnabled: true },
   deletionProtection: true,
   removalPolicy: RemovalPolicy.RETAIN,
@@ -67,7 +69,7 @@ registrations.addGlobalSecondaryIndex({
 const control = new Table(stack, 'Control', {
   partitionKey: { name: 'pk', type: AttributeType.STRING },
   billingMode: BillingMode.PAY_PER_REQUEST,
-  encryption: TableEncryption.AWS_MANAGED,
+  encryption: TableEncryption.DEFAULT,
   timeToLiveAttribute: 'expiresAtEpoch',
   pointInTimeRecoverySpecification: { pointInTimeRecoveryEnabled: true },
   deletionProtection: true,
@@ -80,7 +82,7 @@ const fest = new Table(stack, 'FestRecords', {
   partitionKey: { name: 'pk', type: AttributeType.STRING },
   sortKey: { name: 'sk', type: AttributeType.STRING },
   billingMode: BillingMode.PAY_PER_REQUEST,
-  encryption: TableEncryption.AWS_MANAGED,
+  encryption: TableEncryption.DEFAULT,
   pointInTimeRecoverySpecification: { pointInTimeRecoveryEnabled: true },
   deletionProtection: true,
   removalPolicy: RemovalPolicy.RETAIN,
