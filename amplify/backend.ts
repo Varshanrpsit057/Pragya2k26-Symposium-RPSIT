@@ -74,6 +74,24 @@ const control = new Table(stack, 'Control', {
   removalPolicy: RemovalPolicy.RETAIN,
 });
 
+// The college-wide fest: registrations and results per department (pk D#<dept>, sk R#<id> /
+// E#<event> / claims / counters), and the "byDept" index (dept, u): what changed since a moment.
+const fest = new Table(stack, 'FestRecords', {
+  partitionKey: { name: 'pk', type: AttributeType.STRING },
+  sortKey: { name: 'sk', type: AttributeType.STRING },
+  billingMode: BillingMode.PAY_PER_REQUEST,
+  encryption: TableEncryption.AWS_MANAGED,
+  pointInTimeRecoverySpecification: { pointInTimeRecoveryEnabled: true },
+  deletionProtection: true,
+  removalPolicy: RemovalPolicy.RETAIN,
+});
+fest.addGlobalSecondaryIndex({
+  indexName: 'byDept',
+  partitionKey: { name: 'dept', type: AttributeType.STRING },
+  sortKey: { name: 'u', type: AttributeType.STRING },
+  projectionType: ProjectionType.ALL,
+});
+
 // --- S3: private files -------------------------------------------------------------------
 const files = new Bucket(stack, 'PrivateFiles', {
   blockPublicAccess: BlockPublicAccess.BLOCK_ALL,
@@ -93,9 +111,11 @@ const files = new Bucket(stack, 'PrivateFiles', {
 
 registrations.grantReadWriteData(lambda);
 control.grantReadWriteData(lambda);
+fest.grantReadWriteData(lambda);
 files.grantReadWrite(lambda);
 backend.api.addEnvironment('REGISTRATIONS_TABLE', registrations.tableName);
 backend.api.addEnvironment('CONTROL_TABLE', control.tableName);
+backend.api.addEnvironment('FEST_TABLE', fest.tableName);
 backend.api.addEnvironment('FILES_BUCKET', files.bucketName);
 
 // An optional ceiling on simultaneous runs (e.g. 50), so a flood can never run up the bill or
@@ -144,17 +164,19 @@ const ROUTES: { method: HttpMethod; path: string; rate: number; burst: number }[
   { method: HttpMethod.POST, path: '/api/help', rate: 5, burst: 15 },
   { method: HttpMethod.GET, path: '/api/help/mine', rate: 10, burst: 30 },
   // Staff sign in now and then: a trickle is plenty, and it starves password guessing.
-  { method: HttpMethod.POST, path: '/api/admin/login', rate: 2, burst: 10 },
+  { method: HttpMethod.POST, path: '/api/admin/login', rate: 10, burst: 60 },
   // On the event day about 20 staff devices refresh their lists every 15 seconds and record
   // fees and attendance: a few requests a second, with room for everyone clicking at once.
-  { method: HttpMethod.GET, path: '/api/admin/{proxy+}', rate: 30, burst: 60 },
-  { method: HttpMethod.POST, path: '/api/admin/{proxy+}', rate: 20, burst: 40 },
+  // On the fest day about 300 staff phones ask for changes every 15 seconds (a POST) and
+  // register, take fees and mark attendance: room for all of them coming back at once.
+  { method: HttpMethod.GET, path: '/api/admin/{proxy+}', rate: 60, burst: 150 },
+  { method: HttpMethod.POST, path: '/api/admin/{proxy+}', rate: 120, burst: 300 },
 ];
 const routes = ROUTES.flatMap(({ method, path }) => httpApi.addRoutes({ path, methods: [method], integration }));
 
 const stage = httpApi.defaultStage!.node.defaultChild as CfnStage;
 // The ceiling for the whole API, then each route's own (keys as API Gateway names routes).
-stage.defaultRouteSettings = { throttlingBurstLimit: 200, throttlingRateLimit: 100 };
+stage.defaultRouteSettings = { throttlingBurstLimit: 500, throttlingRateLimit: 250 };
 stage.routeSettings = Object.fromEntries(
   ROUTES.map(({ method, path, rate, burst }) => [`${method} ${path}`, { ThrottlingRateLimit: rate, ThrottlingBurstLimit: burst }]),
 );

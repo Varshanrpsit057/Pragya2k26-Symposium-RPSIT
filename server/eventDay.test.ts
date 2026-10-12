@@ -103,6 +103,7 @@ describe('registration schedule (Asia/Kolkata)', () => {
       ADMIN_PASSWORD_HASH: 'hash',
       REGISTRATIONS_TABLE: 'r',
       CONTROL_TABLE: 'c',
+      FEST_TABLE: 'f',
       FILES_BUCKET: 'b',
     };
     expect(readConfig(base).config?.schedule).toEqual(scheduleOf(site.registration));

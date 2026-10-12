@@ -123,7 +123,7 @@ describe('admin sign-in', () => {
   it('ends sessions when they expire or the admin password changes', async () => {
     const first = setup();
     const token = await first.login();
-    first.advance(8 * 3_600_000 + 1);
+    first.advance(16 * 3_600_000 + 1);
     expect((await first.call('GET', '/api/admin/session', undefined, { token })).status).toBe(401);
 
     const store = new MemoryStore();

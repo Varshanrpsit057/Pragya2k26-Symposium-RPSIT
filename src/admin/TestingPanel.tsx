@@ -13,6 +13,7 @@ import { formatIst, parseEventStart } from '../lib/countdown';
 import type { SessionInfo } from '../lib/staff';
 import { CLEAR_PHRASE, type ClearResult, type TimelineMode } from '../lib/testTools';
 import { SignedOut, clearTestData, currentAdmin, markTest, setTimeline, startTestSession, stopTestSession, testingState, type TimelineRequest } from './adminApi';
+import { clearFestTestData } from './fest/festApi';
 import { Badge, ErrorNote, LiveStatus, useLiveData, when } from './ui';
 
 interface PanelProps {
@@ -59,6 +60,7 @@ export function TestingPanel({ token, onSignedOut, onSession }: PanelProps) {
   const [options, setOptions] = useState({ results: true, helpRequests: true, restartDeskIds: true, finish: true });
   const [phrase, setPhrase] = useState('');
   const [cleared, setCleared] = useState<ClearResult[] | null>(null);
+  const [festCleared, setFestCleared] = useState<{ cleared: number; results: number; restarted: string[] } | null>(null);
 
   const run = async (what: string, task: () => Promise<unknown>, done: string) => {
     setBusy(what);
@@ -91,6 +93,8 @@ export function TestingPanel({ token, onSignedOut, onSession }: PanelProps) {
           if (result.remaining === 0 || result.cleared === 0) break;
         }
         setCleared(rounds);
+        // The fest's test registrations (every department) too.
+        setFestCleared(await clearFestTestData(token, options.results));
         if (options.finish) {
           await stopTestSession(token);
           await setTimeline(token, { mode: 'standard' });
@@ -323,8 +327,9 @@ export function TestingPanel({ token, onSignedOut, onSession }: PanelProps) {
       <section className="adm-card adm-pad" aria-label="Delete test data">
         <h3 className="adm-h3">Delete test data</h3>
         <p className="adm-muted">
-          Deletes the {records.length} TEST registration{records.length === 1 ? '' : 's'} above with their payments, attendance and files. They are saved to a private backup file first, their Google Sheet rows
-          are marked TEST CLEARED, and their phone numbers and emails can be used again.
+          Deletes every registration made during test sessions, in every department (desk, imported and paper), with their fees and attendance, plus the {records.length} TEST registration
+          {records.length === 1 ? '' : 's'} above. They are saved to a private backup file first, and their phone numbers can be used again. Departments left with no registrations start their IDs
+          again at -0001.
         </p>
         <div className="adm-form">
           <label className="adm-check">
@@ -354,7 +359,7 @@ export function TestingPanel({ token, onSignedOut, onSession }: PanelProps) {
           </label>
         </div>
         <button className="adm-button adm-button--danger adm-button--big" type="button" disabled={busy !== '' || phrase.trim() !== CLEAR_PHRASE} onClick={() => void clear()}>
-          {busy === 'clear' ? 'Deleting…' : `Delete the test data (${records.length})`}
+          {busy === 'clear' ? 'Deleting…' : 'Delete the test data'}
         </button>
         {cleared && (
           <p className="adm-note" role="status">
@@ -368,6 +373,13 @@ export function TestingPanel({ token, onSignedOut, onSession }: PanelProps) {
               </>
             )}
             {cleared[cleared.length - 1].remaining > 0 && `. ${cleared[cleared.length - 1].remaining} could not be deleted yet: try again.`}
+          </p>
+        )}
+        {festCleared && (
+          <p className="adm-note" role="status">
+            Fest: deleted {festCleared.cleared} test registration{festCleared.cleared === 1 ? '' : 's'}
+            {festCleared.results > 0 && ` and ${festCleared.results} event results`}
+            {(festCleared.restarted?.length ?? 0) > 0 && `; IDs start again at -0001 in ${festCleared.restarted.join(', ')}`}.
           </p>
         )}
       </section>

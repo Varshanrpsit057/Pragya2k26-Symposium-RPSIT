@@ -18,18 +18,20 @@ export interface Actor {
   expiresAt: number;
   /** The registration desk this sign-in is at (desk accounts); null otherwise. */
   deskNumber: number | null;
+  /** The department (department roles); null for roles that see every department. */
+  department: string | null;
 }
 
 export function requirePermission(actor: Actor, permission: Permission): void {
   if (!hasPermission(actor.role, permission)) {
-    throw new ApiError(403, 'FORBIDDEN', `Your role (${ROLE_INFO[actor.role].label}) cannot do this.`);
+    throw new ApiError(403, 'FORBIDDEN', `Your role (${ROLE_INFO[actor.role]?.label ?? actor.role}) cannot do this.`);
   }
 }
 
 /** Any one of the permissions is enough (e.g. a roster is for coordinators and the certificate team). */
 export function requireAnyPermission(actor: Actor, permissions: readonly Permission[]): void {
   if (!permissions.some((permission) => hasPermission(actor.role, permission))) {
-    throw new ApiError(403, 'FORBIDDEN', `Your role (${ROLE_INFO[actor.role].label}) cannot do this.`);
+    throw new ApiError(403, 'FORBIDDEN', `Your role (${ROLE_INFO[actor.role]?.label ?? actor.role}) cannot do this.`);
   }
 }
 

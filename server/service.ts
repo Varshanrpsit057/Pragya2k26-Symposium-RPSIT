@@ -79,6 +79,8 @@ import { buildReport } from './reports';
 import { requirePermission, type Actor } from './roles';
 import { RowNotFoundError, type SheetRow, type SheetsStore } from './sheets';
 import { StaffAccounts, staffCredential } from './staffAccounts';
+import { FestService } from './fest';
+import { MemoryFestStore, type FestStore } from './festStore';
 import { HelpDesk } from './helpDesk';
 import { StudentPortal } from './studentPortal';
 import { claimsOf, type AdminSession, type Registration, type StaffAccount, type RegistrationChanges, type RegistrationStatus, type Store } from './store';
@@ -101,6 +103,8 @@ const signedOutSince = (account: StaffAccount, session: AdminSession) => Boolean
 
 export interface ServiceDeps {
   store: Store;
+  /** The fest's registrations (DynamoDB on AWS; in memory for tests and the local mock). */
+  fest?: FestStore;
   files: FileStore;
   sheets: Pick<SheetsStore, 'ready' | 'ids' | 'append' | 'update'>;
   drive: Pick<DriveStore, 'upload' | 'replace' | 'findByProperties' | 'ensureFolder' | 'parentOf' | 'trash'>;
@@ -132,12 +136,13 @@ const LEASE_MS = 60_000;
 const MAX_AUTO_EMAIL_ATTEMPTS = 5;
 const MAX_AUTO_SYNC_ATTEMPTS = 50;
 /**
- * Sign-in attempts: 10 per account name per network address, and 100 per address in all,
- * every 15 minutes. Staff share the college's address on the event day, so one person's
- * typos never lock the others out, while guessing stays slow.
+ * Sign-in attempts: 10 per account name per network address, and 1,000 per address in all,
+ * every 15 minutes. On the fest day about 300 phones sign in, and mobile networks put many of
+ * them behind one address, so one person's typos never lock the others out, while guessing
+ * any one account stays slow.
  */
 const LOGIN_LIMIT = { max: 10, windowMs: 15 * 60_000 };
-const LOGIN_ADDRESS_LIMIT = { max: 100, windowMs: 15 * 60_000 };
+const LOGIN_ADDRESS_LIMIT = { max: 1000, windowMs: 15 * 60_000 };
 const LOOKUP_LIMIT = { max: 120, windowMs: 10 * 60_000 };
 /** Registration IDs tried when an on-site number is already taken (a counter reset). */
 const MAX_ID_ATTEMPTS = 5;
@@ -200,6 +205,8 @@ export class Service {
   readonly help: HelpDesk;
   /** Test sessions: the timeline, the TEST marks and deleting test data. */
   readonly testing: TestTools;
+  /** The college-wide fest: departments, desks, events, live data. */
+  readonly fest: FestService;
 
   constructor(private readonly deps: ServiceDeps) {
     this.fees = deps.fees ?? { gatePass: site.registration.gatePassFee, perEvent: site.registration.eventFee };
@@ -208,7 +215,7 @@ export class Service {
     this.schedule = { ...standard };
     this.now = deps.now ?? Date.now;
     this.log = deps.log ?? ((message, details) => console.log(JSON.stringify({ message, ...details })));
-    this.staff = new StaffAccounts({ store: deps.store, ownerUsername: deps.admin.username, now: this.now, log: this.log });
+    this.staff = new StaffAccounts({ store: deps.store, ownerUsername: deps.admin.username, now: this.now, log: this.log, catalog: () => this.fest.catalog() });
     this.events = new EventDesk({
       store: deps.store,
       fees: this.fees,
@@ -238,6 +245,15 @@ export class Service {
       sheetRow: (registration) => this.sheetRow(registration),
     });
     this.help = new HelpDesk({ store: deps.store, now: this.now, log: this.log, testing: async () => (await this.testing.activeSession()) !== null });
+    this.fest = new FestService({
+      store: deps.fest ?? new MemoryFestStore(),
+      settings: deps.store,
+      files: deps.files,
+      schedule: this.schedule,
+      testMark: () => this.testing.markNow(),
+      now: this.now,
+      log: this.log,
+    });
   }
 
   private iso() {
@@ -479,7 +495,7 @@ export class Service {
       const usable = account?.active ? account : null;
       const matches = await verifyPassword(password, usable?.passwordHash ?? (await this.dummyPasswordHash()));
       if (usable && matches) {
-        const desk = usable.role === 'DESK' ? readDeskNumber(isObject(body) ? body.deskNumber : undefined) : null;
+        const desk = usable.role === 'DESK' ? (usable.deskNumber ?? readDeskNumber(isObject(body) ? body.deskNumber : undefined)) : null;
         session = { username: usable.username, kind: 'staff', credential: staffCredential(usable), createdAt: 0, expiresAt: 0, ...(desk && { deskNumber: desk }) };
       }
     }
@@ -525,12 +541,13 @@ export class Service {
         eventIds: account.role === 'COORDINATOR' ? account.eventIds : [],
         kind: 'staff',
         expiresAt: session.expiresAt,
-        deskNumber: account.role === 'DESK' ? (session.deskNumber ?? null) : null,
+        deskNumber: account.role === 'DESK' ? (account.deskNumber ?? session.deskNumber ?? null) : null,
+        department: account.department ?? null,
       };
     }
     // A new admin username or password signs everyone out.
     if (!sameText(session.credential, this.credential())) throw signIn;
-    return { username: this.deps.admin.username, displayName: 'Administrator', role: 'ADMIN', eventIds: [], kind: 'owner', expiresAt: session.expiresAt, deskNumber: null };
+    return { username: this.deps.admin.username, displayName: 'Administrator', role: 'ADMIN', eventIds: [], kind: 'owner', expiresAt: session.expiresAt, deskNumber: null, department: null };
   }
 
   /** A desk account says which registration desk it is at (or moves to another one). */
@@ -556,7 +573,7 @@ export class Service {
       .filter((session) => session.expiresAt > now)
       .flatMap((session): SignedInView[] => {
         if (session.kind !== 'staff') {
-          return [{ username: session.username, displayName: 'Administrator', role: 'ADMIN', kind: 'owner', deskNumber: null, since: new Date(session.createdAt).toISOString(), until: new Date(session.expiresAt).toISOString() }];
+          return [{ username: session.username, displayName: 'Administrator', role: 'ADMIN', kind: 'owner', department: null, deskNumber: null, since: new Date(session.createdAt).toISOString(), until: new Date(session.expiresAt).toISOString() }];
         }
         const account = accounts.get(session.username);
         if (!account?.active || signedOutSince(account, session)) return [];
@@ -566,7 +583,8 @@ export class Service {
             displayName: account.displayName,
             role: account.role,
             kind: 'staff',
-            deskNumber: account.role === 'DESK' ? (session.deskNumber ?? null) : null,
+            department: account.department ?? null,
+            deskNumber: account.role === 'DESK' ? (account.deskNumber ?? session.deskNumber ?? null) : null,
             since: new Date(session.createdAt).toISOString(),
             until: new Date(session.expiresAt).toISOString(),
           },
@@ -592,7 +610,8 @@ export class Service {
       role: actor.role,
       kind: actor.kind,
       eventIds: actor.eventIds,
-      permissions: [...ROLE_PERMISSIONS[actor.role]],
+      department: actor.department,
+      permissions: [...(ROLE_PERMISSIONS[actor.role] ?? [])],
       expiresAt: new Date(actor.expiresAt).toISOString(),
       serverTime: new Date(now).toISOString(),
       phase: registrationPhase(this.schedule, now),

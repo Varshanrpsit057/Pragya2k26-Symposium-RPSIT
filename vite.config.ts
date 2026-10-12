@@ -43,6 +43,9 @@ const adminFolderRedirect = (): Plugin => {
   };
 };
 
+/** The departments' dashboard pages (landing/<code>/admin/index.html). */
+const FEST_PAGES = ['cse', 'aids', 'it', 'ece', 'cys', 'eee', 'mech', 'sh'];
+
 export default defineConfig({
   plugins: [react(), adminFolderRedirect()],
   define: {
@@ -57,6 +60,8 @@ export default defineConfig({
         main: resolve(import.meta.dirname, 'index.html'),
         admin: resolve(import.meta.dirname, 'landing/admin/index.html'),
         student: resolve(import.meta.dirname, 'landing/student/index.html'),
+        // Each department's own address (the same dashboard): /landing/cse/admin/ and so on.
+        ...Object.fromEntries(FEST_PAGES.map((code) => [`admin-${code}`, resolve(import.meta.dirname, `landing/${code}/admin/index.html`)])),
       },
     },
   },

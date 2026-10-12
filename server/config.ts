@@ -22,7 +22,7 @@ export interface AppConfig {
   mail: { fromName: string; sender: string | null; replyTo: string | null };
   admin: { username: string; passwordHash: string };
   rateLimit: { max: number; windowMs: number };
-  tables: { registrations: string; control: string };
+  tables: { registrations: string; control: string; fest: string };
   bucket: string;
   /** When online and on-site registration are open (src/content/site.ts unless overridden). */
   schedule: RegistrationSchedule;
@@ -49,6 +49,7 @@ const REQUIRED = [
   'ADMIN_PASSWORD_HASH',
   'REGISTRATIONS_TABLE',
   'CONTROL_TABLE',
+  'FEST_TABLE',
   'FILES_BUCKET',
 ] as const;
 
@@ -105,7 +106,7 @@ export function readConfig(env: Settings): { config: AppConfig | null; missing: 
         max: integer(env.RATE_LIMIT_MAX, 300, 5, 10_000),
         windowMs: integer(env.RATE_LIMIT_WINDOW_MINUTES, 10, 1, 1440) * 60_000,
       },
-      tables: { registrations: required('REGISTRATIONS_TABLE'), control: required('CONTROL_TABLE') },
+      tables: { registrations: required('REGISTRATIONS_TABLE'), control: required('CONTROL_TABLE'), fest: required('FEST_TABLE') },
       bucket: required('FILES_BUCKET'),
       schedule,
     },

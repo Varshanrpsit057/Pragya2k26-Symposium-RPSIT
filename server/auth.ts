@@ -18,7 +18,7 @@ const KEY_LENGTH = 64;
 const MAX_MEMORY = 64 * 1024 * 1024;
 
 /** How long an admin stays signed in. */
-export const SESSION_HOURS = 8;
+export const SESSION_HOURS = 16;
 
 /** A strong admin password: long, and not just one kind of character. */
 export function passwordProblem(password: string): string | null {
