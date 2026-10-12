@@ -39,7 +39,7 @@ for about 300 phones on mobile data.
   closed) are edited by the web assist team in **Departments & events**, for everyone at once.
 - **Accounts**: **Accounts → Create a department’s accounts** makes a department's HOD, admin, desks
   and coordinators in one go; download the logins then (the passwords are not shown again).
-- **Backups**: every 10 minutes the schedule writes every department's data to
+- **Backups**: every 30 minutes the schedule writes every department's data to
   `backups/fest/all.json` in the private bucket (every earlier version is kept), on top of
   DynamoDB's point-in-time recovery (the `FestRecords` table, deletion protected). Test data is
   saved to `backups/fest-test-data-*.json` before it is deleted.
@@ -100,7 +100,7 @@ GitHub ──push──▶ AWS Amplify Hosting (build: amplify.yml)
                    ├─ website: dist/ (React/Vite) on Amplify's CDN
                    └─ backend: amplify/ (Amplify Gen 2, AWS CDK)
                         HTTP API (API Gateway) /api/*  ──▶  Lambda "pragya-api" (Node.js 22)
-                        EventBridge, every 10 min      ──▶  same Lambda: retries
+                        EventBridge, every 30 min      ──▶  same Lambda: retries
                         DynamoDB  Registrations, Control   (workflow state, IDs, sessions,
                                                             staff accounts, event results)
                         S3 (private)  payment screenshots, participant passes
@@ -152,7 +152,7 @@ layer has a limit, so a flood of requests is turned away cheaply instead of runn
 | --- | --- |
 | Website (Amplify Hosting, CloudFront) | Static and cached at the edge. Optionally turn on the **Amplify firewall** (below). |
 | API Gateway, per route, all visitors together | `uploads`, `register` 50/s (burst 100) · `status` 25/s · `pass` 10/s · `admin/login` 2/s (burst 10) · other staff routes 30/s GET (burst 60), 20/s POST (burst 40) · `health` 5/s · whole API 100/s (burst 200). Unknown paths get a 404 without running the function. |
-| Lambda, per network address | registration (upload + submit) `RATE_LIMIT_MAX` per `RATE_LIMIT_WINDOW_MINUTES` (300 per 10 min: a college network shares one address) · status/pass 120 per 10 min · staff sign-in 10 per account name per 15 min, and 100 per address (staff share the college's address on the event day) |
+| Lambda, per network address | registration (upload + submit) `RATE_LIMIT_MAX` per `RATE_LIMIT_WINDOW_MINUTES` (300 per 10 min: a college network shares one address) · status/pass 120 per 10 min · staff sign-in 10 per account name per 15 min, and 1,000 per address (mobile networks put many phones behind one address) |
 | Lambda, concurrency (optional) | `API_RESERVED_CONCURRENCY` caps simultaneous runs (e.g. `50`), which bounds cost and the Google API load |
 | Logs | API access logs (address, route, status, latency) and function logs, kept 3 months in CloudWatch |
 
@@ -273,7 +273,7 @@ no-store/noindex for the dashboard) come from `customHttp.yml`.
 ## 8. Backend deployment
 
 `npx ampx pipeline-deploy` (run by Amplify) creates or updates the Lambda function, the HTTP API, the
-DynamoDB tables, the private S3 bucket, the 10-minute schedule and the IAM permissions, then writes
+DynamoDB tables, the private S3 bucket, the 30-minute schedule and the IAM permissions, then writes
 the API address to `amplify_outputs.json` for the website build. CORS allows only the branch's own
 `https://<branch>.<app-id>.amplifyapp.com` address and `ALLOWED_ORIGINS`.
 
@@ -303,6 +303,13 @@ npm run dev                                      # the site on http://localhost:
    `GOOGLE_DRIVE_PASS_FOLDER_ID` (from `google:setup`), `ALLOWED_ORIGINS` (custom domain) and the others.
 4. **Redeploy** the branch. Secrets are read by the Lambda function when it starts; they never reach the
    website, the repository or the sheet. To rotate one, change it and redeploy.
+5. **Keep AWS KMS in its free tier**: every secret is decrypted with AWS KMS each time the function
+   starts, so only the three credentials (`GOOGLE_CLIENT_SECRET`, `GOOGLE_REFRESH_TOKEN`,
+   `ADMIN_PASSWORD_HASH`) need to be secrets. Set the four identifiers (`GOOGLE_CLIENT_ID`,
+   `GOOGLE_SHEET_ID`, `GOOGLE_DRIVE_PAYMENT_FOLDER_ID`, `ADMIN_USERNAME`) under **Hosting →
+   Environment variables** with the same values and redeploy; the function then uses them instead
+   of the secrets (which can be deleted afterwards). The DynamoDB tables use DynamoDB's own
+   encryption key (free, no KMS calls), and the S3 bucket uses S3-managed encryption.
 
 ## 10. Production testing
 
@@ -332,18 +339,18 @@ the build and the secret check.
 | Form says registration "isn't open yet" | The API is missing a setting: CloudWatch logs list them under *not configured*. |
 | Browser console: CORS error | The site's address is not allowed: add it to `ALLOWED_ORIGINS` and redeploy. |
 | `invalid_grant` in the logs | The Google sign-in expired or was revoked: run `npm run google:auth` again, update `GOOGLE_REFRESH_TOKEN`, redeploy. Make sure the consent screen is *In production*. |
-| Sheet shows "Waiting to sync" in the dashboard | Google was unreachable; the schedule retries every 10 minutes, without duplicates. |
+| Sheet shows "Waiting to sync" in the dashboard | Google was unreachable; the schedule retries every 30 minutes, without duplicates. |
 | Email status **FAILED** | Gmail refused it (see the error). Use **Retry failed steps**; it is also retried automatically. |
 | Email status **UNKNOWN** | Gmail did not confirm. Check the sender's Sent folder, then **Resend email** only if it is not there. |
 | "Too many sign-in attempts" | 10 wrong attempts from one address: wait 15 minutes. |
 | "The registration server is very busy" | A route's gateway throttle was reached (CloudWatch access logs show status 429). If it is genuine traffic, raise that route in `ROUTES` in `amplify/backend.ts` and push. |
 | Deploy fails on `ReservedConcurrentExecutions` | The account cannot reserve that much concurrency: lower or remove `API_RESERVED_CONCURRENCY`. |
 | `/landing/admin` shows the main page | Use `/landing/admin/`, or add a rewrite in **Hosting → Rewrites and redirects**: source `/landing/admin`, target `/landing/admin/index.html`, type `200`. |
-| First registration right after the very first deploy says "temporarily unavailable" | The ID counter starts from the sheet's highest ID; the schedule sets it up within 10 minutes of the first deploy, or check the Google settings. |
+| First registration right after the very first deploy says "temporarily unavailable" | The ID counter starts from the sheet's highest ID; the schedule sets it up within 30 minutes of the first deploy, or check the Google settings. |
 | A staff member says "Your role cannot do this" | Their role lacks that permission (dashboard → Roles). An admin changes the role in Staff; it applies at once. |
 | A coordinator says "This event is not assigned to your account" | Admin → Staff → Edit → tick the event. |
 | "Ask an admin to authorise a correction" | The event's results are submitted and locked. An admin opens the event and chooses **Authorise correction** with a reason. |
-| Fees and attendance are not in the Google Sheet yet | Event-day changes reach the sheet with the 10-minute schedule (DynamoDB is the record); wait, or check the sheet's *Event Fees Paid* / *Attended Events* columns later. |
+| Fees and attendance are not in the Google Sheet yet | Event-day changes reach the sheet with the 30-minute schedule (DynamoDB is the record); wait, or check the sheet's *Event Fees Paid* / *Attended Events* columns later. |
 
 ## 12. Event day: desk, coordinators and certificates
 
