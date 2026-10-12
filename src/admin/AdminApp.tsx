@@ -6,7 +6,7 @@ import { SignedOut, currentAdmin, listHelp, myHelp, savedToken, setDeskNumber, s
 import { CatalogEditor } from './fest/CatalogEditor';
 import { DeskView } from './fest/DeskView';
 import { EventWindow, linkedEvent } from './fest/EventWindow';
-import { FestProvider } from './fest/FestData';
+import { FestProvider, useFest } from './fest/FestData';
 import { SyncBar } from './fest/festUi';
 import { ImportView } from './fest/ImportView';
 import { FestOverview, FestRegistrations, FestResults } from './fest/OverviewViews';
@@ -249,6 +249,18 @@ function ShellBody({ token, session, onSession, onSignOut, onSignedOut }: ShellP
   const currentLabel = tabs.find((item) => item.id === current)?.label(session) ?? '';
   const panel = { token, session, onSignedOut };
   const [help, setHelp] = useState<HelpContext | null>(null);
+  const { outbox } = useFest();
+  const signOutChecked = () => {
+    const waiting = outbox.length;
+    if (
+      waiting &&
+      !window.confirm(
+        `${waiting === 1 ? '1 change is' : `${waiting} changes are`} still waiting to send from this device. They stay saved here and are sent the next time ${session.username} signs in on this device (same browser).\n\nSign out anyway?`,
+      )
+    )
+      return;
+    onSignOut();
+  };
 
   // "Contact admin" next to any error in the dashboard opens the form with that error.
   useEffect(() => {
@@ -280,7 +292,7 @@ function ShellBody({ token, session, onSession, onSignOut, onSignedOut }: ShellP
             Contact admin
             {!help && <NewReplies token={token} username={session.username} onSignedOut={onSignedOut} />}
           </button>
-          <button className="adm-button" type="button" onClick={onSignOut}>
+          <button className="adm-button" type="button" onClick={signOutChecked}>
             Sign out
           </button>
         </div>

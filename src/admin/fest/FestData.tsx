@@ -419,6 +419,18 @@ export function FestProvider({ token, session, pageDept = null, onSignedOut, chi
     };
   }, [sync, topUp, session.department]);
 
+  // Closing or reloading the tab while changes wait: the browser asks first. They are saved on
+  // the phone either way and sent the next time this account signs in here.
+  useEffect(() => {
+    if (!outbox.length) return;
+    const warn = (event: BeforeUnloadEvent) => {
+      event.preventDefault();
+      event.returnValue = '';
+    };
+    window.addEventListener('beforeunload', warn);
+    return () => window.removeEventListener('beforeunload', warn);
+  }, [outbox.length]);
+
   const pending = useMemo(() => new Set(outbox.filter((op) => !op.failed).map((op) => op.target)), [outbox]);
 
   const value: FestContextValue = {

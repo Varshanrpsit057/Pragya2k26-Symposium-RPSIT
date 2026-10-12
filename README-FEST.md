@@ -415,9 +415,14 @@ The event fees (₹50 each) are taken by the event coordinators at the venue, no
 ### With no signal
 
 Keep registering. The bar at the top shows **offline** and how many registrations are waiting. They
-are sent in order as soon as the signal is back, and a retry never registers anyone twice. **Do not
-close the tab or sign out while anything is waiting to send.** If the phone switches off, sign in
-again on the same phone with the same account and the waiting ones are sent.
+are sent in order as soon as the signal is back, and a retry never registers anyone twice.
+
+**If the phone or laptop switches off** (battery, crash, restart), nothing is lost: each registration
+is saved on the device the moment you tap Register. Switch it on, open the same page in the same
+browser and sign in with the same account (signing in needs signal): the waiting ones are sent by
+themselves. Signing out or closing the tab with registrations waiting asks first; they stay saved
+either way. They are lost only if the device itself is lost or broken, the browser's data is
+cleared, or a private/incognito window was used, so never use one at a desk.
 
 ### An online registrant arrives
 
@@ -583,7 +588,7 @@ Changing a password, deactivating or deleting an account signs that person out a
 | **No signal at a desk** | Keep registering: it is saved on the phone and sent later. Switch to the second phone (other carrier) if you need to look anything up. |
 | **"Waiting to send" does not go down** | Move to better signal. If it says a registration failed, open it: it says why (e.g. the mobile number is already registered, with that ID). Fix it or dismiss it. |
 | **Mobile number already registered** | The desk shows the existing ID. Use that ID; do not register again. |
-| **Phone switched off with registrations waiting** | Charge it, open the same page, sign in with the same account: they are sent. Do not clear the browser's data. |
+| **Phone or laptop switched off with registrations waiting** | Nothing is lost: each registration is saved on the device the moment it is made. Switch it on, open the same page **in the same browser**, sign in with the **same account**: they are sent by themselves. Never use a private/incognito window at a desk (its data is wiped when it closes), and never clear the browser's data. |
 | **Phone lost** | Web assist: **Accounts → Signed in now → Sign out** for that account, set a new password, sign in on another phone. Anything that was waiting on the lost phone is lost: re-register those students (their mobile number tells you if they are already in). |
 | **Every phone at a desk fails** | Paper slips (`<DEPT>-9001…`); the department admin types them in later. |
 | **"Registration is closed"** at a desk | The on-site closing time has passed. Web assist: **Event-day controls → Reopen or extend**. |
