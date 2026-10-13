@@ -90,6 +90,20 @@ describe('a student registering on their phone', () => {
     // The phone that registered (its key) is not affected.
     expect((await h.call('POST', '/api/fest/me', { id: '20001', key: body.submissionId }, { ip: '10.2.1.1' })).status).toBe(200);
   });
+
+  it('cannot get round that limit with a blank or made-up key (a key never falls back to the mobile number)', async () => {
+    const h = setup({ at: TIMES.eventDay });
+    const body = form();
+    await selfRegister(h, body);
+    // A blank key counts as no key: it is limited per ID like any lookup.
+    for (let n = 0; n < 10; n += 1) await h.call('POST', '/api/fest/me', { id: '20001', key: ' ', phone: '9999999999' }, { ip: `10.3.0.${n}` });
+    expect((await h.call('POST', '/api/fest/me', { id: '20001', key: ' ', phone: body.participant.phone }, { ip: '10.3.1.1' })).status).toBe(429);
+    // A key that is sent but wrong is refused even with the right mobile number.
+    const h2 = setup({ at: TIMES.eventDay });
+    await selfRegister(h2, body);
+    expect((await h2.call('POST', '/api/fest/me', { id: '20001', key: ' ', phone: body.participant.phone }, { ip: '10.3.2.1' })).status).toBe(404);
+    expect((await h2.call('POST', '/api/fest/me', { id: '20001', key: 'self-key-0000000000000000', phone: body.participant.phone }, { ip: '10.3.2.1' })).status).toBe(404);
+  });
 });
 
 describe('any department’s desk', () => {

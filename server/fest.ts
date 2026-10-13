@@ -72,6 +72,8 @@ const MAX_IMPORT_ROWS = 200;
 const SUBMISSION = /^[A-Za-z0-9-]{8,80}$/;
 /** A student's own submission id: random and long, as it is also the private key of their page. */
 const STUDENT_KEY = /^[A-Za-z0-9-]{20,80}$/;
+/** Whether a request carries a private key: one rule for the rate limits (service.ts) and the lookup here. */
+export const isStudentKey = (value: unknown): value is string => typeof value === 'string' && STUDENT_KEY.test(value);
 const MAX_PLACES = 3;
 
 export interface FestDeps {
@@ -608,15 +610,17 @@ export class FestService {
    */
   private async ownRegistration(body: unknown, change: boolean): Promise<{ registration: FestRegistration; keyed: boolean }> {
     const id = normaliseFestId(text(isObject(body) ? body.id : '', 20));
-    const key = text(isObject(body) ? body.key : '', 80);
+    const rawKey = isObject(body) ? body.key : undefined;
     const parsed = parseFestId(id);
     const registration = parsed ? await this.deps.store.getRegistration(parsed.dept, id) : null;
-    if (key) {
-      if (!registration || registration.deleted || registration.source !== 'SELF' || !registration.sid || !sameSecret(registration.sid, key)) {
+    // Any key sent must be a real one: a malformed key never falls back to the mobile number.
+    if (rawKey !== undefined && rawKey !== null && rawKey !== '') {
+      if (!isStudentKey(rawKey) || !registration || registration.deleted || registration.source !== 'SELF' || !registration.sid || !sameSecret(registration.sid, rawKey)) {
         throw new ApiError(404, 'NOT_FOUND', 'This registration could not be found on this phone. Open "Already registered?" with your ID and mobile number.');
       }
       return { registration, keyed: true };
     }
+    // (Here, no key was sent.)
     const phone = readParticipant({ phone: isObject(body) ? body.phone : '' }).phone;
     if (!registration || registration.deleted || registration.phone !== phone) throw new ApiError(404, 'NOT_FOUND', 'No registration has that ID with that mobile number.');
     if (change) throw new ApiError(403, 'KEY_NEEDED', 'Change your events or transaction ID on the phone you registered with, or ask at a registration desk.');
