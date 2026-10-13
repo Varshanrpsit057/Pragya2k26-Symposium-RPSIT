@@ -79,7 +79,7 @@ import { buildReport } from './reports';
 import { requirePermission, type Actor } from './roles';
 import { RowNotFoundError, type SheetRow, type SheetsStore } from './sheets';
 import { StaffAccounts, staffCredential } from './staffAccounts';
-import { FestService } from './fest';
+import { FestService, isStudentKey } from './fest';
 import { MemoryFestStore, type FestStore } from './festStore';
 import { HelpDesk } from './helpDesk';
 import { StudentPortal } from './studentPortal';
@@ -458,7 +458,8 @@ export class Service {
       return this.fest.selfRegister(body);
     }
     await this.limit(`student:${ip}`, STUDENT_LIMIT, STUDENT_BUSY);
-    const keyed = typeof body === 'object' && body !== null && typeof (body as { key?: unknown }).key === 'string' && (body as { key: string }).key.length > 0;
+    // Keyed only with a well-formed private key (the same rule as the lookup in fest.ts).
+    const keyed = typeof body === 'object' && body !== null && isStudentKey((body as { key?: unknown }).key);
     if (!keyed) {
       const rawId = typeof body === 'object' && body !== null ? String((body as { id?: unknown }).id ?? '') : '';
       await this.limit(`student-lookup:${ip}`, LOOKUP_LIMIT, STUDENT_BUSY);
