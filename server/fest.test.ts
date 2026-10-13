@@ -159,7 +159,7 @@ describe('live data', () => {
     const overall = await h.staff('OVERALL');
 
     const hodView = await h.call('POST', '/api/admin/fest/sync', {}, { token: cse.hod.token });
-    expect(hodView.body).toMatchObject({ full: true, departments: ['CSE', 'OPEN'] }); // OPEN: students who registered themselves
+    expect(hodView.body).toMatchObject({ full: true, departments: ['CSE'] });
     expect(hodView.body.registrations.map((item: FestRegistration) => item.id)).toEqual(['CSE-0001']);
     expect((await h.call('POST', '/api/admin/fest/sync', { dept: 'IT' }, { token: cse.hod.token })).status).toBe(403);
 

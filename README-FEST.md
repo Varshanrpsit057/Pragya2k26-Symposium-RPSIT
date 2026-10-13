@@ -66,7 +66,7 @@ wrong department's page is told which page is theirs.
 ### The home page, the students' page and the events website
 
 pragya2k26.online's home page (`src/landing/Landing.tsx`) is the fest's front door on the PRAGYA sky
-background: the fest's name and date, **Register now** (to `/register/`) and **My registration ID** (to `/register/?my`: the
+background: the fest's name and date, **Register now** (a pop-up of the 8 departments, each to its form) and **My registration ID** (to `/register/?my`: the
 student's registration, by ID and mobile number), **Staff sign in** (to `/landing/admin/`), the department staff pages, the three steps
 for students, the **Notice on the website**, then the PRAGYA footer (Contact Us, Developed by,
 Follow Us, Location) and "Overall coordinated by the Department of Artificial Intelligence and Data
@@ -78,42 +78,44 @@ by another team member (the `pragya-events-site` project). When it has an addres
 `EVENTS_SITE_URL` at the top of `src/landing/Landing.tsx` to it and deploy: the home page then shows
 an **Events and route map** button.
 
-### Students who register themselves (IDs 20001…)
+### Students who register on their phones (IDs CSE-2001…)
 
-1. **The student**, on their own phone, opens https://pragya2k26.online/register/ (or **Register now**
-   on the home page): name, mobile number, college (with a searchable list), course, year, email and
-   team name (optional), then pays the
-   **₹100 entry fee by UPI** (a "Pay with a UPI app" button, the UPI ID to copy, and the QR) and types
-   the payment's **transaction ID (UTR)**. No staff sign-in, no screenshot.
-2. **They get their ID at once**, large on the screen: **20001, 20002…** (five digits, one series for
-   the whole fest, not tied to a department), with: *"Verify your payment at a payment verification
-   desk (show this ID), and you can register for events at each event's venue."* The ID stays on the
-   phone (it is there whenever they open the page again) and they can see it on any phone with
-   **My registration ID** / **Already registered?** (ID + mobile number; there it only shows: changes
-   are made on the phone that registered). If the connection drops while registering, what they
-   typed is kept; sending again never registers them twice.
-3. **Any desk of any department** opens **Registration desk → Verify payments (n)**: every
-   self-registered student waiting, oldest first, with the transaction ID they typed. The desk finds
-   the payment in the account receiving the money (same transaction ID, ₹100), corrects a typo in the
-   ID if needed, ticks **I have seen ₹100 received with this transaction ID** and taps **Verify**. A
-   transaction ID is accepted once only (a second student typing the same one is refused, naming who
-   has it). **Not found…** (with a reason) tells the student on their page, where they can send the
-   right transaction ID; it then comes back to the list.
+1. **The student**, on their own phone, taps **Register now** on the home page: a pop-up shows the
+   **8 departments**; they choose theirs (or open https://pragya2k26.online/register/, which asks for
+   the department first). Then: name, mobile number, college (with a searchable list), course, year,
+   email and team name (optional), the **₹100 entry fee by UPI** (a "Pay with a UPI app" button, the
+   UPI ID to copy, and the QR) and the payment's **transaction ID (UTR)**. No staff sign-in, no
+   screenshot, no events (they register for events at each venue).
+2. **They get their department's ID at once**, large on the screen: **CSE-2001, CSE-2002…**
+   (AI&DS-2001, CYBER-2001…), with: *"Verify your payment at a payment verification desk (show this
+   ID), and you can register for events at each event's venue."* The ID stays on the phone (it is
+   there whenever they open the page again) and they can see it on any phone with
+   **My registration ID** (ID + mobile number; there it only shows: changes are made on the phone that
+   registered). If the connection drops while registering, what they typed is kept; sending again
+   never registers them twice.
+3. **That department's desks** open **Registration desk → Verify payments (n)**: the students who
+   registered for the department on their phones, oldest first, with the transaction ID they typed.
+   The desk finds the payment in the account receiving the money (same transaction ID, ₹100),
+   corrects a typo in the ID if needed, ticks **I have seen ₹100 received with this transaction ID**
+   and taps **Verify**. A transaction ID is accepted once only, across the whole fest (a second
+   student typing the same one is refused, naming who has it). **Not found…** (with a reason) tells
+   the student on their page, where they can send the right transaction ID; it then comes back to
+   the list.
 4. **The student's page** shows *Verified* (it checks by itself every 45 seconds while waiting).
 5. **At the venue**, the student gives their ID: the event's coordinator adds them (**Add**, under
    "In the department but not in this event"), takes the ₹50 event fee and marks them present, as for
-   any student. Self-registered students may join **any department's** events; attendance needs the
-   payment verified.
+   any student of the department. Attendance needs the payment verified. A student who wants another
+   department's events registers in that department too (at its desk, or on the phone choosing it).
 
 **The account receiving the money:** every desk that verifies needs to see that account's incoming
 payments (the account holder's phone at the verification point, or each desk with access). Set the
 UPI ID and the account holder's name in **Departments & events** (top of the page); until set, the
 PRAGYA account is used.
 
-**Where they show:** every dashboard sees self-registered students (department views include those
-who joined one of the department's events). Filters: **Department → Self-registered**,
-**Registered → On their own phone**, **Entry fee → Waiting for a desk to check**. The overview has a
-**Payments to check** count and a *Self-registered* row in *By department*.
+**Where they show:** like any registration of the department: its desks, event coordinators, HOD
+and department admin, the overall coordinator and the web assist team. Filters: **Registered → On
+their own phone**, **Entry fee → Waiting for a desk to check**. The overview has a **Payments to
+check** count.
 
 ### Colleges (overall coordinator, HODs, department admins, web assist)
 
@@ -291,7 +293,7 @@ again, wait 15 minutes (each account may sign in 10 times per 15 minutes from on
 | **Overall coordinator** | `/landing/admin/` | Overview, Registrations, Results, Colleges, Roles | Every department live, with filters; winners; college-wise places; downloads; reopen submitted results; cancel an event fee recorded by mistake |
 | **HOD** | their department page | Overview, Registrations, Results, Colleges, Roles | Their department live (with the self-registered students in its events), read only |
 | **Department admin** | their department page | Overview, Registrations, Results, Colleges, Register, Event windows, Online & paper, Roles | Upload online registrations, paper slips, register, verify payments, correct details, change events, cancel, any event of the department |
-| **Registration desk** | their department page | Registration desk, Roles | **Verify payments** of students who registered themselves (any department's), register walk-ins (works with no signal), find and check in online registrants, add events to a student, desk totals |
+| **Registration desk** | their department page | Registration desk, Roles | **Verify payments** of students who registered for the department on their phones, register walk-ins (works with no signal), find and check in online registrants, add events to a student, desk totals |
 | **Event coordinator** | their department page (or their event link) | My events, Roles | Their event: students, ₹50 fee, attendance, add a department student, winners, submit |
 
 - The **Roles** section in the dashboard shows the same list, read from the code the server enforces.
@@ -454,10 +456,10 @@ Every student gets one ID in the department they register with. The ID tells you
 
 | ID | Where it came from |
 | --- | --- |
-| `CSE-0001` … `CSE-4999` | Registered at a desk |
+| `CSE-0001` … `CSE-1999` | Registered at a desk |
+| `CSE-2001` … `CSE-4999` | Registered on their own phone (chose the department in the pop-up) |
 | `CSE-5001` … `CSE-8999` | Online (Netlify form), uploaded by the department admin |
 | `CSE-9001` … `CSE-9999` | Paper slip (when the phones could not be used) |
-| `20001`, `20002` … | Registered themselves on their phone (one series for the whole fest; any department's events) |
 
 - **One mobile number is registered once per department.** Registering it again shows the existing
   ID instead.
@@ -473,7 +475,7 @@ with no signal:
 1. When a desk phone signs in it takes a block of **50 IDs** (for example `CSE-0051` to `CSE-0100`).
 2. When **15** are left, it takes the next 50 by itself the next time it has signal. You don't do
    anything, and nobody else gets the same numbers.
-3. A department has **4,999 desk IDs** in total, far more than needed.
+3. A department has **1,999 desk IDs** in total, far more than needed.
 
 So the gaps you may see (desk 1 used 0001–0037, desk 2 started at 0051) are normal: IDs are unique,
 not consecutive.
@@ -682,7 +684,7 @@ Changing a password, deactivating or deleting an account signs that person out a
 | **A student lost their ID** | Any desk: **Find & check in** by mobile number or name, or the student opens **Already registered?** on the students' page with their mobile number and ID. |
 | **"This mobile number is already registered"** | They registered before (on their phone, online or at a desk): find them at a desk by mobile number. |
 | **The payment is not in the account** | **Not found…** with a reason ("not received", "wrong amount"): the student sees it and can send the right transaction ID, or pays at the desk (the desk takes cash and checks them in). |
-| **"This transaction ID was already accepted for 2000x"** | Two students typed the same payment. Ask for the student's own payment screen; correct the transaction ID in the box and verify. |
+| **"This transaction ID was already accepted for CSE-20xx"** | Two students typed the same payment. Ask for the student's own payment screen; correct the transaction ID in the box and verify. |
 | **"The entry fee is not verified yet" at a venue** | Send the student to a desk to verify their payment first. |
 | **Students' page says the server is busy** | Many students at once: try again in a moment. Check the Lambda limit (2.3). |
 
@@ -742,7 +744,7 @@ Changing a password, deactivating or deleting an account signs that person out a
 | Coordinators per event | 2 (more can be added) |
 | Entry fee / event fee | ₹100 / ₹50 (changeable in **Departments & events**) |
 | Phones at once | built for ~300, on mobile data |
-| Registrations | 1,000+ (each department up to 4,999 desk, 3,999 online and 999 paper IDs) |
+| Registrations | 1,000+ (each department up to 1,999 desk, 2,999 phone, 3,999 online and 999 paper IDs) |
 | Live updates | every 15 seconds, only what changed |
 | Session length | 16 hours |
 | IDs per desk phone block | 50, topped up at 15 left |

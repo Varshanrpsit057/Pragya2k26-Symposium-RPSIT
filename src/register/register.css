@@ -327,7 +327,9 @@ body {
 }
 
 .reg-idcard__id {
-  font-size: clamp(3.2rem, 18vw, 4.75rem);
+  /* One line, however long the department's code (AI&DS-2001) */
+  font-size: clamp(2.2rem, 12.5vw, 4rem);
+  white-space: nowrap;
   font-weight: 800;
   font-variant-numeric: tabular-nums;
   letter-spacing: 0.06em;
@@ -429,4 +431,66 @@ body {
 
 .reg-foot a {
   color: var(--r-muted);
+}
+
+/* The department: chosen first (it decides which desks and coordinators see the student) */
+.reg-depts {
+  display: grid;
+  gap: 0.6rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.reg-depts button {
+  display: grid;
+  grid-template-columns: 4.5rem 1fr;
+  gap: 0.6rem;
+  align-items: center;
+  width: 100%;
+  min-height: 3.4rem;
+  padding: 0.7rem 0.9rem;
+  border: 1px solid var(--r-line);
+  border-radius: 12px;
+  color: var(--r-ink);
+  font: inherit;
+  text-align: left;
+  background: var(--r-surface);
+  cursor: pointer;
+}
+
+.reg-depts button:hover,
+.reg-depts button:focus-visible {
+  border-color: var(--r-accent);
+  background: var(--r-surface-2);
+  outline: none;
+}
+
+.reg-depts strong {
+  font-size: 1.05rem;
+}
+
+.reg-depts span {
+  color: var(--r-muted);
+  line-height: 1.35;
+}
+
+.reg-chosen {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem 0.75rem;
+  align-items: center;
+  margin: 0;
+  padding: 0.6rem 0.85rem;
+  border: 1px solid rgb(140 108 255 / 0.5);
+  border-radius: 12px;
+  background: rgb(140 108 255 / 0.12);
+}
+
+.reg-idcard__dept {
+  padding: 0.1rem 0.6rem;
+  border: 1px solid var(--r-line);
+  border-radius: 999px;
+  color: var(--r-ink);
+  font-weight: 700;
 }

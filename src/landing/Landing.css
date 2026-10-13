@@ -386,3 +386,91 @@
 .landing-coordinated strong {
   color: #edefff;
 }
+
+/* Register now: the departments in a pop-up */
+.landing-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  display: grid;
+  place-items: center;
+  padding: 1rem;
+  background: rgb(3 4 20 / 0.72);
+  backdrop-filter: blur(4px);
+}
+
+.landing-modal__panel {
+  width: min(100%, 30rem);
+  max-height: calc(100dvh - 2rem);
+  overflow-y: auto;
+  padding: 1.4rem 1.25rem 1.1rem;
+  border: 1px solid rgb(160 170 255 / 0.3);
+  border-radius: 1.1rem;
+  color: #edefff;
+  font-family: var(--font);
+  background: linear-gradient(170deg, #161a52, #0b0d2b);
+  box-shadow: 0 30px 80px -30px rgb(0 0 0 / 0.8);
+}
+
+.landing-modal__panel h2 {
+  margin: 0;
+  font-size: 1.35rem;
+  font-stretch: 112%;
+}
+
+.landing-modal__panel p {
+  margin: 0.35rem 0 1rem;
+  color: #a3a8cc;
+}
+
+.landing-modal__list {
+  display: grid;
+  gap: 0.5rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.landing-modal__list a {
+  display: grid;
+  grid-template-columns: 4.6rem 1fr;
+  gap: 0.6rem;
+  align-items: center;
+  min-height: 3.2rem;
+  padding: 0.6rem 0.85rem;
+  border: 1px solid rgb(160 170 255 / 0.2);
+  border-radius: 0.8rem;
+  color: inherit;
+  text-decoration: none;
+  background: rgb(255 255 255 / 0.03);
+}
+
+.landing-modal__list a:hover,
+.landing-modal__list a:focus-visible {
+  border-color: #8c6cff;
+  background: rgb(140 108 255 / 0.16);
+  outline: none;
+}
+
+.landing-modal__code {
+  font-weight: 800;
+  font-stretch: 120%;
+}
+
+.landing-modal__name {
+  color: #c4c8ec;
+  line-height: 1.35;
+}
+
+.landing-modal__close {
+  width: 100%;
+  min-height: 2.8rem;
+  margin-top: 0.9rem;
+  border: 1px solid rgb(160 170 255 / 0.3);
+  border-radius: 0.8rem;
+  color: #edefff;
+  font: inherit;
+  font-weight: 600;
+  background: transparent;
+  cursor: pointer;
+}

@@ -26,6 +26,8 @@ export interface PublicInfo {
 
 export interface SelfRegistration {
   submissionId: string;
+  /** The department they register for (its desks and event coordinators see them). */
+  dept: string;
   participant: { name: string; phone: string; email: string; college: string; branch: string; year: string; team: string };
   events: string[];
   txn: string;

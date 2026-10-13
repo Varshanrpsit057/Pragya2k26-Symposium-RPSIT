@@ -63,6 +63,16 @@ export function RegisterApp() {
   // "My registration ID" on the home page comes here as /register/?my: straight to the registration
   // (this phone's own if it registered here, otherwise the ID and mobile number).
   const [signingIn, setSigningIn] = useState(() => typeof window !== 'undefined' && new URLSearchParams(window.location.search).has('my'));
+  // The department chosen in the home page's pop-up (/register/?dept=CSE), or here first.
+  const [dept, setDept] = useState(() => (typeof window !== 'undefined' ? (new URLSearchParams(window.location.search).get('dept') ?? '').toUpperCase() : ''));
+  const chooseDept = (code: string) => {
+    setDept(code);
+    try {
+      window.history.replaceState(null, '', code ? `?dept=${code}` : window.location.pathname);
+    } catch {
+      // Only the address bar: nothing else depends on it.
+    }
+  };
 
   const loadInfo = useCallback(
     () =>
@@ -114,8 +124,16 @@ export function RegisterApp() {
               Already registered? See your registration
             </button>
           </Panel>
+        ) : !info.departments.some((item) => item.code === dept) ? (
+          <ChooseDepartment info={info} onChoose={chooseDept} onSignIn={() => setSigningIn(true)} />
         ) : (
-          <RegisterForm info={info} onRegistered={(view, phone, key) => remember({ id: view.id, phone, key })} onSignIn={() => setSigningIn(true)} />
+          <RegisterForm
+            info={info}
+            dept={dept}
+            onChangeDept={() => chooseDept('')}
+            onRegistered={(view, phone, key) => remember({ id: view.id, phone, key })}
+            onSignIn={() => setSigningIn(true)}
+          />
         )}
       </main>
       <footer className="reg-foot">
@@ -137,7 +155,43 @@ function Panel({ title, children }: { title: string; children: ReactNode }) {
 
 // ------------------------------------------------------------------------------------------ the form
 
-function RegisterForm({ info, onRegistered, onSignIn }: { info: PublicInfo; onRegistered: (view: StudentView, phone: string, key: string) => void; onSignIn: () => void }) {
+/** First, the department: the student registers for one, and its desks and event coordinators see them. */
+function ChooseDepartment({ info, onChoose, onSignIn }: { info: PublicInfo; onChoose: (code: string) => void; onSignIn: () => void }) {
+  return (
+    <section className="reg-panel">
+      <h1 className="reg-h1">Choose your department</h1>
+      <p className="reg-lead">You register for one department and take part in its events. Its registration desk checks your payment.</p>
+      <ul className="reg-depts">
+        {info.departments.map((item) => (
+          <li key={item.code}>
+            <button type="button" onClick={() => onChoose(item.code)}>
+              <strong>{deptShort(item.code)}</strong>
+              <span>{item.name}</span>
+            </button>
+          </li>
+        ))}
+      </ul>
+      <button className="reg-link" type="button" onClick={onSignIn}>
+        Already registered? See your registration
+      </button>
+    </section>
+  );
+}
+
+function RegisterForm({
+  info,
+  dept,
+  onChangeDept,
+  onRegistered,
+  onSignIn,
+}: {
+  info: PublicInfo;
+  dept: string;
+  onChangeDept: () => void;
+  onRegistered: (view: StudentView, phone: string, key: string) => void;
+  onSignIn: () => void;
+}) {
+  const deptName = info.departments.find((item) => item.code === dept)?.name ?? '';
   const [draft, setDraft] = useState<Draft>(() => ({ ...emptyDraft(), ...read<Draft>(DRAFT) }));
   const [tried, setTried] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -170,7 +224,7 @@ function RegisterForm({ info, onRegistered, onSignIn }: { info: PublicInfo; onRe
     }
     setBusy(true);
     try {
-      const view = await registerSelf({ submissionId: draft.submissionId, participant, events: [], txn });
+      const view = await registerSelf({ submissionId: draft.submissionId, dept, participant, events: [], txn });
       write(DRAFT, null);
       onRegistered(view, participant.phone, draft.submissionId);
     } catch (failure) {
@@ -183,6 +237,14 @@ function RegisterForm({ info, onRegistered, onSignIn }: { info: PublicInfo; onRe
   return (
     <form className="reg-panel" noValidate onSubmit={(event) => void submit(event)}>
       <h1 className="reg-h1">Register for the fest</h1>
+      <p className="reg-chosen">
+        <span>
+          Department <strong>{deptShort(dept)}</strong> · {deptName}
+        </span>
+        <button className="reg-link" type="button" onClick={onChangeDept}>
+          Change
+        </button>
+      </p>
       <p className="reg-lead">
         Fill in your details, pay the {rupees(info.entryFee)} entry fee by UPI, and type its transaction ID. You get your registration ID at once.
       </p>
@@ -305,7 +367,7 @@ function SignIn({ onDone, onBack }: { onDone: (saved: Saved) => void; onBack: ()
       <h1 className="reg-h1">Your registration</h1>
       <p className="reg-lead">Type your registration ID and the mobile number you registered with.</p>
       <Field label="Registration ID">
-        <input value={id} inputMode="numeric" placeholder="e.g. 20017" autoComplete="off" onChange={(event) => setId(event.target.value)} />
+        <input value={id} autoCapitalize="characters" placeholder="e.g. CSE-2017" autoComplete="off" onChange={(event) => setId(event.target.value)} />
       </Field>
       <Field label="Mobile number">
         <input value={phone} type="tel" inputMode="numeric" autoComplete="tel-national" onChange={(event) => setPhone(event.target.value)} />
@@ -380,6 +442,7 @@ function MyRegistration({ saved, info, onForget }: { saved: Saved; info: PublicI
         <strong className="reg-idcard__id">{showId(saved.id)}</strong>
         {view && <span className="reg-idcard__name">{view.name}</span>}
         {view && <span className="reg-idcard__college">{view.college}</span>}
+        {view && <span className="reg-idcard__dept">{deptShort(view.dept)}</span>}
         {status && <span className={`reg-status reg-status--${status.tone}`}>{status.label}</span>}
       </div>
 

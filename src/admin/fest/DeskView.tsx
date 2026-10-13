@@ -5,7 +5,7 @@
  */
 import { useMemo, useState, type FormEvent } from 'react';
 import { NEARBY_COLLEGES, OTHER_COLLEGES } from '../../content/colleges';
-import { awaitingCheck, deptShort, eventLabel, eventsOf, isActive, normaliseFestId, OPEN_DEPT, parseFestId, participantProblems, readParticipant, rupees, showId, sourceOfNumber, teamRule, tidyPhone, YEARS, type FestParticipant, type FestRegistration } from '../../lib/fest';
+import { awaitingCheck, deptShort, eventLabel, eventsOf, isActive, normaliseFestId, parseFestId, participantProblems, readParticipant, rupees, showId, sourceOfNumber, teamRule, tidyPhone, YEARS, type FestParticipant, type FestRegistration } from '../../lib/fest';
 import { hasPermission } from '../../lib/staff';
 import { Badge, when } from '../ui';
 import { useFest } from './FestData';
@@ -43,7 +43,7 @@ export function DeskView() {
   const [dept, setDept, canPick] = useWorkDept();
   const { registrations } = useFest();
   const [tab, setTab] = useState<'verify' | 'register' | 'find' | 'totals'>('verify');
-  const waiting = useMemo(() => [...registrations.values()].filter(awaitingCheck).length, [registrations]);
+  const waiting = useMemo(() => [...registrations.values()].filter((item) => awaitingCheck(item) && item.dept === dept).length, [registrations, dept]);
   return (
     <main className="adm-page fest-desk">
       {canPick && <DeptPicker value={dept} onChange={setDept} />}
@@ -65,7 +65,7 @@ export function DeskView() {
               </button>
             ))}
           </nav>
-          {tab === 'verify' && <VerifyPayments />}
+          {tab === 'verify' && <VerifyPayments dept={dept} />}
           {tab === 'register' && <RegisterForm dept={dept} />}
           {tab === 'find' && <FindAndCheckIn dept={dept} />}
           {tab === 'totals' && <DeskTotals dept={dept} />}
@@ -89,7 +89,7 @@ export function RegisterForm({ dept, paper = false }: { dept: string; paper?: bo
   const participant = readParticipant(form);
   const problems = participantProblems(participant);
   const phone = tidyPhone(form.phone);
-  const already = phone.length === 10 ? [...registrations.values()].find((item) => (item.dept === dept || item.dept === OPEN_DEPT) && item.phone === phone && !item.deleted) : undefined;
+  const already = phone.length === 10 ? [...registrations.values()].find((item) => item.dept === dept && item.phone === phone && !item.deleted) : undefined;
   const teamAllowed = events.some((id) => (deptEvents.find((event) => event.id === id)?.teamMax ?? 1) > 1);
   const left = paper ? 1 : idsLeft(dept);
   const slip = normaliseFestId(slipId);
@@ -245,7 +245,7 @@ function FindAndCheckIn({ dept }: { dept: string }) {
     () =>
       query.trim().length < 2
         ? []
-        : [...registrations.values()].filter((item) => (item.dept === dept || item.dept === OPEN_DEPT) && !item.deleted && matches(item, query)).sort((a, b) => a.id.localeCompare(b.id)),
+        : [...registrations.values()].filter((item) => item.dept === dept && !item.deleted && matches(item, query)).sort((a, b) => a.id.localeCompare(b.id)),
     [registrations, dept, query],
   );
   if (!catalog) return null;
@@ -306,7 +306,7 @@ function FindAndCheckIn({ dept }: { dept: string }) {
                   </span>
                 </div>
               )}
-              {canEdit && isActive(registration) && registration.dept !== OPEN_DEPT && (adding === registration.id ? (
+              {canEdit && isActive(registration) && (adding === registration.id ? (
                 <span className="adm-inline adm-inline--wrap">
                   {deptEvents
                     .filter((event) => !registration.events.some((entry) => entry.eventId === event.id))
@@ -347,10 +347,14 @@ function FindAndCheckIn({ dept }: { dept: string }) {
  * Students who registered themselves and typed their UPI transaction ID: the desk finds each
  * payment in the receiving account by that ID and amount, then verifies it (or says it was not found).
  */
-function VerifyPayments() {
+function VerifyPayments({ dept }: { dept: string }) {
   const { registrations } = useFest();
   const [query, setQuery] = useState('');
-  const waiting = useMemo(() => [...registrations.values()].filter(awaitingCheck).sort((a, b) => a.created.at.localeCompare(b.created.at)), [registrations]);
+  // The students who registered for this department on their phones.
+  const waiting = useMemo(
+    () => [...registrations.values()].filter((item) => awaitingCheck(item) && item.dept === dept).sort((a, b) => a.created.at.localeCompare(b.created.at)),
+    [registrations, dept],
+  );
   const shown = query.trim() ? waiting.filter((item) => matches(item, query)) : waiting;
   return (
     <section className="adm-card adm-pad">
@@ -360,7 +364,7 @@ function VerifyPayments() {
       </p>
       <label className="adm-field">
         <span>Find</span>
-        <input type="search" value={query} placeholder="ID (20001…), name, phone or transaction ID" onChange={(event) => setQuery(event.target.value)} />
+        <input type="search" value={query} placeholder={`ID (${deptShort(dept)}-2001…), name, phone or transaction ID`} onChange={(event) => setQuery(event.target.value)} />
       </label>
       <ShortList items={shown} empty={waiting.length ? 'Nobody matches.' : 'No payments waiting. New ones appear here by themselves.'} render={(registration) => (
         <RegistrationCard key={registration.id} registration={registration}>
@@ -434,7 +438,7 @@ function VerifyBox({ registration }: { registration: FestRegistration }) {
 
 function DeskTotals({ dept }: { dept: string }) {
   const { registrations, session, catalog } = useFest();
-  const mine = useMemo(() => [...registrations.values()].filter((item) => (item.dept === dept || item.dept === OPEN_DEPT) && isActive(item)), [registrations, dept]);
+  const mine = useMemo(() => [...registrations.values()].filter((item) => item.dept === dept && isActive(item)), [registrations, dept]);
   const me = session.username;
   let cash = 0;
   let upi = 0;

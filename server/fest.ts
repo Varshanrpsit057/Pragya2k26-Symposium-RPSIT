@@ -11,12 +11,13 @@
  *
  * Every rule is checked here; the dashboards only hide what a role cannot use.
  */
-import { canJoin, catalogProblem, DEFAULT_CATALOG, DEFAULT_UPI, departmentOf, deptShort, entryOf, eventOf, feePaid, formatFestId, ID_BLOCK, ID_RANGES, isActive, matchEvents, normaliseFestId, OPEN_DEPT, parseFestId, participantProblems, readParticipant, showId, sourceOfNumber, toStudentView, TXN, type FestCatalog, type FestDepartment, type FestEvent, type FestMethod, type FestParticipant, type FestPayment, type FestPlace, type FestRegistration, type FestResult, type FestSource, type FestStamp } from '../src/lib/fest';
+import { canJoin, catalogProblem, DEFAULT_CATALOG, DEFAULT_UPI, departmentOf, deptShort, entryOf, eventOf, feePaid, formatFestId, ID_BLOCK, ID_RANGES, isActive, matchEvents, normaliseFestId, parseFestId, participantProblems, readParticipant, showId, sourceOfNumber, toStudentView, TXN, type FestCatalog, type FestDepartment, type FestEvent, type FestMethod, type FestParticipant, type FestPayment, type FestPlace, type FestRegistration, type FestResult, type FestSource, type FestStamp } from '../src/lib/fest';
 import { timingSafeEqual } from 'node:crypto';
 import { formatIst, parseEventStart } from '../src/lib/countdown';
 import { registrationPhase, type RegistrationSchedule } from '../src/lib/schedule';
 import { DEPARTMENT_ROLES, hasPermission, type Permission } from '../src/lib/staff';
 import { ApiError } from './errors';
+import { TXN_SCOPE } from './festStore';
 import type { FileStore } from './files';
 import type { FestStore } from './festStore';
 import { requirePermission, type Actor } from './roles';
@@ -30,7 +31,6 @@ const CLEAR_BATCH = 250;
 const PURGE_PARALLEL = 20;
 /** Who made a change from a student's own page. */
 const STUDENT = 'student';
-const ALREADY_SELF = 'This mobile number is already registered. Open "Already registered?" with your ID, or ask at any registration desk.';
 /** How long an instance trusts the catalog it read. */
 const CATALOG_TTL_MS = 10_000;
 /** Each sync returns what changed since a little before the last one, so nothing written meanwhile is missed. */
@@ -152,16 +152,14 @@ export class FestService {
   private async viewDepartments(actor: Actor, requested: unknown): Promise<string[]> {
     const catalog = await this.catalog();
     const wanted = text(requested, 6).toUpperCase();
-    // Students who registered themselves can join any department's events: everyone sees them.
     if (hasPermission(actor.role, 'fest.viewAll')) {
-      if (!wanted) return [...catalog.departments.map((dept) => dept.code), OPEN_DEPT];
-      if (wanted === OPEN_DEPT) return [OPEN_DEPT];
+      if (!wanted) return catalog.departments.map((dept) => dept.code);
       if (!departmentOf(catalog, wanted)) throw new ApiError(404, 'NOT_FOUND', 'There is no such department.');
-      return [wanted, OPEN_DEPT];
+      return [wanted];
     }
     const own = this.ownDepartment(actor);
-    if (wanted && wanted !== own && wanted !== OPEN_DEPT) throw new ApiError(403, 'OTHER_DEPARTMENT', `Your account is for ${deptShort(own)}.`);
-    return [own, OPEN_DEPT];
+    if (wanted && wanted !== own) throw new ApiError(403, 'OTHER_DEPARTMENT', `Your account is for ${deptShort(own)}.`);
+    return [own];
   }
 
   private ownDepartment(actor: Actor): string {
@@ -387,8 +385,7 @@ export class FestService {
     };
     if (typeof action !== 'string' || !needs[action]) throw new ApiError(400, 'INVALID', 'Choose what to do.');
     requirePermission(actor, needs[action]);
-    // Self-registered students belong to no department: any department's desk may verify them.
-    if (dept !== OPEN_DEPT) await this.workDepartment(actor, dept);
+    await this.workDepartment(actor, dept);
     const input = body as Record<string, unknown>;
     const catalog = await this.catalog();
     const stamp = this.stamp(actor);
@@ -410,7 +407,7 @@ export class FestService {
       const txn = (text(input.txn, 40) || claim.txn).replace(/\s/g, '');
       if (!TXN.test(txn)) throw new ApiError(400, 'INVALID', 'Type the transaction ID as it appears in the payment.');
       if (input.confirmed !== true) throw new ApiError(400, 'INVALID', `Tick that you have seen ₹${claim.amount} received with this transaction ID.`);
-      const holder = await this.deps.store.claimTxn(OPEN_DEPT, txn, id);
+      const holder = await this.deps.store.claimTxn(TXN_SCOPE, txn, id);
       if (holder && holder !== id) throw new ApiError(409, 'TXN_USED', `This transaction ID was already accepted for ${showId(holder)}.`, undefined, undefined, { existingId: holder });
       try {
         return await this.mutate(dept, id, (registration) => {
@@ -421,7 +418,7 @@ export class FestService {
           return { next: { entry: { status: 'PAID', payment, claim: registration.entry.claim }, checkedIn: registration.checkedIn ?? { ...stamp, ...(desk && { desk }) } } };
         });
       } catch (error) {
-        await this.deps.store.releaseTxn(OPEN_DEPT, txn, id);
+        await this.deps.store.releaseTxn(TXN_SCOPE, txn, id);
         throw error;
       }
     }
@@ -516,39 +513,39 @@ export class FestService {
     };
   }
 
-  /** A student registers themselves: an ID from 20001, any department's events, the entry fee's transaction ID for a desk to check. */
+  /**
+   * A student registers themselves for a department: an ID of that department (CSE-2001…), the entry
+   * fee's transaction ID for one of its desks to check; its event coordinators take them in.
+   */
   async selfRegister(body: unknown) {
     if (!isObject(body)) throw new ApiError(400, 'INVALID', 'The registration could not be read.');
     if (registrationPhase(this.deps.schedule, this.deps.now()) === 'closed') throw new ApiError(403, 'ONSITE_CLOSED', this.closedMessage());
+    const catalog = await this.catalog();
+    const department = departmentOf(catalog, text(body.dept, 6).toUpperCase());
+    if (!department || !department.active) throw new ApiError(400, 'INVALID', 'Choose your department.', undefined, undefined, { dept: 'Choose your department.' });
+    const dept = department.code;
     // The phone's submission id is also the private key of the student's page (only that phone has it).
     const submissionId = text(body.submissionId, 80);
     if (!STUDENT_KEY.test(submissionId)) throw new ApiError(400, 'INVALID', 'The registration could not be read. Please try again.');
-    const replay = await this.deps.store.findSubmission(OPEN_DEPT, submissionId);
-    if (replay) return { success: true as const, registration: toStudentView(await this.required(OPEN_DEPT, replay), true), replayed: true };
+    const replay = await this.deps.store.findSubmission(dept, submissionId);
+    if (replay) return { success: true as const, registration: toStudentView(await this.required(dept, replay), true), replayed: true };
 
     const participant = readParticipant(body.participant);
     const problems = participantProblems(participant);
     if (Object.keys(problems).length) throw new ApiError(400, 'INVALID', Object.values(problems)[0]!, undefined, undefined, problems as Record<string, string>);
-    const catalog = await this.catalog();
-    const eventIds = this.readEventIds(catalog, OPEN_DEPT, body.events);
+    const eventIds = this.readEventIds(catalog, dept, body.events);
     await this.ensureOpenEvents(eventIds);
     const txn = text(body.txn, 40).replace(/\s/g, '');
     if (!TXN.test(txn)) throw new ApiError(400, 'INVALID', 'Type the UPI transaction ID (UTR) from your payment.', undefined, undefined, { txn: 'Type the UPI transaction ID (UTR) from your payment.' });
 
-    // Already registered somewhere (online, at a desk, or here)? Then a desk takes it from there.
-    const codes = [...catalog.departments.map((dept) => dept.code), OPEN_DEPT];
-    const holders = await Promise.all(codes.map(async (dept) => ((await this.deps.store.findPhone(dept, participant.phone)) ? dept : null)));
-    const holder = holders.find(Boolean);
-    if (holder) throw new ApiError(409, 'DUPLICATE_PHONE', holder === OPEN_DEPT ? ALREADY_SELF : `This mobile number is already registered with ${deptShort(holder)}. Go to a registration desk with it.`);
-
     const stamp: FestStamp = { at: this.iso(), by: STUDENT };
     const mark = await this.deps.testMark();
     for (let attempt = 0; attempt < 5; attempt += 1) {
-      const number = await this.deps.store.takeNumbers(OPEN_DEPT, 'SELF', 1);
-      if (number > ID_RANGES.SELF.last) throw new ApiError(409, 'IDS_EXHAUSTED', 'Registration is full. Please go to a registration desk.');
+      const number = await this.deps.store.takeNumbers(dept, 'SELF', 1);
+      if (number > ID_RANGES.SELF.last) throw new ApiError(409, 'IDS_EXHAUSTED', `${deptShort(dept)} registration on phones is full. Please go to a ${deptShort(dept)} registration desk.`);
       const registration: FestRegistration = {
-        id: String(number),
-        dept: OPEN_DEPT,
+        id: formatFestId(dept, number),
+        dept,
         source: 'SELF',
         ...participant,
         entry: { status: 'DUE', claim: { txn, amount: catalog.entryFee, at: stamp.at } },
@@ -564,8 +561,11 @@ export class FestService {
         this.deps.log('Fest self-registration', { id: registration.id, events: eventIds.length, ...(registration.test && { test: true }) });
         return { success: true as const, registration: toStudentView(registration, true), replayed: false };
       }
-      if (created.reason === 'submission') return { success: true as const, registration: toStudentView(await this.required(OPEN_DEPT, created.existingId!), true), replayed: true };
-      if (created.reason === 'phone') throw new ApiError(409, 'DUPLICATE_PHONE', ALREADY_SELF);
+      if (created.reason === 'submission') return { success: true as const, registration: toStudentView(await this.required(dept, created.existingId!), true), replayed: true };
+      if (created.reason === 'phone') {
+        // Never says whose ID it is: the student finds it with "My registration ID", or at a desk.
+        throw new ApiError(409, 'DUPLICATE_PHONE', `This mobile number is already registered in ${deptShort(dept)}. Open "My registration ID", or go to a ${deptShort(dept)} registration desk.`);
+      }
       // 'id': that number is taken (e.g. after test data was cleared): take the next one.
     }
     throw new ApiError(409, 'BUSY', 'Registration is busy. Please try again.');
@@ -735,8 +735,8 @@ export class FestService {
       if (ids.length > event.teamMax) throw new ApiError(400, 'INVALID', `${event.name} allows teams of up to ${event.teamMax}.`);
       for (const id of ids) {
         const owner = parseFestId(id);
-        const registration = owner && canJoin(owner, event) ? await this.deps.store.getRegistration(owner.dept, id) : null;
-        const entry = registration && isActive(registration) ? entryOf(registration, event.id) : null;
+        const registration = owner ? await this.deps.store.getRegistration(owner.dept, id) : null;
+        const entry = registration && canJoin(registration, event) && isActive(registration) ? entryOf(registration, event.id) : null;
         if (!entry) throw new ApiError(400, 'INVALID', `${showId(id)} is not registered for ${event.name}.`);
         if (!entry.present) throw new ApiError(400, 'INVALID', `${showId(id)} is not marked present at ${event.name}.`);
       }
@@ -838,7 +838,7 @@ export class FestService {
     const catalog = await this.catalog();
     const withResults = isObject(body) && body.results === true;
     const limit = Math.min(Math.max(int(isObject(body) ? body.limit : undefined, CLEAR_BATCH), 1), 500);
-    const codes = [...catalog.departments.map((dept) => dept.code), OPEN_DEPT];
+    const codes = catalog.departments.map((dept) => dept.code);
     const everything = await Promise.all(codes.map(async (dept) => ({ dept, ...(await this.deps.store.changes(dept, '')) })));
     const tests = everything.flatMap((part) => part.registrations.filter((registration) => registration.test));
     const batch = tests.slice(0, limit);
@@ -863,7 +863,7 @@ export class FestService {
       // Departments left with no registrations start their IDs again.
       for (const part of everything) {
         if (part.registrations.some((registration) => !registration.test)) continue;
-        const sources: FestSource[] = part.dept === OPEN_DEPT ? ['SELF'] : ['DESK', 'ONLINE', 'PAPER'];
+        const sources: FestSource[] = ['DESK', 'SELF', 'ONLINE', 'PAPER'];
         await Promise.all(sources.map((source) => this.deps.store.resetCounter(part.dept, source)));
         restarted.push(part.dept);
       }
@@ -877,7 +877,7 @@ export class FestService {
   /** Every department's data to a private file (S3 keeps each earlier version): run by the schedule. */
   async backup() {
     const catalog = await this.catalog();
-    const parts = await Promise.all([...catalog.departments.map((dept) => dept.code), OPEN_DEPT].map((dept) => this.deps.store.changes(dept, '')));
+    const parts = await Promise.all(catalog.departments.map((dept) => this.deps.store.changes(dept.code, '')));
     const data = { at: this.iso(), catalog, registrations: parts.flatMap((part) => part.registrations), results: parts.flatMap((part) => part.results) };
     await this.deps.files.put('backups/fest/all.json', new TextEncoder().encode(JSON.stringify(data)), 'application/json');
     return { registrations: data.registrations.length, results: data.results.length };

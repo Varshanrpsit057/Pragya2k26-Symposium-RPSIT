@@ -1,4 +1,4 @@
-import { render, screen, within } from '@testing-library/react';
+import { fireEvent, render, screen, within } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
 import { Landing } from './Landing';
 
@@ -36,5 +36,17 @@ describe('the front door (pragya2k26.online)', () => {
     expect(screen.getByRole('heading', { name: 'Location' })).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'Follow Us' })).toBeInTheDocument();
     expect(screen.getByText(/Overall coordinated by the/)).toHaveTextContent('Overall coordinated by the Department of Artificial Intelligence and Data Science');
+  });
+
+  it('opens the 8 departments in a pop-up from Register now; each goes to its registration form', () => {
+    render(<Landing />);
+    fireEvent.click(screen.getByRole('link', { name: 'Register now' }));
+    const dialog = screen.getByRole('dialog', { name: 'Choose your department' });
+    const links = within(dialog).getAllByRole('link');
+    expect(links.map((link) => link.getAttribute('href'))).toEqual(['CSE', 'AIDS', 'IT', 'ECE', 'CYS', 'EEE', 'MECH', 'SH'].map((code) => `/register/?dept=${code}`));
+    expect(within(dialog).getByRole('link', { name: /^AI&DS/ })).toBeInTheDocument();
+    expect(within(dialog).getByRole('link', { name: /^CYBER/ })).toBeInTheDocument();
+    fireEvent.keyDown(window, { key: 'Escape' });
+    expect(screen.queryByRole('dialog')).toBeNull();
   });
 });

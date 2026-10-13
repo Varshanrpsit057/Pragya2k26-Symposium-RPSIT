@@ -9,7 +9,7 @@
  * - Colleges: students per college and the 1st, 2nd and 3rd places each college won
  */
 import { useMemo, useState } from 'react';
-import { canJoin, collegeSummary, deptShort, eventLabel, eventOf, feePaid, isActive, OPEN_DEPT, participantProblems, readParticipant, rupees, showId, toCsv, totalsOf, type CollegeRow, type FestCatalog, type FestEvent, type FestParticipant, type FestRegistration } from '../../lib/fest';
+import { canJoin, collegeSummary, deptShort, eventLabel, eventOf, feePaid, isActive, participantProblems, readParticipant, rupees, showId, toCsv, totalsOf, type CollegeRow, type FestCatalog, type FestEvent, type FestParticipant, type FestRegistration } from '../../lib/fest';
 import { hasPermission } from '../../lib/staff';
 import { Badge, saveFile, when } from '../ui';
 import { ordinal } from './EventWindow';
@@ -70,9 +70,8 @@ export function FestOverview() {
                 </tr>
               </thead>
               <tbody>
-                {[...catalog.departments, { code: OPEN_DEPT, name: 'Self-registered (any department)' }].map((dept) => {
-                  // Each department's own registrations (self-registered students have their own row).
-                  const part = totalsOf(applyFilters(all.filter((item) => item.dept === dept.code), { ...filters, dept: '' }, catalog));
+                {catalog.departments.map((dept) => {
+                  const part = totalsOf(applyFilters(all, { ...filters, dept: dept.code }, catalog));
                   const deptEvents = catalog.events.filter((event) => event.dept === dept.code && event.active);
                   const submitted = deptEvents.filter((event) => results.get(event.id)?.submitted).length;
                   return (
@@ -539,7 +538,7 @@ export function FestColleges() {
   const [sort, setSort] = useState<{ key: keyof CollegeRow; down: boolean }>({ key: 'places', down: true });
   const rows = useMemo(() => {
     // Places count for the events the filters show (all events when none is chosen).
-    const shown = catalog ? new Set(catalog.events.filter((event) => (!filters.dept || filters.dept === OPEN_DEPT || event.dept === filters.dept) && (!filters.eventId || event.id === filters.eventId)).map((event) => event.id)) : new Set<string>();
+    const shown = catalog ? new Set(catalog.events.filter((event) => (!filters.dept || event.dept === filters.dept) && (!filters.eventId || event.id === filters.eventId)).map((event) => event.id)) : new Set<string>();
     const summary = collegeSummary(list, [...results.values()].filter((result) => shown.has(result.eventId)));
     const { key, down } = sort;
     return [...summary].sort((a, b) => {
