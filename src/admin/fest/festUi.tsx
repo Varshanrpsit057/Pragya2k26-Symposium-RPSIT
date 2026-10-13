@@ -54,8 +54,8 @@ export const deptName = (catalog: FestCatalog | null, code: string) => catalog?.
 export const matches = (registration: FestRegistration, query: string) => {
   const q = query.trim().toLowerCase();
   if (!q) return true;
-  // 'AI&DS-7' finds AIDS-0007 (IDs keep the code AIDS).
-  const compact = q.replace(/ai\s*&\s*ds/g, 'aids').replace(/[\s-]/g, '');
+  // 'AI&DS-7' finds AIDS-0007, 'S&H-7' SH-0007 (IDs keep the codes AIDS and SH).
+  const compact = q.replace(/\s*&\s*/g, '').replace(/[\s-]/g, '');
   const letters = (text: string) => text.toLowerCase().replace(/[^a-z0-9]/g, '');
   return (
     registration.id.toLowerCase().replace('-', '').includes(compact) ||

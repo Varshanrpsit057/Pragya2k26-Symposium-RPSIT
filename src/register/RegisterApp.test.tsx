@@ -45,7 +45,7 @@ describe('a student on their phone', () => {
     backend(h);
     render(<RegisterApp />);
     expect(await screen.findByRole('heading', { name: 'Choose your department' })).toBeInTheDocument();
-    for (const code of ['CSE', 'AI&DS', 'IT', 'ECE', 'CYBER', 'EEE', 'MECH', 'SH']) expect(screen.getByRole('button', { name: new RegExp(`^${code}`) })).toBeInTheDocument();
+    for (const code of ['CSE', 'AI&DS', 'IT', 'ECE', 'CYBER', 'EEE', 'MECH', 'S&H']) expect(screen.getByRole('button', { name: new RegExp(`^${code}`) })).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: /^CYBER/ }));
     await screen.findByLabelText('Name with initial');
     expect(document.querySelector('.reg-chosen')).toHaveTextContent('Department CYBER · Computer Science and Engineering (Cyber Security)');

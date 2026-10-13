@@ -351,18 +351,18 @@ export const ID_BLOCK = 50;
 export const ID_TOP_UP_AT = 15;
 
 /**
- * How a department's code is shown to people: AIDS reads as AI&DS, CYS as CYBER. The code itself stays in web
+ * How a department's code is shown to people: AIDS reads as AI&DS, CYS as CYBER, SH as S&H. The code itself stays in web
  * addresses (/landing/aids/admin/), usernames (aids-desk1), event IDs and stored records, where
  * '&' would break things.
  */
-const SHOWN_CODES: Record<string, string> = { AIDS: 'AI&DS', CYS: 'CYBER' };
+const SHOWN_CODES: Record<string, string> = { AIDS: 'AI&DS', CYS: 'CYBER', SH: 'S&H' };
 export const deptShort = (code: string) => SHOWN_CODES[code] ?? code;
 /** How a registration ID is shown: 'AIDS-0007' → 'AI&DS-0007' (others unchanged). */
 export const showId = (id: string) => {
   const match = /^([A-Z]{2,6})-(\d{4})$/.exec(id);
   return match && SHOWN_CODES[match[1]] ? `${SHOWN_CODES[match[1]]}-${match[2]}` : id;
 };
-/** 'AI&DS-7', 'ai & ds 7' → 'AIDS-7'; 'cyber 7' → 'CYS-7' (then read as usual). */
+/** 'AI&DS-7', 'ai & ds 7' → 'AIDS-7'; 'cyber 7' → 'CYS-7'; 'S&H-7' → 'SH-7' (then read as usual). */
 const typedCode = (input: string) =>
   Object.entries(SHOWN_CODES).reduce((text, [code, shown]) => text.replace(new RegExp(shown.replace(/[&]/g, '\\s*&\\s*'), 'i'), code), input);
 

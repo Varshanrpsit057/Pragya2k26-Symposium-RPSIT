@@ -46,6 +46,7 @@ describe('the front door (pragya2k26.online)', () => {
     expect(links.map((link) => link.getAttribute('href'))).toEqual(['CSE', 'AIDS', 'IT', 'ECE', 'CYS', 'EEE', 'MECH', 'SH'].map((code) => `/register/?dept=${code}`));
     expect(within(dialog).getByRole('link', { name: /^AI&DS/ })).toBeInTheDocument();
     expect(within(dialog).getByRole('link', { name: /^CYBER/ })).toBeInTheDocument();
+    expect(within(dialog).getByRole('link', { name: /^S&H/ })).toBeInTheDocument();
     fireEvent.keyDown(window, { key: 'Escape' });
     expect(screen.queryByRole('dialog')).toBeNull();
   });
