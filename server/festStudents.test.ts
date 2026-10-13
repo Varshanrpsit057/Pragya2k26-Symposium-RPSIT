@@ -48,7 +48,7 @@ describe('a student registering on their phone', () => {
   it('chooses a department and gets the next ID of that department (IT-2001) at once, waiting for that department’s desk to check the payment', async () => {
     const h = setup({ at: TIMES.eventDay });
     const info = await h.call('GET', '/api/fest/info');
-    expect(info.body).toMatchObject({ open: true, entryFee: 100, upiId: expect.stringContaining('@') });
+    expect(info.body).toMatchObject({ open: true, entryFee: 100, selfRegistration: true, lookup: true, onlinePayment: true });
     expect(info.body.events).toHaveLength(44);
 
     const first = await selfRegister(h, form());
@@ -152,13 +152,17 @@ describe('the department’s desk', () => {
     // Another department's desk cannot verify them.
     expect((await h.call('POST', '/api/admin/fest/registrations/IT-2001', { action: 'verify', confirmed: true }, { token: mechDesk.token })).body.code).toBe('OTHER_DEPARTMENT');
 
-    expect((await h.call('POST', '/api/admin/fest/registrations/IT-2001', { action: 'verify' }, { token: itDesk.token })).body.code).toBe('INVALID');
-    const verified = await h.call('POST', '/api/admin/fest/registrations/IT-2001', { action: 'verify', confirmed: true }, { token: itDesk.token });
+    expect((await h.call('POST', '/api/admin/fest/registrations/IT-2001', { action: 'verify', txn: a.txn }, { token: itDesk.token })).body.code).toBe('INVALID');
+    // The desk types the UTR from the payment it received: it must match the one the student sent.
+    expect((await h.call('POST', '/api/admin/fest/registrations/IT-2001', { action: 'verify', confirmed: true }, { token: itDesk.token })).body.code).toBe('INVALID');
+    const mismatch = await h.call('POST', '/api/admin/fest/registrations/IT-2001', { action: 'verify', txn: '412345678000', confirmed: true }, { token: itDesk.token });
+    expect(mismatch.body).toMatchObject({ code: 'TXN_MISMATCH', error: expect.stringContaining('8901') });
+    const verified = await h.call('POST', '/api/admin/fest/registrations/IT-2001', { action: 'verify', txn: '4123 4567 8901', confirmed: true }, { token: itDesk.token });
     expect(verified.body.registration).toMatchObject({ entry: { status: 'PAID', payment: { method: 'UPI', amount: 100, txn: a.txn, desk: 2, by: 'it-desk2' } }, checkedIn: { by: 'it-desk2' } });
     expect(view(await me(h, 'IT-2001', a.participant.phone)).status).toBe('verified');
 
     // The second student typed the same transaction ID: refused, naming who has it.
-    const used = await h.call('POST', '/api/admin/fest/registrations/IT-2002', { action: 'verify', confirmed: true }, { token: itDesk3.token });
+    const used = await h.call('POST', '/api/admin/fest/registrations/IT-2002', { action: 'verify', txn: a.txn, confirmed: true }, { token: itDesk3.token });
     expect(used.body).toMatchObject({ code: 'TXN_USED', details: { existingId: 'IT-2001' } });
   });
 
@@ -173,7 +177,9 @@ describe('the department’s desk', () => {
 
     const resent = await h.call('POST', '/api/fest/me/payment', { id: 'IT-2001', key: body.submissionId, txn: '512345678901' }, { ip: '10.1.1.2' });
     expect(view(resent)).toMatchObject({ status: 'waiting', txnEnd: '8901', reason: '' });
-    const verified = await h.call('POST', '/api/admin/fest/registrations/IT-2001', { action: 'verify', confirmed: true }, { token: desk.token });
+    // The first UTR no longer matches; the new one does.
+    expect((await h.call('POST', '/api/admin/fest/registrations/IT-2001', { action: 'verify', txn: body.txn, confirmed: true }, { token: desk.token })).body.code).toBe('TXN_MISMATCH');
+    const verified = await h.call('POST', '/api/admin/fest/registrations/IT-2001', { action: 'verify', txn: '512345678901', confirmed: true }, { token: desk.token });
     expect(verified.body.registration.entry).toMatchObject({ status: 'PAID', payment: { txn: '512345678901' } });
   });
 });
@@ -195,7 +201,7 @@ describe('the department’s events', () => {
     expect((await event('add')).status).toBe(200);
     expect((await event('fee', { payment: { method: 'CASH', confirmed: true } })).status).toBe(200);
     expect((await event('present')).body.code).toBe('ENTRY_DUE');
-    await h.call('POST', '/api/admin/fest/registrations/IT-2001', { action: 'verify', confirmed: true }, { token: desk.token });
+    await h.call('POST', '/api/admin/fest/registrations/IT-2001', { action: 'verify', txn: body.txn, confirmed: true }, { token: desk.token });
     expect((await event('present')).status).toBe(200);
 
     const results = await h.call('POST', '/api/admin/fest/events/it-web-architects/results', { action: 'submit', places: [{ place: 1, ids: ['IT-2001'] }] }, { token: coordinator.token });

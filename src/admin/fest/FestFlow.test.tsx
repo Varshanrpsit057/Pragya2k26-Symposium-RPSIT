@@ -181,8 +181,9 @@ describe('the overall coordinator', () => {
     const h = setup({ at: TIMES.eventDay });
     const register = async (dept: string, id: string, phone: string) => {
       const desk = await h.staff('DESK', [], `${dept.toLowerCase()}-desk-${id.slice(-1)}`, { department: dept, deskNumber: 1 });
-      await h.call('POST', '/api/admin/fest/registrations', { submissionId: `sub-${id}-000`, id, participant: { name: 'Student', phone, college: 'Sona' }, events: [], payment: { method: 'UPI', txn: '412345678901', confirmed: true } }, { token: desk.token });
+      await h.call('POST', '/api/admin/fest/registrations', { submissionId: `sub-${id}-000`, id, participant: { name: 'Student', phone, college: 'Sona' }, events: [], payment: { method: 'UPI', txn: `4123456789${phone.slice(-2)}`, confirmed: true } }, { token: desk.token });
     };
+    // (Each UPI payment has its own transaction ID: one is accepted once across the fest.)
     await register('CSE', 'CSE-0001', '9840011111');
     await register('CSE', 'CSE-0002', '9840022222');
     await register('IT', 'IT-0001', '9840033333');
@@ -243,5 +244,72 @@ describe('a department admin', () => {
     expect(await screen.findByText(/Imported 1 registrations\./)).toBeInTheDocument();
     const [imported] = await sync(h, admin.token);
     expect(imported).toMatchObject({ id: 'CSE-5001', source: 'ONLINE', name: 'Kavin R', entry: { status: 'PAID', payment: { method: 'ONLINE' } } });
+  });
+});
+
+describe('verifying a UPI payment at the desk', () => {
+  it('needs the UTR typed to match the student’s, and flags a UTR sent by two students', async () => {
+    const h = setup({ at: TIMES.eventDay });
+    const student = (n: number) => ({ submissionId: `flow-student-key-00000000${n}`, dept: 'CSE', participant: { name: `Student ${"AB"[n - 1]}`, phone: `984000000${n}`, college: 'Sona', branch: 'B.E. CSE', year: '2nd Year', email: `s${n}@example.com` }, events: [] });
+    for (const n of [1, 2]) {
+      expect((await h.call('POST', '/api/fest/register', student(n), { ip: '10.0.0.8' })).body).toMatchObject({ registration: { id: `CSE-200${n}` } });
+      expect((await h.call('POST', '/api/fest/me/payment', { id: `CSE-200${n}`, key: student(n).submissionId, txn: '612345678901' }, { ip: '10.0.0.8' })).body).toMatchObject({ registration: { status: 'waiting' } });
+    }
+    const desk = await h.staff('DESK', [], 'cse-desk1', { department: 'CSE', deskNumber: 1 });
+    backend(h);
+    signIn(desk.token);
+    render(<AdminApp />);
+    expect(await screen.findByRole('button', { name: 'Verify payments (2)' }, { timeout: 5000 })).toBeInTheDocument();
+    const card = (id: string) => screen.getByText(id, { selector: '.fest-card__id' }).closest('article') as HTMLElement;
+    const first = card('CSE-2001');
+    // Only the last 4 digits of the student's UTR are shown; both students sent the same one.
+    expect(within(first).getByText(/UTR ending/)).toHaveTextContent('UTR ending 8901');
+    expect(within(first).getByRole('alert')).toHaveTextContent('Same UTR also sent by CSE-2002');
+
+    const typed = within(first).getByLabelText(/^UTR of the payment you received/);
+    const verify = within(first).getByRole('button', { name: 'Verify CSE-2001' });
+    fireEvent.click(within(first).getByRole('checkbox', { name: /I have seen ₹100 received/ }));
+    fireEvent.change(typed, { target: { value: '6123 4567 8000' } });
+    expect(within(first).getByText(/Does not match the UTR the student sent/)).toBeInTheDocument();
+    expect(verify).toBeDisabled();
+    fireEvent.change(typed, { target: { value: '6123 4567 8901' } });
+    expect(within(first).getByText(/Matches the UTR CSE-2001 sent/)).toBeInTheDocument();
+    fireEvent.click(verify);
+    await waitFor(async () => expect((await sync(h, desk.token)).find((item) => item.id === 'CSE-2001')?.entry).toMatchObject({ status: 'PAID', payment: { txn: '612345678901' } }));
+
+    // The other student's card now says the UTR is taken, and cannot be verified.
+    const second = card('CSE-2002');
+    await waitFor(() => expect(within(second).getByRole('alert')).toHaveTextContent('Duplicate: this UTR was already accepted for CSE-2001'));
+    fireEvent.click(within(second).getByRole('checkbox', { name: /I have seen ₹100 received/ }));
+    fireEvent.change(within(second).getByLabelText(/^UTR of the payment you received/), { target: { value: '612345678901' } });
+    expect(within(second).getByRole('button', { name: 'Verify CSE-2002' })).toBeDisabled();
+  });
+});
+
+describe('Website controls', () => {
+  it('lets the web assist team switch parts off, switch a role’s sign-in off and remove the QR code', async () => {
+    const h = setup({ at: TIMES.eventDay });
+    await h.asOwner('POST', '/api/admin/portal/qr', { image: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==' });
+    const token = await h.login();
+    backend(h);
+    vi.spyOn(window, 'confirm').mockReturnValue(true);
+    signIn(token);
+    render(<AdminApp />);
+    fireEvent.click(within(await screen.findByRole('navigation', { name: 'Sections' })).getByRole('button', { name: 'Website controls' }));
+
+    const phones = await screen.findByRole('switch', { name: 'Student registration on phones' });
+    expect(phones).toHaveAttribute('aria-checked', 'true');
+    fireEvent.click(phones);
+    await waitFor(() => expect(screen.getByRole('switch', { name: 'Student registration on phones' })).toHaveAttribute('aria-checked', 'false'));
+    expect((await h.call('GET', '/api/fest/info')).body.selfRegistration).toBe(false);
+
+    fireEvent.click(screen.getByRole('switch', { name: 'Registration desks' }));
+    await waitFor(() => expect(screen.getByRole('switch', { name: 'Registration desks' })).toHaveAttribute('aria-checked', 'false'));
+    expect((await h.asOwner('GET', '/api/admin/portal')).body.portal.logins).toMatchObject({ DESK: false, COORDINATOR: true });
+
+    expect(screen.getByRole('img', { name: 'The UPI QR code students see' })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Remove the QR code' }));
+    await waitFor(() => expect(screen.getByText('No QR code uploaded')).toBeInTheDocument());
+    expect((await h.call('GET', '/api/fest/payment')).body.qr).toBeNull();
   });
 });

@@ -49,12 +49,14 @@ export function EventWindow() {
 }
 
 function EventPanel({ event }: { event: FestEvent }) {
-  const { registrations, results, session, change } = useFest();
+  const { registrations, results, session, change, switches } = useFest();
   const [query, setQuery] = useState('');
   const [paying, setPaying] = useState<string | null>(null);
   const [payment, setPayment] = useState<PaymentDraft>(NO_PAYMENT);
   const result = results.get(event.id) ?? null;
-  const locked = Boolean(result?.submitted);
+  // Website controls can switch event entry off (the web assist team can still fix things).
+  const entryOff = !switches.eventEntry && session.role !== 'ADMIN';
+  const locked = Boolean(result?.submitted) || entryOff;
   // The department's own students, and anyone who registered themselves (they may join any event).
   const inDept = useMemo(() => [...registrations.values()].filter((item) => canJoin(item, event) && isActive(item)), [registrations, event]);
   const registered = useMemo(() => inDept.filter((item) => entryOf(item, event.id)).sort((a, b) => a.id.localeCompare(b.id)), [inDept, event.id]);
@@ -96,11 +98,12 @@ function EventPanel({ event }: { event: FestEvent }) {
           <Stat label="Fee paid" value={totals.feesPaid} sub={`${rupees(totals.feeCash)} cash · ${rupees(totals.feeUpi)} UPI`} />
           <Stat label="Present" value={totals.present} />
         </div>
-        {locked && (
+        {result?.submitted && (
           <p className="adm-note">
-            Results submitted by {result!.submitted!.by} {when(result!.submitted!.at)}. The event is closed: ask the overall coordinator if something must change.
+            Results submitted by {result.submitted.by} {when(result.submitted.at)}. The event is closed: ask the overall coordinator if something must change.
           </p>
         )}
+        {entryOff && <p className="adm-note">Event entry is switched off by the web assist team: this window is read-only for now.</p>}
       </section>
 
       <section className="adm-card adm-pad">
@@ -173,8 +176,9 @@ function EventPanel({ event }: { event: FestEvent }) {
 }
 
 function Winners({ event, registered }: { event: FestEvent; registered: FestRegistration[] }) {
-  const { results, change, catalog, pending } = useFest();
+  const { results, change, catalog, pending, switches, session } = useFest();
   const result = results.get(event.id) ?? null;
+  const resultsOff = !switches.results && session.role !== 'ADMIN';
   const locked = Boolean(result?.submitted);
   const initial = () =>
     [1, 2, 3].map((place) => {
@@ -197,7 +201,9 @@ function Winners({ event, registered }: { event: FestEvent; registered: FestRegi
   return (
     <section className="adm-card adm-pad" aria-label="Winners">
       <h3 className="adm-h3">Winners</h3>
-      {locked ? (
+      {resultsOff && !locked ? (
+        <p className="adm-note">Results entry is switched off by the web assist team.</p>
+      ) : locked ? (
         <ol className="fest-winners">
           {result!.places.map((place) => (
             <li key={place.place}>

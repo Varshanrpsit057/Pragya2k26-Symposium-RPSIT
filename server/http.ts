@@ -206,6 +206,10 @@ export const STAFF_ROUTES: readonly StaffRoute[] = [
   { method: 'POST', path: route_(`/fest/events/${EVENT}/results`), permission: ['fest.event', 'fest.correct'], run: (s, { actor, body, params: [eventId] }) => s.fest.results(actor, eventId, body) },
   { method: 'POST', path: route_('/fest/import'), permission: 'fest.import', run: (s, { actor, body }) => s.fest.importRows(actor, body) },
   { method: 'POST', path: route_('/fest/test-data/clear'), permission: 'system.testing', run: (s, { actor, body }) => s.fest.clearTest(actor, body) },
+  // Website controls: every switch, the UPI account and the QR code students pay with.
+  { method: 'GET', path: route_('/portal'), permission: 'site.switches', run: (s) => s.fest.portalView() },
+  { method: 'POST', path: route_('/portal'), permission: 'site.switches', run: (s, { actor, body }) => s.fest.savePortal(actor, body) },
+  { method: 'POST', path: route_('/portal/qr'), permission: 'site.switches', run: (s, { actor, body }) => s.fest.saveQr(actor, body) },
 ];
 
 const isObject = (value: unknown): value is Record<string, unknown> => typeof value === 'object' && value !== null && !Array.isArray(value);
@@ -266,6 +270,12 @@ export async function route(
         break;
       case '/api/fest/me':
         result = await post((body) => service.festStudent('view', body, request.ip));
+        break;
+      case '/api/fest/find':
+        result = await post((body) => service.festStudent('find', body, request.ip));
+        break;
+      case '/api/fest/payment':
+        result = await get(() => service.fest.publicPayment());
         break;
       case '/api/fest/me/events':
         result = await post((body) => service.festStudent('events', body, request.ip));

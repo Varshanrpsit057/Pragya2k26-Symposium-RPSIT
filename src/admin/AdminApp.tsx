@@ -12,6 +12,7 @@ import { ImportView } from './fest/ImportView';
 import { FestColleges, FestOverview, FestRegistrations, FestResults } from './fest/OverviewViews';
 import { HelpDialog, repliesSeenAt, type HelpContext } from './HelpDialog';
 import { HelpPanel } from './HelpPanel';
+import { PortalPanel } from './PortalPanel';
 import { RegistrationWindowPanel } from './RegistrationWindowPanel';
 import { RolesPanel } from './RolesPanel';
 import { StaffPanel } from './StaffPanel';
@@ -19,7 +20,7 @@ import { SystemPanel } from './SystemPanel';
 import { TestingPanel } from './TestingPanel';
 import { Badge, ErrorNote, HELP_EVENT, messageOf, useLiveData, when } from './ui';
 
-type TabId = 'overview' | 'registrations' | 'results' | 'colleges' | 'desk' | 'event' | 'import' | 'catalog' | 'window' | 'help' | 'system' | 'staff' | 'testing' | 'roles';
+type TabId = 'overview' | 'registrations' | 'results' | 'colleges' | 'desk' | 'event' | 'import' | 'catalog' | 'controls' | 'window' | 'help' | 'system' | 'staff' | 'testing' | 'roles';
 
 /** Roles that watch (every department, or their own) rather than work at a desk or an event. */
 const watches = (session: SessionInfo) => can(session, 'fest.viewAll') || session.role === 'HOD' || session.role === 'DEPT_ADMIN';
@@ -34,6 +35,7 @@ const TABS: { id: TabId; label: (session: SessionInfo) => string; show: (session
   { id: 'event', label: (session) => (session.role === 'COORDINATOR' ? 'My events' : 'Event windows'), show: (session) => can(session, 'fest.event') },
   { id: 'import', label: () => 'Online & paper', show: (session) => can(session, 'fest.import') },
   { id: 'catalog', label: () => 'Departments & events', show: (session) => can(session, 'fest.catalog') },
+  { id: 'controls', label: () => 'Website controls', show: (session) => can(session, 'site.switches') },
   { id: 'staff', label: () => 'Accounts', show: (session) => can(session, 'staff.manage') },
   { id: 'window', label: () => 'Event-day controls', show: (session) => can(session, 'registration.window') || can(session, 'site.notice') },
   { id: 'help', label: () => 'Help requests', show: (session) => can(session, 'help.manage') },
@@ -151,23 +153,17 @@ function LoginForm({ notice, onSignedIn }: { notice: string; onSignedIn: (token:
   const pageDept = pageDepartment(window.location.pathname);
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
-  const [desk, setDesk] = useState('');
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
   const [help, setHelp] = useState(false);
-  const typeUsername = (value: string) => {
-    setUsername(value);
-    // "desk2" is at desk 2.
-    const guess = /^desk[-_ ]?(\d{1,2})$/i.exec(value.trim())?.[1];
-    if (guess && Number(guess) >= 1 && Number(guess) <= DESK_CHOICES) setDesk(String(Number(guess)));
-  };
 
   const submit = async (event: FormEvent) => {
     event.preventDefault();
     setBusy(true);
     setError('');
     try {
-      const token = await signIn(username.trim(), password, desk ? Number(desk) : null);
+      // Desk accounts carry their desk number; an older one without it is asked after signing in.
+      const token = await signIn(username.trim(), password, null);
       setPassword('');
       onSignedIn(token);
     } catch (failure) {
@@ -179,28 +175,18 @@ function LoginForm({ notice, onSignedIn }: { notice: string; onSignedIn: (token:
   return (
     <main className="adm-login">
       <form className="adm-card adm-login__card" onSubmit={submit}>
-        <h1 className="adm-login__title">PRAGYA 2026 · Student coordinators</h1>
+        <p className="adm-login__brand">INFINITE TECHFEST’26</p>
+        <h1 className="adm-login__title">On-site Registration Portal</h1>
         {pageDept && <p className="adm-login__dept">{deptTitle(pageDept)}</p>}
-        <p className="adm-muted">Sign in with your own student coordinator account.</p>
+        <p className="adm-muted">Staff sign in: use the account the web assist team gave you.</p>
         {notice && <p className="adm-note">{notice}</p>}
         <label className="adm-field">
           <span>Username</span>
-          <input value={username} onChange={(event) => typeUsername(event.target.value)} autoComplete="username" required autoFocus />
+          <input value={username} onChange={(event) => setUsername(event.target.value)} autoComplete="username" required autoFocus />
         </label>
         <label className="adm-field">
           <span>Password</span>
           <input type="password" value={password} onChange={(event) => setPassword(event.target.value)} autoComplete="current-password" required />
-        </label>
-        <label className="adm-field">
-          <span>Desk number (only if your account does not have one)</span>
-          <select value={desk} onChange={(event) => setDesk(event.target.value)}>
-            <option value="">Not at a registration desk</option>
-            {Array.from({ length: DESK_CHOICES }, (_, index) => index + 1).map((number) => (
-              <option key={number} value={number}>
-                Desk {number}
-              </option>
-            ))}
-          </select>
         </label>
         {error && (
           <p className="adm-error" role="alert">
@@ -220,7 +206,7 @@ function LoginForm({ notice, onSignedIn }: { notice: string; onSignedIn: (token:
           <h2 id="adm-login-depts" className="adm-login__depts-title">
             Department staff pages
           </h2>
-          <p className="adm-muted">Desks, event coordinators and HODs can also sign in on their department’s page.</p>
+          <p className="adm-muted">Department admins, desks and event coordinators can also sign in on their department’s page.</p>
           <ul>
             {DEFAULT_CATALOG.departments.map((dept) => (
               <li key={dept.code}>
@@ -238,7 +224,7 @@ function LoginForm({ notice, onSignedIn }: { notice: string; onSignedIn: (token:
   );
 }
 
-/** Desk numbers offered at sign-in and in the header. */
+/** Desk numbers an older desk account (made without one) can choose after signing in. */
 const DESK_CHOICES = 8;
 
 interface ShellProps {
@@ -293,7 +279,8 @@ function ShellBody({ token, session, onSession, onSignOut, onSignedOut }: ShellP
     <div className="adm">
       <header className="adm-bar">
         <div>
-          <h1 className="adm-bar__title">PRAGYA 2026 · {session.department ? deptTitle(session.department) : 'All departments'}</h1>
+          <p className="adm-bar__brand">INFINITE TECHFEST’26 · On-site Registration Portal</p>
+          <h1 className="adm-bar__title">{session.department ? deptTitle(session.department) : 'All departments'}</h1>
           <p className="adm-muted adm-bar__phase">
             <Badge tone={session.phase === 'closed' ? 'bad' : session.phase === 'between' ? 'warn' : 'good'}>{PHASE_LABEL[session.phase]}</Badge>
             {session.phase === 'online' && session.schedule.onlineClosesAt && <> until {formatIst(parseEventStart(session.schedule.onlineClosesAt)!)}</>}
@@ -363,6 +350,7 @@ function ShellBody({ token, session, onSession, onSignOut, onSignedOut }: ShellP
       {current === 'event' && <EventWindow />}
       {current === 'import' && <ImportView token={token} onSignedOut={onSignedOut} />}
       {current === 'catalog' && <CatalogEditor token={token} onSignedOut={onSignedOut} />}
+      {current === 'controls' && <PortalPanel {...panel} />}
       {current === 'window' && <RegistrationWindowPanel {...panel} onSession={onSession} />}
       {current === 'help' && <HelpPanel {...panel} />}
       {current === 'system' && <SystemPanel {...panel} />}

@@ -40,17 +40,17 @@ afterEach(() => {
 });
 
 describe('the desk number of each desk sign-in', () => {
-  it('is chosen when signing in (filled in from a username like desk2) and shown in the header', async () => {
+  it('is not asked on the sign-in page: the desk account carries it, and the header shows it', async () => {
     const sent = api((url) => (url.endsWith('/api/admin/login') ? { token: 'x'.repeat(43) } : url.endsWith('/api/admin/session') ? session('DESK', 2) : undefined));
     render(<AdminApp />);
+    expect(screen.queryByLabelText(/Desk number/)).toBeNull();
     fireEvent.change(screen.getByLabelText('Username'), { target: { value: 'desk2' } });
-    expect(screen.getByLabelText('Desk number (only if your account does not have one)')).toHaveValue('2');
     fireEvent.change(screen.getByLabelText('Password'), { target: { value: 'Preview-Staff-Pass-2026' } });
     fireEvent.click(screen.getByRole('button', { name: 'Sign in' }));
     // Signed in: the header shows the desk.
     await waitFor(() => expect(screen.queryByLabelText('Username')).toBeNull());
     expect(await screen.findByText('Desk 2')).toBeInTheDocument();
-    expect(sent.find((call) => call.url.endsWith('/api/admin/login'))?.body).toEqual({ username: 'desk2', password: 'Preview-Staff-Pass-2026', deskNumber: 2 });
+    expect(sent.find((call) => call.url.endsWith('/api/admin/login'))?.body).toEqual({ username: 'desk2', password: 'Preview-Staff-Pass-2026' });
   });
 
   it('is asked for after signing in when it was not chosen, and saved for the session', async () => {

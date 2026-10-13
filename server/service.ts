@@ -50,7 +50,8 @@ import { PLACES, type AdminRegistration } from '../src/lib/admin';
 import type { AuditEntry, SystemProblem, SystemStatus } from '../src/lib/help';
 import { proofLabel } from '../src/lib/student';
 import { eventDayStarted, registrationPhase, scheduleOf, type RegistrationPhase, type RegistrationSchedule } from '../src/lib/schedule';
-import { MAX_DESK_NUMBER, readDeskNumber, ROLE_PERMISSIONS, type SessionInfo, type SignedInView } from '../src/lib/staff';
+import { LOGIN_LABELS, LOGIN_ROLES, type LoginRole } from '../src/lib/portal';
+import { MAX_DESK_NUMBER, readDeskNumber, ROLE_PERMISSIONS, type SessionInfo, type SignedInView, type StaffRole } from '../src/lib/staff';
 import { SESSION_HOURS, bearerToken, hashPassword, newSessionToken, sameText, sha256, verifyPassword } from './auth';
 import { driveLink, type DriveStore, type StoredFile } from './drive';
 import { confirmationEmail } from './emailTemplate';
@@ -456,12 +457,19 @@ export class Service {
   }
 
   /** The fest's student page: register, see their registration, change events, send the right transaction ID. */
-  async festStudent(action: 'register' | 'view' | 'events' | 'payment', body: unknown, ip: string) {
+  async festStudent(action: 'register' | 'view' | 'find' | 'events' | 'payment', body: unknown, ip: string) {
     if (action === 'register') {
       await this.limit(`self:${ip}`, SELF_REGISTER_LIMIT, STUDENT_BUSY);
       return this.fest.selfRegister(body);
     }
     await this.limit(`student:${ip}`, STUDENT_LIMIT, STUDENT_BUSY);
+    if (action === 'find') {
+      // By mobile number and email: a few tries for each number, and the address's lookup limit.
+      const rawPhone = typeof body === 'object' && body !== null ? String((body as { phone?: unknown }).phone ?? '') : '';
+      await this.limit(`student-lookup:${ip}`, LOOKUP_LIMIT, STUDENT_BUSY);
+      await this.limit(`student-phone:${sha256(rawPhone.replace(/\D/g, '').slice(-10)).slice(0, 24)}`, STUDENT_ID_LIMIT, 'Too many tries for this mobile number. Please wait 10 minutes, or ask at a registration desk.');
+      return this.fest.findOwn(body);
+    }
     // Keyed only with a well-formed private key (the same rule as the lookup in fest.ts).
     const keyed = typeof body === 'object' && body !== null && isStudentKey((body as { key?: unknown }).key);
     if (!keyed) {
@@ -526,6 +534,9 @@ export class Service {
       const account = await this.deps.store.getStaff(username.toLowerCase());
       const usable = account?.active ? account : null;
       const matches = await verifyPassword(password, usable?.passwordHash ?? (await this.dummyPasswordHash()));
+      if (usable && matches && (await this.loginOff(usable.role))) {
+        throw new ApiError(403, 'LOGIN_OFF', `Sign-in for ${LOGIN_LABELS[usable.role as LoginRole].toLowerCase()} is switched off by the web assist team.`);
+      }
       if (usable && matches) {
         const desk = usable.role === 'DESK' ? (usable.deskNumber ?? readDeskNumber(isObject(body) ? body.deskNumber : undefined)) : null;
         session = { username: usable.username, kind: 'staff', credential: staffCredential(usable), createdAt: 0, expiresAt: 0, ...(desk && { deskNumber: desk }) };
@@ -541,6 +552,12 @@ export class Service {
     await this.deps.store.putSession(sha256(token), { ...session, createdAt: now, expiresAt });
     this.log('Admin signed in', { ip, username: session.username, kind: session.kind, ...(session.deskNumber && { desk: session.deskNumber }) });
     return { success: true, token, username: session.username, expiresAt: new Date(expiresAt).toISOString() };
+  }
+
+  /** Whether Website controls has switched this role's sign-in off. */
+  private async loginOff(role: StaffRole) {
+    if (!(LOGIN_ROLES as readonly string[]).includes(role)) return false;
+    return !(await this.fest.portal()).logins[role as LoginRole];
   }
 
   private dummyPasswordHash() {
@@ -566,6 +583,8 @@ export class Service {
     if (session.kind === 'staff') {
       const account = await this.deps.store.getStaff(session.username);
       if (!account || !account.active || !sameText(session.credential, staffCredential(account)) || signedOutSince(account, session)) throw signIn;
+      // The web assist team switched this role's sign-in off: signed out at once.
+      if (await this.loginOff(account.role)) throw new ApiError(401, 'LOGIN_OFF', `Sign-in for ${LOGIN_LABELS[account.role as LoginRole].toLowerCase()} is switched off by the web assist team.`);
       return {
         username: account.username,
         displayName: account.displayName,

@@ -198,6 +198,20 @@
   color: var(--l-muted);
 }
 
+.landing-portal {
+  display: inline-block;
+  margin: 1.1rem 0 0;
+  padding: 0.35rem 0.9rem;
+  border: 1px solid rgb(140 108 255 / 0.55);
+  border-radius: 999px;
+  font-size: clamp(0.85rem, 0.8rem + 0.3vw, 1rem);
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #d9d0ff;
+  background: rgb(140 108 255 / 0.14);
+}
+
 .landing-date {
   margin: 1.4rem 0 0;
   font-size: clamp(1.35rem, 1.1rem + 1.2vw, 1.9rem);

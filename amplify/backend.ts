@@ -167,6 +167,9 @@ const ROUTES: { method: HttpMethod; path: string; rate: number; burst: number }[
   { method: HttpMethod.GET, path: '/api/fest/info', rate: 60, burst: 200 },
   { method: HttpMethod.POST, path: '/api/fest/register', rate: 40, burst: 120 },
   { method: HttpMethod.POST, path: '/api/fest/me', rate: 40, burst: 120 },
+  // "My registration ID" by mobile number and email, and the payment step's QR code.
+  { method: HttpMethod.POST, path: '/api/fest/find', rate: 20, burst: 60 },
+  { method: HttpMethod.GET, path: '/api/fest/payment', rate: 40, burst: 120 },
   { method: HttpMethod.POST, path: '/api/fest/me/events', rate: 20, burst: 60 },
   { method: HttpMethod.POST, path: '/api/fest/me/payment', rate: 10, burst: 30 },
   // Contact admin (works signed out too) and a staff member's own requests with the answers.

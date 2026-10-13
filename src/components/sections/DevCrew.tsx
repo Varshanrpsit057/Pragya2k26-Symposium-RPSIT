@@ -1,21 +1,13 @@
 import { crew } from '../../content/crew';
-import type { CrewLinkKind, CrewMember } from '../../content/types';
+import type { CrewMember } from '../../content/types';
 import { IncognitoIcon } from '../icons/IncognitoIcon';
 import { SocialIcon } from '../icons/SocialIcon';
 import { Modal } from '../modal/Modal';
 import ProfileCard from '../profile/ProfileCard';
+import { crewLinkLabel } from './crewLinks';
 import './DevCrew.css';
 
-const LINK_NAMES: Record<CrewLinkKind, (name: string) => string> = {
-  linkedin: (name) => `${name} on LinkedIn`,
-  github: (name) => `${name} on GitHub`,
-  portfolio: (name) => `Portfolio of ${name}`,
-};
-
-/** Accessible name for a crew profile link, e.g. "Varshan C on GitHub (opens in a new tab)". */
-export function crewLinkLabel(kind: CrewLinkKind, name: string): string {
-  return `${LINK_NAMES[kind](name)} (opens in a new tab)`;
-}
+export { crewLinkLabel };
 
 /** "Mohan Prabu K" → "MP": shown in place of a portrait until one is added. */
 export function initials(name: string): string {

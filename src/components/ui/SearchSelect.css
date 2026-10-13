@@ -1,0 +1,173 @@
+/*
+ * The page sets its colours (students' page: register.css; dashboards: admin.css):
+ *   --ss-bg, --ss-popup, --ss-line, --ss-ink, --ss-muted, --ss-accent, --ss-bad, --ss-radius
+ */
+.search-select {
+  position: relative;
+  min-width: 0;
+}
+
+.search-select__trigger {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  width: 100%;
+  min-height: 3rem;
+  padding: 0.65rem 0.9rem 0.65rem 0.8rem;
+  border: 1px solid var(--ss-line, #c9cbe0);
+  border-radius: var(--ss-radius, 10px);
+  font: inherit;
+  font-size: 16px;
+  text-align: left;
+  color: var(--ss-ink, #14163a);
+  background: var(--ss-bg, #fff);
+  cursor: pointer;
+  transition:
+    border-color 0.15s ease,
+    box-shadow 0.15s ease;
+}
+
+.search-select__trigger:focus-visible,
+.search-select.is-open .search-select__trigger {
+  outline: none;
+  border-color: var(--ss-accent, #6b4dff);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--ss-accent, #6b4dff) 28%, transparent);
+}
+
+.search-select__trigger[aria-invalid='true'] {
+  border-color: var(--ss-bad, #d63a52);
+}
+
+/* Long names wrap onto a second line instead of being cut off */
+.search-select__value {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.search-select__placeholder {
+  color: var(--ss-muted, #6b6f93);
+}
+
+.search-select__chevron {
+  flex-shrink: 0;
+  color: var(--ss-muted, #6b6f93);
+  transition: transform 0.15s ease;
+}
+
+.search-select.is-open .search-select__chevron {
+  transform: rotate(180deg);
+}
+
+/* The open list floats over the fields below it */
+.search-select__popup {
+  position: absolute;
+  top: calc(100% + 0.35rem);
+  left: 0;
+  right: 0;
+  z-index: 20;
+  display: grid;
+  gap: 0.4rem;
+  padding: 0.5rem;
+  border: 1px solid var(--ss-line, #c9cbe0);
+  border-radius: var(--ss-radius, 10px);
+  background: var(--ss-popup, #fff);
+  box-shadow: 0 22px 50px -18px rgb(0 0 0 / 0.6);
+  animation: search-select-in 0.18s ease-out;
+}
+
+@keyframes search-select-in {
+  from {
+    opacity: 0;
+    transform: translate3d(0, -0.3rem, 0);
+  }
+}
+
+.search-select__search {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.search-select__search svg {
+  position: absolute;
+  left: 0.75rem;
+  color: var(--ss-muted, #6b6f93);
+  pointer-events: none;
+}
+
+.search-select .search-select__input {
+  width: 100%;
+  min-height: 2.75rem;
+  padding: 0.55rem 0.8rem 0.55rem 2.2rem;
+  border: 1px solid var(--ss-line, #c9cbe0);
+  border-radius: calc(var(--ss-radius, 10px) - 2px);
+  font: inherit;
+  font-size: 16px;
+  color: var(--ss-ink, #14163a);
+  background: var(--ss-bg, #fff);
+}
+
+.search-select .search-select__input::placeholder {
+  color: var(--ss-muted, #6b6f93);
+}
+
+.search-select .search-select__input:focus-visible {
+  outline: none;
+  border-color: var(--ss-accent, #6b4dff);
+}
+
+/* Scrolls inside itself; the form behind does not move */
+.search-select__list {
+  display: grid;
+  gap: 0.1rem;
+  max-height: min(17rem, 45dvh);
+  margin: 0;
+  padding: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  list-style: none;
+}
+
+.search-select__list:focus-visible {
+  outline: 2px solid var(--ss-accent, #6b4dff);
+  outline-offset: 2px;
+}
+
+.search-select__option {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  min-height: 2.75rem;
+  padding: 0.5rem 0.7rem;
+  border-radius: calc(var(--ss-radius, 10px) - 2px);
+  line-height: 1.35;
+  color: var(--ss-ink, #14163a);
+  cursor: pointer;
+}
+
+.search-select__option.is-active {
+  background: color-mix(in srgb, var(--ss-accent, #6b4dff) 14%, transparent);
+}
+
+.search-select__option.is-selected {
+  font-weight: 700;
+  color: var(--ss-accent-ink, var(--ss-accent, #6b4dff));
+}
+
+.search-select__check {
+  flex-shrink: 0;
+}
+
+.search-select__empty {
+  margin: 0;
+  padding: 0.6rem 0.7rem;
+  color: var(--ss-muted, #6b6f93);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .search-select__popup {
+    animation: none;
+  }
+}

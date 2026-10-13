@@ -4,7 +4,7 @@ import { site } from '../../content/site';
 import { HelpDeskLine } from '../help/HelpDeskLine';
 import { ContactIcon } from '../icons/ContactIcon';
 import { SocialIcon } from '../icons/SocialIcon';
-import { crewLinkLabel } from './DevCrew';
+import { crewLinkLabel } from './crewLinks';
 import './Footer.css';
 
 /** A link under Explore: another page, or a section (#id) of this page. */
@@ -25,8 +25,8 @@ const telHref = (number: string) => `tel:+91${number.replace(/\D/g, '')}`;
 const displayUrl = (url: string) => url.replace(/^https?:\/\//, '').replace(/\/$/, '');
 
 /**
- * Brand and contact on top; below them the credits, follow and explore links, side by side
- * with the map. The whole Dev Crew opens from the incognito button in the navigation.
+ * Brand and contact on top; below them the credits beside the follow and explore links. No
+ * map: the address is enough, and the page loads without Google Maps.
  */
 export function Footer({ links }: FooterProps) {
   const { college } = site;
@@ -166,29 +166,6 @@ export function Footer({ links }: FooterProps) {
               </ul>
             </nav>
           </div>
-        </div>
-
-        <div className="footer__location">
-          <h2 className="footer__heading">Location</h2>
-          <div className="footer__map">
-            <iframe
-              src={college.map.embedUrl}
-              title={`Map showing ${college.name}`}
-              loading="lazy"
-              referrerPolicy="no-referrer-when-downgrade"
-              allowFullScreen
-            />
-          </div>
-          <a
-            className="footer__map-link"
-            href={college.map.url}
-            target="_blank"
-            rel="noopener noreferrer"
-            aria-label="Open in Google Maps (opens in a new tab)"
-          >
-            Open in Google Maps
-            <ContactIcon name="external" size={15} />
-          </a>
         </div>
       </div>
 

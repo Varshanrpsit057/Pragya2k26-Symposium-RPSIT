@@ -14,6 +14,16 @@
   --r-good: #3ddc97;
   --r-warn: #ffc15a;
   --r-bad: #ff7a8a;
+  /* The searchable lists (stream, department) in the same colours */
+  --ss-bg: var(--r-surface-2);
+  --ss-popup: #11153f;
+  --ss-line: var(--r-line);
+  --ss-ink: var(--r-ink);
+  --ss-muted: var(--r-muted);
+  --ss-accent: var(--r-accent);
+  --ss-accent-ink: #cbbdff;
+  --ss-bad: var(--r-bad);
+  --ss-radius: 10px;
   color-scheme: dark;
 }
 
@@ -163,6 +173,7 @@ body {
 
 .reg-button {
   display: inline-flex;
+  gap: 0.4rem;
   align-items: center;
   justify-content: center;
   min-height: 3rem;
@@ -174,7 +185,8 @@ body {
   font-weight: 700;
   text-align: center;
   text-decoration: none;
-  background: var(--r-accent);
+  background: linear-gradient(135deg, #9b7bff, #6c4dff);
+  box-shadow: 0 10px 24px -12px rgb(140 108 255 / 0.8);
   cursor: pointer;
 }
 
@@ -193,6 +205,13 @@ body {
   border: 1px solid var(--r-line);
   color: var(--r-ink);
   background: transparent;
+  box-shadow: none;
+}
+
+.reg-button--small {
+  min-height: 2.4rem;
+  padding: 0.4rem 0.8rem;
+  font-size: 0.9rem;
 }
 
 .reg-link {
@@ -274,7 +293,10 @@ body {
   border: 1px solid rgb(140 108 255 / 0.55);
   border-radius: 18px;
   text-align: center;
-  background: linear-gradient(160deg, #1b1f5e, #0e1135);
+  background:
+    radial-gradient(90% 70% at 50% 0%, rgb(140 108 255 / 0.28), transparent 70%),
+    linear-gradient(160deg, #1b1f5e, #0e1135);
+  box-shadow: 0 24px 50px -30px rgb(140 108 255 / 0.9);
 }
 
 .reg-idcard__label {
@@ -387,6 +409,128 @@ body {
 
 .reg-foot a {
   color: var(--r-muted);
+}
+
+.reg-foot span {
+  margin-left: auto;
+  color: var(--r-muted);
+  font-size: 0.8rem;
+  text-align: right;
+}
+
+.reg-center {
+  text-align: center;
+}
+
+/* Before registering: what the fee is and how it can be paid */
+.reg-note {
+  margin: 0;
+  padding: 0.85rem 1rem;
+  border: 1px solid rgb(140 108 255 / 0.4);
+  border-radius: 12px;
+  color: var(--r-ink);
+  background: rgb(140 108 255 / 0.1);
+}
+
+/* The payment step after registering */
+.reg-pay {
+  display: grid;
+  gap: 0.9rem;
+  padding: 1rem;
+  border: 1px solid var(--r-line);
+  border-radius: 16px;
+  background: var(--r-surface);
+}
+
+.reg-pay__choices {
+  display: grid;
+  gap: 0.7rem;
+}
+
+@media (min-width: 480px) {
+  .reg-pay__choices {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+.reg-choice {
+  display: grid;
+  gap: 0.3rem;
+  align-content: start;
+  min-height: 6.5rem;
+  padding: 1rem;
+  border: 1px solid var(--r-line);
+  border-radius: 14px;
+  color: var(--r-ink);
+  font: inherit;
+  text-align: left;
+  background: var(--r-surface-2);
+  cursor: pointer;
+  transition:
+    border-color 0.15s ease,
+    transform 0.15s ease;
+}
+
+.reg-choice strong {
+  font-size: 1.1rem;
+}
+
+.reg-choice span {
+  color: var(--r-muted);
+  font-size: 0.92rem;
+  line-height: 1.4;
+}
+
+.reg-choice:hover,
+.reg-choice:focus-visible {
+  border-color: var(--r-accent);
+  outline: none;
+  transform: translateY(-1px);
+}
+
+.reg-steps {
+  display: grid;
+  gap: 1.1rem;
+  margin: 0;
+  padding: 0 0 0 1.3rem;
+}
+
+.reg-steps li {
+  display: grid;
+  gap: 0.7rem;
+  padding-left: 0.2rem;
+}
+
+.reg-steps li::marker {
+  color: var(--r-accent);
+  font-weight: 800;
+}
+
+/* The QR code on white, as UPI apps expect it */
+.reg-qr {
+  justify-self: center;
+  width: min(15rem, 70vw);
+  height: auto;
+  padding: 0.6rem;
+  border-radius: 14px;
+  background: #fff;
+  image-rendering: pixelated;
+}
+
+.reg-upi {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.6rem 0.8rem;
+  border: 1px dashed var(--r-line);
+  border-radius: 10px;
+}
+
+.reg-upi code {
+  font-size: 1rem;
+  overflow-wrap: anywhere;
 }
 
 /* The department: chosen first (it decides which desks and coordinators see the student) */

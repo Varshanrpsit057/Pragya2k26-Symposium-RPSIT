@@ -280,7 +280,8 @@ async function verifyOne(token, dept) {
   const waiting = [...(seen.get(dept)?.values() ?? [])].find((item) => item.entry?.status === 'DUE' && !item.entry.rejected && !item.cancelled && !item.deleted && !verifying.has(item.id));
   if (!waiting) return false;
   verifying.add(waiting.id);
-  const body = waiting.entry.claim ? { action: 'verify', confirmed: true } : { action: 'checkin', payment: { method: 'UPI', txn: nextTxn(), confirmed: true } };
+  // A UTR the student sent is typed back by the desk (it must match); otherwise the desk takes a UPI payment with its own UTR.
+  const body = waiting.entry.claim ? { action: 'verify', txn: waiting.entry.claim.txn, confirmed: true } : { action: 'checkin', payment: { method: 'UPI', txn: nextTxn(), confirmed: true } };
   const answer = await call('verify payment', 'POST', `/api/admin/fest/registrations/${waiting.id}`, body, token);
   if (answer.status === 200) {
     verified += 1;

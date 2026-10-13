@@ -55,7 +55,7 @@ const sections = async () => {
 
 describe('dashboard of the student coordinators', () => {
   it.each([
-    ['ADMIN', {}, ['Overview', 'Registrations', 'Results', 'Colleges', 'Register', 'Event windows', 'Online & paper', 'Departments & events', 'Accounts', 'Event-day controls', 'Help requests', 'System status', 'Testing', 'Roles']],
+    ['ADMIN', {}, ['Overview', 'Registrations', 'Results', 'Colleges', 'Register', 'Event windows', 'Online & paper', 'Departments & events', 'Website controls', 'Accounts', 'Event-day controls', 'Help requests', 'System status', 'Testing', 'Roles']],
     ['OVERALL', {}, ['Overview', 'Registrations', 'Results', 'Colleges', 'Roles']],
     ['HOD', { department: 'CSE' }, ['Overview', 'Registrations', 'Results', 'Colleges', 'Roles']],
     ['DEPT_ADMIN', { department: 'CSE' }, ['Overview', 'Registrations', 'Results', 'Colleges', 'Register', 'Event windows', 'Online & paper', 'Roles']],
@@ -66,7 +66,7 @@ describe('dashboard of the student coordinators', () => {
     render(<AdminApp />);
     expect(await sections()).toEqual(expected);
     expect(screen.getByText(/On-site registration open/)).toBeInTheDocument();
-    const title = 'department' in extra ? 'PRAGYA 2026 · CSE · Computer Science and Engineering' : 'PRAGYA 2026 · All departments';
+    const title = 'department' in extra ? 'CSE · Computer Science and Engineering' : 'All departments';
     expect(screen.getByRole('heading', { name: title })).toBeInTheDocument();
     // Everyone can reach the web assist team, and sees whether the phone is live.
     expect(screen.getByRole('button', { name: /Contact admin/ })).toBeInTheDocument();
@@ -106,9 +106,11 @@ describe('dashboard of the student coordinators', () => {
     fireEvent.click(within(await screen.findByRole('navigation', { name: 'Sections' })).getByRole('button', { name: 'Roles' }));
     const heading = screen.getByRole('heading', { name: 'Roles and permissions' });
     const panel = heading.closest('section') as HTMLElement;
-    for (const role of ['Web assist team', 'Overall coordinator', 'Department HOD', 'Department admin', 'Registration desk', 'Event coordinator']) {
+    for (const role of ['Web assist team', 'Overall coordinator (HOD)', 'Department admin', 'Registration desk', 'Event coordinator']) {
       expect(within(panel).getByRole('heading', { name: role })).toBeInTheDocument();
     }
+    // One HOD for every department (the overall coordinator): no HOD account per department.
+    expect(within(panel).queryByRole('heading', { name: /Department HOD/ })).toBeNull();
     expect(within(panel).queryByRole('heading', { name: 'Certificate team' })).toBeNull();
     const coordinator = within(panel).getByRole('heading', { name: 'Event coordinator' }).closest('article') as HTMLElement;
     expect(coordinator).toHaveClass('is-mine');

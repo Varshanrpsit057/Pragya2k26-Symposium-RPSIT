@@ -1,11 +1,12 @@
 /** Staff accounts (admins): create, set roles, assign events, reset passwords, deactivate, delete. */
 import { useCallback, useState, type FormEvent } from 'react';
 import { events as allEvents } from '../content/events';
-import { deptShort, eventLabel, toCsv, type FestCatalog } from '../lib/fest';
+import { deptShort, eventLabel, type FestCatalog } from '../lib/fest';
 import { CREATABLE_ROLES, DEPARTMENT_ROLES, ROLE_INFO, type SessionInfo, type StaffAccountView, type StaffRole } from '../lib/staff';
 import { ApiFailure, SignedOut, createStaff, deleteStaff, listStaff, signOutStaff, signedInNow, updateStaff, type StaffChange } from './adminApi';
+import { PORTAL, saveTable } from './fest/excel';
 import { useFestCatalog } from './fest/FestData';
-import { Badge, ErrorNote, LiveStatus, saveFile, useLiveData, when } from './ui';
+import { Badge, ErrorNote, LiveStatus, useLiveData, when } from './ui';
 
 interface PanelProps {
   token: string;
@@ -456,15 +457,21 @@ interface PlannedAccount {
   message?: string;
 }
 
-/** The accounts a department needs: HOD, department admin, each desk, two coordinators per event. */
-function planFor(catalog: FestCatalog, code: string): PlannedAccount[] {
+/** Each department's registration desk logins. */
+export const DESK_LOGINS = 2;
+
+/**
+ * The accounts a department needs: its department admin, two registration desks and one
+ * coordinator for each event. (The overall coordinator, the HOD, is one account for every
+ * department; there is no HOD account per department.)
+ */
+export function planFor(catalog: FestCatalog, code: string): PlannedAccount[] {
   const dept = catalog.departments.find((item) => item.code === code);
   if (!dept) return [];
   const lower = code.toLowerCase();
   const plan: PlannedAccount[] = [
-    { username: `${lower}-hod`, displayName: `${deptShort(code)} HOD`, role: 'HOD', department: code, eventIds: [], password: generatePassword() },
     { username: `${lower}-admin`, displayName: `${deptShort(code)} Department admin`, role: 'DEPT_ADMIN', department: code, eventIds: [], password: generatePassword() },
-    ...Array.from({ length: dept.desks }, (_, index) => ({
+    ...Array.from({ length: DESK_LOGINS }, (_, index) => ({
       username: `${lower}-desk${index + 1}`,
       displayName: `${deptShort(code)} Desk ${index + 1}`,
       role: 'DESK' as StaffRole,
@@ -475,20 +482,22 @@ function planFor(catalog: FestCatalog, code: string): PlannedAccount[] {
     })),
   ];
   for (const event of catalog.events.filter((item) => item.dept === code)) {
-    const slug = event.id.replace(new RegExp(`^${lower}-`), '').slice(0, 22).replace(/-+$/, '');
-    for (const n of [1, 2]) {
-      plan.push({
-        username: `${lower}-${slug}-${n}`,
-        displayName: `${event.name.replace(/[^\p{L}\p{N} .'()&-]/gu, ' ').replace(/\s+/g, ' ').trim().slice(0, 40)} coordinator ${n}`,
-        role: 'COORDINATOR',
-        department: code,
-        eventIds: [event.id],
-        password: generatePassword(),
-      });
-    }
+    const slug = event.id.replace(new RegExp(`^${lower}-`), '').slice(0, 24).replace(/-+$/, '');
+    plan.push({
+      username: `${lower}-${slug}`,
+      displayName: `${event.name.replace(/[^\p{L}\p{N} .'()&-]/gu, ' ').replace(/\s+/g, ' ').trim().slice(0, 40)} coordinator`,
+      role: 'COORDINATOR',
+      department: code,
+      eventIds: [event.id],
+      password: generatePassword(),
+    });
   }
   return plan;
 }
+
+/** Already there: the same username, or (a coordinator) an account that already has that event. */
+export const planExists = (item: PlannedAccount, existing: readonly StaffAccountView[]) =>
+  existing.some((account) => account.username === item.username || (item.role === 'COORDINATOR' && account.role === 'COORDINATOR' && item.eventIds.every((id) => account.eventIds.includes(id))));
 
 /**
  * Makes a department's accounts in one go (those that do not exist yet), with strong
@@ -499,11 +508,11 @@ function DepartmentAccounts({ token, existing, onCreated, onSignedOut }: { token
   const [code, setCode] = useState('');
   const [plan, setPlan] = useState<PlannedAccount[]>([]);
   const [busy, setBusy] = useState(false);
-  const taken = new Set(existing.map((account) => account.username));
   const choose = (next: string) => {
     setCode(next);
-    setPlan(next ? planFor(catalog, next).map((item) => (taken.has(item.username) ? { ...item, status: 'exists' as const } : item)) : []);
+    setPlan(next ? planFor(catalog, next).map((item) => (planExists(item, existing) ? { ...item, status: 'exists' as const } : item)) : []);
   };
+  const hods = existing.filter((account) => account.role === 'HOD');
   const create = async () => {
     setBusy(true);
     const next = [...plan];
@@ -530,7 +539,15 @@ function DepartmentAccounts({ token, existing, onCreated, onSignedOut }: { token
   return (
     <section className="adm-card adm-pad">
       <h2 className="adm-h2">Create a department’s accounts</h2>
-      <p className="adm-muted">The HOD, the department admin, every desk and two coordinators for each event, with strong passwords. Accounts that already exist are left as they are.</p>
+      <p className="adm-muted">
+        The department admin, {DESK_LOGINS} registration desks and one coordinator for each event, with strong passwords. Accounts that already exist are left as they are. The overall
+        coordinator (the HOD) is one account for every department: create it above with the role Overall coordinator.
+      </p>
+      {hods.length > 0 && (
+        <p className="adm-note">
+          Department HOD accounts are no longer used: {hods.map((account) => account.username).join(', ')}. Deactivate or delete them in the list above.
+        </p>
+      )}
       <label className="adm-field">
         <span>Department</span>
         <select value={code} onChange={(event) => choose(event.target.value)} disabled={busy}>
@@ -582,26 +599,22 @@ function DepartmentAccounts({ token, existing, onCreated, onSignedOut }: { token
               type="button"
               disabled={!created.length}
               onClick={() =>
-                saveFile(
-                  `${code}-accounts.csv`,
-                  toCsv([
-                    ['Department', 'Role', 'Name', 'Username', 'Password', 'Desk', 'Events', 'Sign in at'],
-                    ...created.map((item) => [
-                      item.department,
-                      ROLE_INFO[item.role].label,
-                      item.displayName,
-                      item.username,
-                      item.password,
-                      item.deskNumber ?? '',
-                      item.eventIds.map((id) => eventName(catalog, id)).join('; '),
-                      `${window.location.origin}/landing/${item.department.toLowerCase()}/admin/`,
-                    ]),
+                saveTable(`${code}-accounts.xlsx`, `${deptShort(code)} logins`, `${PORTAL} · new logins for ${deptShort(code)}: give each person their own, privately`, [
+                  ['Department', 'Role', 'Name', 'Username', 'Password', 'Desk', 'Events', 'Sign in at'],
+                  ...created.map((item) => [
+                    deptShort(item.department),
+                    ROLE_INFO[item.role].label,
+                    item.displayName,
+                    item.username,
+                    item.password,
+                    item.deskNumber ?? '',
+                    item.eventIds.map((id) => eventName(catalog, id)).join('; '),
+                    `${window.location.origin}/landing/${item.department.toLowerCase()}/admin/`,
                   ]),
-                  'text/csv;charset=utf-8',
-                )
+                ])
               }
             >
-              Download the new logins (CSV)
+              Download the new logins (Excel)
             </button>
           </div>
           {created.length > 0 && <p className="adm-note">Download the logins now: the passwords are not shown again. Give each person their own login privately.</p>}

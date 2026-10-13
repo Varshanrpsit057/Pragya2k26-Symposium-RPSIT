@@ -10,8 +10,12 @@
 export const STAFF_ROLES = ['ADMIN', 'OVERALL', 'HOD', 'DEPT_ADMIN', 'DESK', 'COORDINATOR', 'CERTIFICATE', 'SUPPORT'] as const;
 export type StaffRole = (typeof STAFF_ROLES)[number];
 
-/** The roles new accounts are made with (the certificate team was dropped; the web assist team is Admin). */
-export const CREATABLE_ROLES: readonly StaffRole[] = ['ADMIN', 'OVERALL', 'HOD', 'DEPT_ADMIN', 'DESK', 'COORDINATOR'];
+/**
+ * The roles new accounts are made with: the web assist team (Admin), the overall coordinator (the
+ * HOD, one account for every department), and in each department its admin, desks and event
+ * coordinators. (Department HOD accounts made earlier still work, view only.)
+ */
+export const CREATABLE_ROLES: readonly StaffRole[] = ['ADMIN', 'OVERALL', 'DEPT_ADMIN', 'DESK', 'COORDINATOR'];
 
 /** Roles that belong to one department: they see and work on that department only. */
 export const DEPARTMENT_ROLES: readonly StaffRole[] = ['HOD', 'DEPT_ADMIN', 'DESK', 'COORDINATOR'];
@@ -40,6 +44,7 @@ export type Permission =
   | 'registration.window'
   | 'site.notice'
   | 'system.testing'
+  | 'site.switches'
   | 'fest.view'
   | 'fest.viewAll'
   | 'fest.register'
@@ -74,6 +79,7 @@ export const PERMISSION_LABELS: Record<Permission, string> = {
   'registration.window': 'Change the registration times: reopen or extend on-site registration, close registration now, or set new times; the website, the desks and the API follow within seconds',
   'site.notice': 'Post a notice on the website and the student page (e.g. a venue or time change); every open page shows it within two minutes',
   'system.testing': 'Test sessions: set the timeline the website follows, mark records made while testing, and delete that test data',
+  'site.switches': 'Website controls: switch each part of the portal off and on (student registration, online payment, lookups, desk registration, event entry, results, downloads, each role’s sign-in) and upload, replace or remove the UPI QR code',
   'fest.view': "See the live registrations, events, money and results (department roles: their own department only)",
   'fest.viewAll': 'See every department, with filters by department, event, venue and desk',
   'fest.register': 'Register students at a desk (works offline: it sends when the network is back) and check in online registrants',
@@ -104,6 +110,7 @@ export const CURRENT_PERMISSIONS: readonly Permission[] = [
   'help.manage',
   'system.view',
   'system.testing',
+  'site.switches',
 ];
 
 export const ROLE_PERMISSIONS: Record<StaffRole, readonly Permission[]> = {
@@ -129,6 +136,7 @@ export const ROLE_PERMISSIONS: Record<StaffRole, readonly Permission[]> = {
     'registration.window',
     'site.notice',
     'system.testing',
+    'site.switches',
     'fest.view',
     'fest.viewAll',
     'fest.register',
@@ -158,27 +166,27 @@ export const ROLE_INFO: Record<StaffRole, { label: string; summary: string }> = 
   ADMIN: {
     label: 'Web assist team',
     summary:
-      'Full control of the system: departments and events, accounts (create, change, sign out, delete), registration times, the website notice, registrations (register, import, correct, cancel, delete, restore), event windows, corrections, test sessions and system status. Every department.',
+      'Full control of the portal: Website controls (switch every part on or off, sign-in for each role, the UPI QR code), accounts (create, change, sign out, delete) and who is signed in, departments and events, registration times, the website notice, registrations (register, correct, cancel, delete, restore), event windows, corrections, test sessions and system status. Every department.',
   },
   OVERALL: {
-    label: 'Overall coordinator',
-    summary: 'Every department live, with filters by department, event, venue and desk: registrations, money, attendance and each event’s winners; corrections (cancel a fee recorded by mistake, reopen results); downloads.',
+    label: 'Overall coordinator (HOD)',
+    summary: 'Every department and every event live, with filters on every category (department, event, venue, how they registered, desk, entry fee, status, college, search): registrations, money, attendance and winners, downloaded as Excel; corrections (cancel a fee recorded by mistake, reopen results).',
   },
   HOD: {
-    label: 'Department HOD',
-    summary: 'Their department live: registrations at each desk, money, every event’s attendance and winners. View only.',
+    label: 'Department HOD (no longer used)',
+    summary: 'An earlier role: their department live, view only. The overall coordinator (the HOD) now sees every department.',
   },
   DEPT_ADMIN: {
     label: 'Department admin',
-    summary: 'Their department: upload the online registrations, watch the desks and events, register students, correct details, cancel registrations, help at any of the department’s events.',
+    summary: 'Their department: watch its desks and events, register students and verify payments, correct details, cancel registrations, help at any of its events, upload paper slips, download its lists as Excel.',
   },
   DESK: {
     label: 'Registration desk',
-    summary: 'Register students at the desk (individual or team) with the events they choose and take the ₹100 gate pass (cash, or GPay the student pays from Student login); verify GPay payments; correct details. Desk registrations get no pass: the Registration ID is enough. Event fees are paid at each venue.',
+    summary: 'Two per department. Verify the UPI payments students made on their phones (type the UTR: it must match theirs and be used once), take the ₹100 entry fee in cash or UPI, register walk-ins, check students in and correct details.',
   },
   COORDINATOR: {
     label: 'Event coordinator',
-    summary: 'Assigned events only: find the student by their Registration ID (verifying a GPay payment made online if needed), enter them (individual or team) with the ₹50 fee, mark attendance, enter winners and submit results.',
+    summary: 'One per event. Their event only: find the student by their Registration ID, enter them (individual or team) with the event fee, mark attendance, enter the winners and submit the results.',
   },
   CERTIFICATE: {
     label: 'Certificate team',
