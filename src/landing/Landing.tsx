@@ -1,11 +1,20 @@
+import { SkyBackdrop } from '../components/background/SkyBackdrop';
+import { SiteNotice } from '../components/help/SiteNotice';
+import { Footer, type FooterLink } from '../components/sections/Footer';
 import { site } from '../content/site';
 import { DEFAULT_CATALOG } from '../lib/fest';
-import { SiteNotice } from '../components/help/SiteNotice';
-import { telHref, whatsappHref } from '../components/help/HelpDeskLine';
 import './Landing.css';
 
 /** Where staff sign in (every role; department staff may also use their department's page). */
 export const STAFF_SIGN_IN = '/landing/admin/';
+/** The students' page: register on their phone, then their ID and payment status. */
+export const REGISTER = '/register/';
+
+const FOOTER_LINKS: readonly FooterLink[] = [
+  { id: 'register', label: 'Register', href: REGISTER },
+  { id: 'my-id', label: 'My registration ID', href: REGISTER },
+  { id: 'staff', label: 'Staff sign in', href: STAFF_SIGN_IN },
+];
 
 /**
  * The students' website (every department's events and the route map), run separately. Set it
@@ -15,7 +24,6 @@ export const EVENTS_SITE_URL: string | null = null;
 
 const departments = DEFAULT_CATALOG.departments;
 const eventCount = DEFAULT_CATALOG.events.length;
-const helpLine = site.helpDesk.phones[0] ?? null;
 const festDay = site.dates ?? 'the event day';
 
 // The loop: a lemniscate of Bernoulli across a 600 × 240 box, one station per department.
@@ -68,7 +76,10 @@ function Loop() {
  */
 export function Landing() {
   return (
-    <div className="landing">
+    <>
+      {/* The PRAGYA sky: a still gradient at once, the slow light streaks on capable devices only */}
+      <SkyBackdrop />
+    <div id="home" className="landing">
       <header className="landing-top">
         <a className="landing-college" href={site.college.website} target="_blank" rel="noopener noreferrer">
           <img src="/images/rpsit-crest.webp" alt="" width="40" height="40" />
@@ -93,8 +104,11 @@ export function Landing() {
             PRAGYA 2K26, the college-wide technical fest of {site.institution}: {eventCount} events across {departments.length} departments.
           </p>
           <div className="landing-actions">
-            <a className="landing-button" href={STAFF_SIGN_IN}>
-              Staff sign in
+            <a className="landing-button" href={REGISTER}>
+              Register now
+            </a>
+            <a className="landing-button landing-button--ghost" href={REGISTER}>
+              My registration ID
             </a>
             {EVENTS_SITE_URL && (
               <a className="landing-button landing-button--ghost" href={EVENTS_SITE_URL}>
@@ -102,14 +116,21 @@ export function Landing() {
               </a>
             )}
           </div>
+          <a className="landing-staff" href={STAFF_SIGN_IN}>
+            Staff sign in
+          </a>
         </section>
 
         <section className="landing-block" aria-labelledby="landing-students">
           <h2 id="landing-students">Taking part?</h2>
-          <p>
-            Register at your department’s desk on campus on {festDay}. Already registered online? Give the desk the mobile number you
-            registered with.
-          </p>
+          <ol className="landing-steps">
+            <li>
+              <a href={REGISTER}>Register on your phone</a>: your details, the ₹{DEFAULT_CATALOG.entryFee} entry fee by UPI and its transaction ID. You get your registration ID at once.
+            </li>
+            <li>Verify your payment at any registration desk: show your ID.</li>
+            <li>Register for events at each event’s venue, in any department, on {festDay}.</li>
+          </ol>
+          <p>Registered online already? Give the desk the mobile number you registered with.</p>
           {EVENTS_SITE_URL && (
             <p>
               Every department’s events, and the way to each venue, are on the <a href={EVENTS_SITE_URL}>events and route map website</a>.
@@ -133,20 +154,11 @@ export function Landing() {
         </section>
       </main>
 
-      <footer className="landing-foot">
-        {helpLine && (
-          <p>
-            Need help? Call the help desk on <a href={telHref(helpLine.phone)}>{helpLine.phone}</a> or{' '}
-            <a href={whatsappHref(helpLine.phone)} target="_blank" rel="noopener noreferrer">
-              message on WhatsApp
-            </a>
-            .
-          </p>
-        )}
-        <p className="landing-foot__address">
-          {site.college.name}, {site.college.address}
-        </p>
-      </footer>
     </div>
+      <Footer links={FOOTER_LINKS} />
+      <p className="landing-coordinated">
+        Overall coordinated by the <strong>Department of Artificial Intelligence and Data Science</strong>
+      </p>
+    </>
   );
 }

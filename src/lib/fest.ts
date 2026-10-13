@@ -51,6 +51,9 @@ export interface FestCatalog {
   revision: number;
   /** The entry fee in rupees, paid at the desk (or online). */
   entryFee: number;
+  /** The UPI account students pay the entry fee to when they register themselves (shown on their page). */
+  upiId?: string;
+  upiPayee?: string;
   departments: FestDepartment[];
   events: FestEvent[];
   updatedAt: string | null;
@@ -216,10 +219,13 @@ export const teamRule = (event: Pick<FestEvent, 'teamMin' | 'teamMax'>) =>
 /** What is wrong with a catalog, or null. */
 export function catalogProblem(catalog: FestCatalog): string | null {
   if (!Number.isInteger(catalog.entryFee) || catalog.entryFee < 0 || catalog.entryFee > 10_000) return 'The entry fee must be a whole number of rupees.';
+  if (catalog.upiId && !UPI_ID.test(catalog.upiId)) return 'The UPI ID looks wrong (like name@bank).';
+  if (catalog.upiPayee && catalog.upiPayee.length > 80) return 'The account holder name is too long.';
   const codes = new Set<string>();
   for (const dept of catalog.departments) {
     if (!DEPT_CODE.test(dept.code)) return `Department code "${dept.code}" must be 2–6 capital letters.`;
     if (codes.has(dept.code)) return `Two departments use the code ${dept.code}.`;
+    if (dept.code === OPEN_DEPT) return `${OPEN_DEPT} is kept for students who register themselves: choose another code.`;
     codes.add(dept.code);
     if (!dept.name.trim()) return `Department ${dept.code} needs a name.`;
     if (!Number.isInteger(dept.desks) || dept.desks < 1 || dept.desks > 20) return `Department ${dept.code}: desks must be 1–20.`;
@@ -242,7 +248,13 @@ export function catalogProblem(catalog: FestCatalog): string | null {
 // ------------------------------------------------------------------------------------------
 // Registrations
 
-export type FestSource = 'DESK' | 'ONLINE' | 'PAPER';
+export type FestSource = 'DESK' | 'ONLINE' | 'PAPER' | 'SELF';
+
+/**
+ * Students who register themselves on their phone: one fest-wide series of IDs (20001, 20002…),
+ * kept as their own "department", and free to join any department's events.
+ */
+export const OPEN_DEPT = 'OPEN';
 export type FestMethod = 'CASH' | 'UPI' | 'ONLINE';
 
 /** Who recorded what, and when. */
@@ -268,8 +280,15 @@ export interface FestEntry {
   present?: FestStamp;
 }
 
+/** The UPI transaction ID a student typed when registering themselves, waiting for a desk to check it. */
+export interface FestClaim {
+  txn: string;
+  amount: number;
+  at: string;
+}
+
 export interface FestRegistration {
-  /** 'CSE-0147'. */
+  /** 'CSE-0147', or '20017' for a student who registered themselves. */
   id: string;
   dept: string;
   source: FestSource;
@@ -281,7 +300,11 @@ export interface FestRegistration {
   branch: string;
   year: string;
   team: string;
-  entry: { status: 'PAID' | 'DUE'; payment?: FestPayment };
+  /**
+   * The entry fee. A self-registered student starts DUE with `claim` (the transaction ID they
+   * typed); a desk verifies it (PAID, with the payment) or marks it not received (`rejected`).
+   */
+  entry: { status: 'PAID' | 'DUE'; payment?: FestPayment; claim?: FestClaim; rejected?: FestStamp & { reason: string } };
   /** An online registrant arrived at the desk. */
   checkedIn?: FestStamp & { desk?: number };
   events: FestEntry[];
@@ -318,11 +341,15 @@ export interface FestResult {
   u: string;
 }
 
-/** The numbers each source uses within a department: CSE-0001… at the desks, CSE-5001… online, CSE-9001… on paper. */
+/**
+ * The numbers each source uses within a department: CSE-0001… at the desks, CSE-5001… online,
+ * CSE-9001… on paper; and 20001… for students who register themselves (fest-wide, no prefix).
+ */
 export const ID_RANGES: Record<FestSource, { first: number; last: number }> = {
   DESK: { first: 1, last: 4999 },
   ONLINE: { first: 5001, last: 8999 },
   PAPER: { first: 9001, last: 9999 },
+  SELF: { first: 20001, last: 99999 },
 };
 
 /** How many IDs a desk phone takes at a time, and when it asks for more. */
@@ -330,16 +357,23 @@ export const ID_BLOCK = 50;
 export const ID_TOP_UP_AT = 15;
 
 export const FEST_ID = /^([A-Z]{2,6})-(\d{4})$/;
-export const formatFestId = (dept: string, number: number) => `${dept}-${String(number).padStart(4, '0')}`;
+const SELF_ID = /^\d{5}$/;
+export const formatFestId = (dept: string, number: number) => (dept === OPEN_DEPT ? String(number) : `${dept}-${String(number).padStart(4, '0')}`);
 export const parseFestId = (id: string) => {
+  if (SELF_ID.test(id)) {
+    const number = Number(id);
+    return number >= ID_RANGES.SELF.first ? { dept: OPEN_DEPT, number } : null;
+  }
   const match = FEST_ID.exec(id);
   return match ? { dept: match[1], number: Number(match[2]) } : null;
 };
 export const sourceOfNumber = (number: number): FestSource | null =>
   (Object.entries(ID_RANGES) as [FestSource, { first: number; last: number }][]).find(([, range]) => number >= range.first && number <= range.last)?.[0] ?? null;
 
-/** 'cse 147', 'cse0147', 'CSE-147' → 'CSE-0147'; '' when it does not look like an ID. */
+/** 'cse 147', 'cse0147', 'CSE-147' → 'CSE-0147'; ' 20017 ' → '20017'; '' when it does not look like an ID. */
 export function normaliseFestId(input: string): string {
+  const self = /^\s*(\d{5})\s*$/.exec(input);
+  if (self) return Number(self[1]) >= ID_RANGES.SELF.first ? self[1] : '';
   const match = /^\s*([a-z]{2,6})\s*-?\s*(\d{1,4})\s*$/i.exec(input);
   return match ? formatFestId(match[1].toUpperCase(), Number(match[2])) : '';
 }
@@ -353,6 +387,59 @@ export function parseIdList(text: string): string[] {
   }
   return ids;
 }
+
+/** What a student sees of their own registration (their page, signed in with ID and mobile number). */
+export interface StudentView {
+  id: string;
+  dept: string;
+  name: string;
+  college: string;
+  branch: string;
+  year: string;
+  team: string;
+  /** The last 4 digits of the mobile number, to show whose page this is. */
+  phoneEnd: string;
+  /** waiting: the desk has not checked the transaction ID yet; rejected: the desk did not find the payment. */
+  status: 'verified' | 'waiting' | 'rejected' | 'due' | 'cancelled';
+  txn: string;
+  reason: string;
+  entryFee: number;
+  events: { eventId: string; feePaid: boolean; present: boolean }[];
+  createdAt: string;
+}
+
+export function toStudentView(registration: FestRegistration): StudentView {
+  const { entry } = registration;
+  return {
+    id: registration.id,
+    dept: registration.dept,
+    name: registration.name,
+    college: registration.college,
+    branch: registration.branch,
+    year: registration.year,
+    team: registration.team,
+    phoneEnd: registration.phone.slice(-4),
+    status: !isActive(registration) ? 'cancelled' : entry.status === 'PAID' ? 'verified' : entry.rejected ? 'rejected' : entry.claim ? 'waiting' : 'due',
+    txn: entry.claim?.txn ?? entry.payment?.txn ?? '',
+    reason: entry.rejected?.reason ?? '',
+    entryFee: entry.claim?.amount ?? entry.payment?.amount ?? 0,
+    events: registration.events.map((item) => ({ eventId: item.eventId, feePaid: feePaid(item), present: Boolean(item.present) })),
+    createdAt: registration.created.at,
+  };
+}
+
+/** The UPI account for the entry fee, until the web assist team sets one in Departments & events. */
+export const DEFAULT_UPI = { upiId: '9342060452@nyes', upiPayee: 'Mrs Jayanthi Parthasarathy' };
+export const UPI_ID = /^[A-Za-z0-9._-]{2,64}@[A-Za-z0-9.-]{2,40}$/;
+/** A UPI transaction ID (UTR) or bank reference: letters and digits. */
+export const TXN = /^[A-Za-z0-9]{6,35}$/;
+
+/** A student may take part in an event of their own department, or of any department if they registered themselves. */
+export const canJoin = (registration: Pick<FestRegistration, 'dept'>, event: Pick<FestEvent, 'dept'>) => registration.dept === event.dept || registration.dept === OPEN_DEPT;
+/** A self-registered student whose transaction ID waits for a desk. */
+export const awaitingCheck = (registration: FestRegistration) => registration.entry.status === 'DUE' && Boolean(registration.entry.claim) && !registration.entry.rejected;
+/** The department's name, or what a self-registered student's "department" is called. */
+export const deptLabel = (catalog: FestCatalog | null, code: string) => (code === OPEN_DEPT ? 'Self-registered (any department)' : (catalog && departmentOf(catalog, code)?.name) || code);
 
 /** Neither cancelled nor deleted: counts everywhere. */
 export const isActive = (registration: Pick<FestRegistration, 'cancelled' | 'deleted'>) => !registration.cancelled && !registration.deleted;
@@ -505,6 +592,63 @@ export function matchEvents(catalog: FestCatalog, dept: string, text: string): {
 }
 
 // ------------------------------------------------------------------------------------------
+// Colleges (the overall coordinator's college-wise view)
+
+/** 'Sona College of Technology, Salem.' → 'sona college of technology salem': one college however it is typed. */
+export const collegeKey = (name: string) => name.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+
+export interface CollegeRow {
+  key: string;
+  /** As most of its students typed it. */
+  name: string;
+  students: number;
+  /** Places won in submitted results (a team counts once for its college). */
+  first: number;
+  second: number;
+  third: number;
+  places: number;
+}
+
+/** Students per college, and the 1st, 2nd and 3rd places its students won (submitted results only). */
+export function collegeSummary(registrations: Iterable<FestRegistration>, results: Iterable<FestResult>): CollegeRow[] {
+  const rows = new Map<string, CollegeRow & { spellings: Map<string, number> }>();
+  const byId = new Map<string, FestRegistration>();
+  const rowOf = (college: string) => {
+    const key = collegeKey(college);
+    let row = rows.get(key);
+    if (!row) {
+      row = { key, name: college || 'Not given', students: 0, first: 0, second: 0, third: 0, places: 0, spellings: new Map() };
+      rows.set(key, row);
+    }
+    return row;
+  };
+  for (const registration of registrations) {
+    if (!isActive(registration)) continue;
+    byId.set(registration.id, registration);
+    const row = rowOf(registration.college);
+    row.students += 1;
+    row.spellings.set(registration.college, (row.spellings.get(registration.college) ?? 0) + 1);
+  }
+  for (const result of results) {
+    if (!result.submitted) continue;
+    for (const place of result.places) {
+      const colleges = new Set(place.ids.map((id) => byId.get(id)).filter((item): item is FestRegistration => Boolean(item)).map((item) => collegeKey(item.college)));
+      for (const key of colleges) {
+        const row = rows.get(key);
+        if (!row) continue;
+        if (place.place === 1) row.first += 1;
+        else if (place.place === 2) row.second += 1;
+        else if (place.place === 3) row.third += 1;
+        row.places += 1;
+      }
+    }
+  }
+  return [...rows.values()]
+    .map(({ spellings, ...row }) => ({ ...row, name: [...spellings.entries()].sort((a, b) => b[1] - a[1])[0]?.[0] || 'Not given' }))
+    .sort((a, b) => b.places - a.places || b.first - a.first || b.second - a.second || b.students - a.students || a.name.localeCompare(b.name));
+}
+
+// ------------------------------------------------------------------------------------------
 // Totals (computed in the browser from the live data)
 
 export interface FestTotals {
@@ -512,6 +656,9 @@ export interface FestTotals {
   desk: number;
   online: number;
   paper: number;
+  /** Registered themselves on their phone; `awaiting`: their transaction ID not checked yet. */
+  self: number;
+  awaiting: number;
   checkedIn: number;
   entryDue: number;
   /** Entry fees received at the desks, by method (online payments counted apart). */
@@ -532,6 +679,8 @@ export function totalsOf(registrations: Iterable<FestRegistration>, eventId?: st
     desk: 0,
     online: 0,
     paper: 0,
+    self: 0,
+    awaiting: 0,
     checkedIn: 0,
     entryDue: 0,
     entryCash: 0,
@@ -549,8 +698,10 @@ export function totalsOf(registrations: Iterable<FestRegistration>, eventId?: st
     totals.registered += 1;
     if (registration.source === 'DESK') totals.desk += 1;
     else if (registration.source === 'ONLINE') totals.online += 1;
+    else if (registration.source === 'SELF') totals.self += 1;
     else totals.paper += 1;
-    if (registration.source === 'ONLINE' ? registration.checkedIn : true) totals.checkedIn += 1;
+    if (awaitingCheck(registration)) totals.awaiting += 1;
+    if (registration.source === 'ONLINE' || registration.source === 'SELF' ? registration.checkedIn : true) totals.checkedIn += 1;
     const payment = registration.entry.payment;
     if (registration.entry.status === 'DUE') totals.entryDue += 1;
     else if (payment && !payment.voided) {

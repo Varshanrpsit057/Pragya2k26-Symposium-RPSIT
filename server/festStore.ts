@@ -6,7 +6,8 @@
  *   E#cse-hackathon   an event's results      (has dept + u: in the "byDept" index)
  *   P#9876543210      one phone, one registration per department
  *   X#<submission>    one desk submission, one registration (a retry never makes two)
- *   C#DESK|ONLINE|PAPER  the department's ID counters
+ *   T#<txn>           one UPI transaction ID, one verified registration (self-registered students)
+ *   C#DESK|ONLINE|PAPER|SELF  the department's ID counters (SELF: the 20001… series, in D#OPEN)
  * The "byDept" index (dept, u) gives everything changed since a moment: each screen asks only
  * for what changed since it last asked.
  *
@@ -40,6 +41,13 @@ export interface FestStore {
   saveResult(result: FestResult, expected: number): Promise<boolean>;
   /** Takes `count` numbers from the department's counter for that source; the first of them. */
   takeNumbers(dept: string, source: FestSource, count: number): Promise<number>;
+  /**
+   * Claims a UPI transaction ID for one registration (accepted once across the fest): null when
+   * claimed now (or already this registration's), otherwise the ID of the registration holding it.
+   */
+  claimTxn(dept: string, txn: string, id: string): Promise<string | null>;
+  /** Releases the claim, if this registration holds it (a verification that could not be saved). */
+  releaseTxn(dept: string, txn: string, id: string): Promise<void>;
   /** Removes a registration and its claims for good (test data only). */
   purgeRegistration(registration: FestRegistration): Promise<void>;
   purgeResult(dept: string, eventId: string): Promise<void>;
@@ -127,6 +135,20 @@ export class MemoryFestStore implements FestStore {
     const first = this.counters.get(key) ?? ID_RANGES[source].first;
     this.counters.set(key, first + count);
     return first;
+  }
+
+  async claimTxn(dept: string, txn: string, id: string) {
+    await tick();
+    const key = `T#${dept}#${txn.toUpperCase()}`;
+    const holder = this.claims.get(key);
+    if (holder && holder !== id) return holder;
+    this.claims.set(key, id);
+    return null;
+  }
+
+  async releaseTxn(dept: string, txn: string, id: string) {
+    const key = `T#${dept}#${txn.toUpperCase()}`;
+    if (this.claims.get(key) === id) this.claims.delete(key);
   }
 
   async purgeRegistration(registration: FestRegistration) {

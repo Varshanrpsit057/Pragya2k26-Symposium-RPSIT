@@ -5,6 +5,8 @@
  *
  *   - every phone signs in, loads the catalog, asks for changes every 15 seconds, and checks its
  *     session and help replies every 60 seconds;
+ *   - students register themselves on their phones (no sign-in: IDs 20001…, the entry fee's
+ *     transaction ID), then look at their page twice; desk phones verify those payments;
  *   - desk phones (2 per desk) take blocks of IDs and register a student every 30-60 seconds;
  *   - coordinator phones take event fees and mark attendance every 20-40 seconds;
  *   - HODs, department admins and the overall coordinator watch.
@@ -20,7 +22,7 @@
  * Usage (from this folder, Node 22+, nothing to install):
  *   node scripts/load-test.mjs --admin <your admin username>
  *   (the password is asked for and typed hidden; or set LOADTEST_ADMIN_PASSWORD)
- * Options: --devices 300  --minutes 10  --ramp 120 (seconds to bring every phone in)
+ * Options: --devices 300  --students 200 (self-registering)  --minutes 10  --ramp 120 (seconds to bring every phone in)
  *          --api <API address>  --keep-accounts  --yes (skip the 10-second wait)
  */
 import { randomBytes, randomUUID } from 'node:crypto';
@@ -35,6 +37,7 @@ const { values: options } = parseArgs({
     devices: { type: 'string', default: '300' },
     minutes: { type: 'string', default: '10' },
     ramp: { type: 'string', default: '120' },
+    students: { type: 'string', default: '200' },
     'keep-accounts': { type: 'boolean', default: false },
     yes: { type: 'boolean', default: false },
   },
@@ -44,6 +47,9 @@ const API = options.api.replace(/\/+$/, '');
 const DEVICES = Math.min(Math.max(Number(options.devices) || 300, 1), 1000);
 const MINUTES = Math.min(Math.max(Number(options.minutes) || 10, 1), 60);
 const RAMP_S = Math.min(Math.max(Number(options.ramp) || 120, 0), 900);
+// Every simulated student comes from this one laptop, and the API limits each network address:
+// 600 self-registrations and 3,000 page looks per 10 minutes. Real phones come from many addresses.
+const STUDENTS = Math.min(Math.max(Number(options.students) || 0, 0), 500);
 const PREFIX = 'lt-';
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -204,6 +210,12 @@ function merge(registrations) {
   }
 }
 let registered = 0;
+let selfRegistered = 0;
+let verified = 0;
+/** Self-registered students a desk has already started to verify (each is verified once). */
+const verifying = new Set();
+let txnCounter = 0;
+const nextTxn = () => `7${runSeed}${String(++txnCounter).padStart(8, '0')}`;
 let feesTaken = 0;
 let marked = 0;
 
@@ -245,11 +257,48 @@ async function phone(device, password, endAt) {
       nextMinute = Date.now() + 60_000;
     }
     if (now >= nextAction) {
-      if (device.kind === 'desk') await register(device, token, ids, refill);
+      if (device.kind === 'desk') {
+        // Half the time a desk checks a self-registered student's payment (when one is waiting).
+        if (Math.random() < 0.5 && (await verifyOne(token))) {
+          // verified one
+        } else await register(device, token, ids, refill);
+      }
       if (device.kind === 'coordinator') await eventWork(device, token);
       nextAction = Date.now() + (device.kind === 'desk' ? between(30_000, 60_000) : between(20_000, 40_000));
     }
     await sleep(500);
+  }
+}
+
+/** A desk verifies one self-registered student waiting for a payment check; false when none waits. */
+async function verifyOne(token) {
+  const waiting = [...(seen.get('OPEN')?.values() ?? [])].find((item) => item.entry?.status === 'DUE' && item.entry.claim && !item.entry.rejected && !verifying.has(item.id));
+  if (!waiting) return false;
+  verifying.add(waiting.id);
+  const answer = await call('verify payment', 'POST', `/api/admin/fest/registrations/${waiting.id}`, { action: 'verify', confirmed: true }, token);
+  if (answer.status === 200) {
+    verified += 1;
+    if (answer.json?.registration) merge([answer.json.registration]);
+  }
+  return true;
+}
+
+/** A student on their phone: registers (no sign-in), then looks at their page after 1 and 3 minutes. */
+async function selfStudent(allEvents, endAt) {
+  const body = {
+    submissionId: `lt-self-${randomUUID()}`,
+    participant: { ...student(), phone: `8${runSeed}${String(++phoneCounter).padStart(6, '0')}` },
+    events: allEvents.length ? [...new Set([pick(allEvents), pick(allEvents)])].slice(0, Math.floor(Math.random() * 3)) : [],
+    txn: nextTxn(),
+  };
+  const answer = await call('student register', 'POST', '/api/fest/register', body);
+  const id = answer.json?.registration?.id;
+  if (!id) return;
+  selfRegistered += 1;
+  for (const wait of [60_000, 120_000]) {
+    if (stopping || Date.now() + wait > endAt) return;
+    await sleep(wait);
+    await call('student status', 'POST', '/api/fest/me', { id, phone: body.participant.phone });
   }
 }
 
@@ -364,6 +413,7 @@ async function main() {
   const counts = devices.reduce((all, device) => ({ ...all, [device.kind]: (all[device.kind] ?? 0) + 1 }), {});
   console.log(`Test session: "${session.testing.session}" (everything registered is marked TEST).`);
   console.log(`Plan: ${accounts.length} lt- accounts, ${devices.length} phones (${counts.desk ?? 0} at desks, ${counts.coordinator ?? 0} with coordinators, ${counts.watch ?? 0} watching),`);
+  console.log(`      and ${STUDENTS} students registering themselves on their phones (the desks verify their payments),`);
   console.log(`      all phones in over ${RAMP_S} s, then ${MINUTES} min at full load. About ${Math.round((devices.length * 4 + (counts.desk ?? 0) * 1.3 + (counts.coordinator ?? 0) * 2) / 60)} requests a second.`);
   if (!options.yes) {
     console.log('\nStarting in 10 seconds. Ctrl+C to cancel.');
@@ -402,7 +452,7 @@ async function main() {
       return sorted.length ? `${Math.round(quantile(sorted, 0.95))} ms` : '-';
     };
     console.log(
-      `[${clock(now - started)}] phones ${active}/${devices.length} | ${perSecond.toFixed(1)} req/s | changes p95 ${p95('sync (changes)')} | register p95 ${p95('register')} | registered ${registered}, fees ${feesTaken}, present ${marked} | failed ${failed}/${total}`,
+      `[${clock(now - started)}] phones ${active}/${devices.length} | ${perSecond.toFixed(1)} req/s | changes p95 ${p95('sync (changes)')} | register p95 ${p95('register')} | self ${selfRegistered} (verified ${verified}) | desk ${registered}, fees ${feesTaken}, present ${marked} | failed ${failed}/${total}`,
     );
     if (lastMinute > 100 && failedMinute / lastMinute > 0.5 && !stopping) {
       console.log('More than half the requests failed in the last minute: stopping to spare the server.');
@@ -421,12 +471,19 @@ async function main() {
       active -= 1;
     }
   });
-  await Promise.all(runs);
+  // Students arrive through the run (most in its first half), each on their own phone.
+  const allEvents = catalog.events.filter((event) => event.active !== false).map((event) => event.id);
+  const span = (RAMP_S + MINUTES * 60 * 0.6) * 1000;
+  const students = Array.from({ length: STUDENTS }, async () => {
+    await sleep(Math.random() * span);
+    if (!stopping) await selfStudent(allEvents, endAt);
+  });
+  await Promise.all([...runs, ...students]);
   clearInterval(ticker);
 
   const elapsed = Date.now() - started;
   const result = summary(elapsed);
-  console.log(`\nDone after ${clock(elapsed)}: ${result.total} requests, ${result.perSecond.toFixed(1)} a second; registered ${registered}, event fees ${feesTaken}, attendance ${marked}.\n`);
+  console.log(`\nDone after ${clock(elapsed)}: ${result.total} requests, ${result.perSecond.toFixed(1)} a second; ${selfRegistered} students registered themselves (${verified} verified at desks), ${registered} at desks, event fees ${feesTaken}, attendance ${marked}.\n`);
   console.table(result.lines.map((line) => ({ operation: line.operation, requests: line.requests, failed: line.failed, p50: line.p50, p95: line.p95, p99: line.p99, max: line.max })));
   for (const line of result.lines.filter((item) => item.failed)) console.log(`  ${line.operation}: ${JSON.stringify(line.errors)}`);
   const rate = result.total ? result.failed / result.total : 0;
@@ -439,7 +496,7 @@ async function main() {
   }
 
   const report = `load-test-report-${new Date().toISOString().slice(0, 16).replace(/[:T]/g, '-')}.json`;
-  writeFileSync(report, JSON.stringify({ api: API, devices: devices.length, rampSeconds: RAMP_S, minutes: MINUTES, startedAt: new Date(started).toISOString(), elapsedMs: elapsed, registered, feesTaken, marked, verdict, ...result }, null, 2));
+  writeFileSync(report, JSON.stringify({ api: API, devices: devices.length, students: STUDENTS, rampSeconds: RAMP_S, minutes: MINUTES, startedAt: new Date(started).toISOString(), elapsedMs: elapsed, selfRegistered, verified, registered, feesTaken, marked, verdict, ...result }, null, 2));
   console.log(`Report saved: ${report}`);
 
   if (!options['keep-accounts']) {

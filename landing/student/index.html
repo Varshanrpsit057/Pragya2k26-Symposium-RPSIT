@@ -2,18 +2,22 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <!-- The event-day student page: light on purpose (no images, no web fonts), so it never
-         competes with the registration desks for the campus network. -->
-    <meta name="robots" content="noindex, nofollow, noarchive" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <!-- The old student page's address: the same students' page as /register/. -->
     <meta name="referrer" content="no-referrer" />
     <meta name="theme-color" content="#05061a" />
     <meta name="color-scheme" content="dark" />
-    <title>PRAGYA 2026 · Student login</title>
+    <title>Register · INFINITE TECHFEST'26</title>
     <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png" />
+    <style>
+      html {
+        background: #05061a;
+        color: #edefff;
+      }
+    </style>
   </head>
   <body>
-    <div id="student-root"></div>
-    <script type="module" src="/src/student/main.tsx"></script>
+    <div id="register-root"></div>
+    <script type="module" src="/src/register/main.tsx"></script>
   </body>
 </html>

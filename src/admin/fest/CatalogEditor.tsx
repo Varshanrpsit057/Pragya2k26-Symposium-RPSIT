@@ -4,7 +4,7 @@
  * every phone picks the change up within seconds.
  */
 import { useState } from 'react';
-import { catalogProblem, type FestCatalog, type FestDepartment, type FestEvent } from '../../lib/fest';
+import { DEFAULT_UPI, catalogProblem, type FestCatalog, type FestDepartment, type FestEvent } from '../../lib/fest';
 import { SignedOut } from '../adminApi';
 import { Badge, when } from '../ui';
 import { saveFestCatalog } from './festApi';
@@ -65,6 +65,16 @@ export function CatalogEditor({ token, onSignedOut }: { token: string; onSignedO
           <span>Entry fee (₹, paid at the desk)</span>
           <input type="number" min={0} value={value.entryFee} onChange={(event) => setDraft({ ...value, entryFee: Number(event.target.value) })} />
         </label>
+        <div className="adm-inline adm-inline--wrap">
+          <label className="adm-field">
+            <span>UPI ID students pay the entry fee to (their own page)</span>
+            <input value={value.upiId ?? ''} placeholder={DEFAULT_UPI.upiId} onChange={(event) => setDraft({ ...value, upiId: event.target.value.trim() })} />
+          </label>
+          <label className="adm-field">
+            <span>Account holder’s name</span>
+            <input value={value.upiPayee ?? ''} placeholder={DEFAULT_UPI.upiPayee} onChange={(event) => setDraft({ ...value, upiPayee: event.target.value })} />
+          </label>
+        </div>
         {problem && <p className="adm-field__error">{problem}</p>}
         {error && <p className="adm-error">{error}</p>}
         {note && <p className="adm-note">{note}</p>}

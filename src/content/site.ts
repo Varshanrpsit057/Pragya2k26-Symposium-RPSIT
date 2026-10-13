@@ -10,7 +10,7 @@ export const site: SiteInfo = {
   year: '2026',
   institution: 'R P Sarathy Institute of Technology, Salem',
   department: 'Artificial Intelligence and Data Science',
-  tagline: 'An AI & technology symposium',
+  tagline: 'Infinite Techfest’26 · the college-wide technical fest',
   college: {
     name: 'R P Sarathy Institute of Technology',
     status: 'An Autonomous Institution',

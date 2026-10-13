@@ -144,6 +144,13 @@ const MAX_AUTO_SYNC_ATTEMPTS = 50;
 const LOGIN_LIMIT = { max: 10, windowMs: 15 * 60_000 };
 const LOGIN_ADDRESS_LIMIT = { max: 1000, windowMs: 15 * 60_000 };
 const LOOKUP_LIMIT = { max: 120, windowMs: 10 * 60_000 };
+/**
+ * Students on their own phones (fest registration and their page). Many phones on one mobile
+ * network can share an address, so the limits per address are generous.
+ */
+const SELF_REGISTER_LIMIT = { max: 600, windowMs: 10 * 60_000 };
+const STUDENT_LIMIT = { max: 3000, windowMs: 10 * 60_000 };
+const STUDENT_BUSY = 'Too many requests from your network. Please wait a few minutes and try again.';
 /** Registration IDs tried when an on-site number is already taken (a counter reset). */
 const MAX_ID_ATTEMPTS = 5;
 /** Google syncs run together by the scheduled job, so the sheet writes go in batches. */
@@ -440,6 +447,18 @@ export class Service {
     const registration = await this.deps.store.getRegistration(registrationId);
     if (!registration || !sameText(sha256(key), registration.submissionHash)) throw new ApiError(404, 'NOT_FOUND', NOT_FOUND_MESSAGE);
     return registration;
+  }
+
+  /** The fest's student page: register, see their registration, change events, send the right transaction ID. */
+  async festStudent(action: 'register' | 'view' | 'events' | 'payment', body: unknown, ip: string) {
+    if (action === 'register') {
+      await this.limit(`self:${ip}`, SELF_REGISTER_LIMIT, STUDENT_BUSY);
+      return this.fest.selfRegister(body);
+    }
+    await this.limit(`student:${ip}`, STUDENT_LIMIT, STUDENT_BUSY);
+    if (action === 'view') return this.fest.studentView(body);
+    if (action === 'events') return this.fest.studentEvents(body);
+    return this.fest.studentPayment(body);
   }
 
   async status(body: unknown, ip: string): Promise<StatusResult> {

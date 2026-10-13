@@ -62,6 +62,8 @@ describe('a registration desk', () => {
     const network = backend(h);
     signIn(desk.token);
     render(<AdminApp />);
+    // The desk opens on the payments to check; walk-ins are registered in Register.
+    fireEvent.click(await screen.findByRole('button', { name: 'Register' }));
     expect(await screen.findByText('50 IDs on this phone')).toBeInTheDocument();
 
     await fillStudent('Kavin R', '9840011111');
@@ -99,6 +101,8 @@ describe('a registration desk', () => {
     const network = backend(h);
     signIn(desk.token);
     const before = render(<AdminApp />);
+    // The desk opens on the payments to check; walk-ins are registered in Register.
+    fireEvent.click(await screen.findByRole('button', { name: 'Register' }));
     expect(await screen.findByText('50 IDs on this phone')).toBeInTheDocument();
 
     network.offline();

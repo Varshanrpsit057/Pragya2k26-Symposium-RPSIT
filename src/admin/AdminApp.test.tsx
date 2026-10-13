@@ -55,10 +55,10 @@ const sections = async () => {
 
 describe('dashboard of the student coordinators', () => {
   it.each([
-    ['ADMIN', {}, ['Overview', 'Registrations', 'Results', 'Register', 'Event windows', 'Online & paper', 'Departments & events', 'Accounts', 'Event-day controls', 'Help requests', 'System status', 'Testing', 'Roles']],
-    ['OVERALL', {}, ['Overview', 'Registrations', 'Results', 'Roles']],
-    ['HOD', { department: 'CSE' }, ['Overview', 'Registrations', 'Results', 'Roles']],
-    ['DEPT_ADMIN', { department: 'CSE' }, ['Overview', 'Registrations', 'Results', 'Register', 'Event windows', 'Online & paper', 'Roles']],
+    ['ADMIN', {}, ['Overview', 'Registrations', 'Results', 'Colleges', 'Register', 'Event windows', 'Online & paper', 'Departments & events', 'Accounts', 'Event-day controls', 'Help requests', 'System status', 'Testing', 'Roles']],
+    ['OVERALL', {}, ['Overview', 'Registrations', 'Results', 'Colleges', 'Roles']],
+    ['HOD', { department: 'CSE' }, ['Overview', 'Registrations', 'Results', 'Colleges', 'Roles']],
+    ['DEPT_ADMIN', { department: 'CSE' }, ['Overview', 'Registrations', 'Results', 'Colleges', 'Register', 'Event windows', 'Online & paper', 'Roles']],
     ['DESK', { department: 'CSE', deskNumber: 2 }, ['Registration desk', 'Roles']],
     ['COORDINATOR', { department: 'CSE', eventIds: ['cse-hackathon'] }, ['My events', 'Roles']],
   ] as const)('shows %s only its own sections', async (role, extra, expected) => {

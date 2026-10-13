@@ -179,6 +179,26 @@ export class DynamoFestStore implements FestStore {
     return Number(Attributes?.next) - count;
   }
 
+  async claimTxn(dept: string, txn: string, id: string) {
+    const key = { pk: pk(dept), sk: `T#${txn.toUpperCase()}` };
+    try {
+      await this.db.send(new PutCommand({ TableName: this.table, Item: { ...key, kind: 'T', id }, ConditionExpression: 'attribute_not_exists(sk) OR id = :id', ExpressionAttributeValues: { ':id': id } }));
+      return null;
+    } catch (error) {
+      if (!isConditionFailure(error)) throw error;
+      const { Item } = await this.db.send(new GetCommand({ TableName: this.table, Key: key, ConsistentRead: true }));
+      return (Item?.id as string | undefined) ?? null;
+    }
+  }
+
+  async releaseTxn(dept: string, txn: string, id: string) {
+    try {
+      await this.db.send(new DeleteCommand({ TableName: this.table, Key: { pk: pk(dept), sk: `T#${txn.toUpperCase()}` }, ConditionExpression: 'id = :id', ExpressionAttributeValues: { ':id': id } }));
+    } catch (error) {
+      if (!isConditionFailure(error)) throw error;
+    }
+  }
+
   async purgeRegistration(registration: FestRegistration) {
     const { dept, id, phone } = registration;
     const [phoneOwner, submissionOwner] = await Promise.all([this.findPhone(dept, phone), registration.sid ? this.findSubmission(dept, registration.sid) : null]);
@@ -186,6 +206,8 @@ export class DynamoFestStore implements FestStore {
     if (phoneOwner === id) keys.push(`P#${phone}`);
     if (registration.sid && submissionOwner === id) keys.push(`X#${registration.sid}`);
     await Promise.all(keys.map((sk) => this.db.send(new DeleteCommand({ TableName: this.table, Key: { pk: pk(dept), sk } }))));
+    const txn = registration.entry.payment?.txn;
+    if (txn) await this.releaseTxn(dept, txn, id);
   }
 
   async purgeResult(dept: string, eventId: string) {

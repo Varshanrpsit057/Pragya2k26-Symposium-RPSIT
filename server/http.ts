@@ -82,7 +82,7 @@ interface StaffRoute {
 const ID = '([A-Za-z0-9-]{1,20})';
 const EVENT = '([a-z0-9-]{1,40})';
 const USER = '([A-Za-z0-9._-]{1,40})';
-const FEST_ID = '([A-Za-z]{2,6}-?\\d{1,4})';
+const FEST_ID = '([A-Za-z]{2,6}-?\\d{1,4}|\\d{5})';
 const route_ = (pattern: string) => new RegExp(`^/api/admin${pattern}$`);
 
 /** Every staff route and the permission it requires. */
@@ -256,6 +256,22 @@ export async function route(
         break;
       case '/api/pass':
         result = await post((body) => service.pass(body, request.ip));
+        break;
+      // The fest's students, on their own phones (no sign-in).
+      case '/api/fest/info':
+        result = await get(() => service.fest.publicInfo());
+        break;
+      case '/api/fest/register':
+        result = await post((body) => service.festStudent('register', body, request.ip));
+        break;
+      case '/api/fest/me':
+        result = await post((body) => service.festStudent('view', body, request.ip));
+        break;
+      case '/api/fest/me/events':
+        result = await post((body) => service.festStudent('events', body, request.ip));
+        break;
+      case '/api/fest/me/payment':
+        result = await post((body) => service.festStudent('payment', body, request.ip));
         break;
       case '/api/student/portal':
         result = await get(() => service.students.state());

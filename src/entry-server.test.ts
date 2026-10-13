@@ -8,9 +8,11 @@ describe('prerender', () => {
 
     expect(html).toContain('Techfest’26');
     expect(html).toContain('R P Sarathy Institute of Technology');
+    expect(html).toContain('href="/register/"');
     expect(html).toContain('href="/landing/admin/"');
     expect(html).toContain('href="/landing/cse/admin/"');
-    // Registration and the event pages moved to the students' events website.
-    expect(html).not.toMatch(/Register Now|Student login/);
+    expect(html).toContain('Overall coordinated by the');
+    // The route map is gone from this site.
+    expect(html).not.toMatch(/route-map|Route map/);
   });
 });

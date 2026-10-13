@@ -5,6 +5,7 @@
  */
 import { useMemo, useState } from 'react';
 import {
+  canJoin,
   entryOf,
   eventLabel,
   eventOf,
@@ -68,7 +69,8 @@ function EventPanel({ event }: { event: FestEvent }) {
   const [payment, setPayment] = useState<PaymentDraft>(NO_PAYMENT);
   const result = results.get(event.id) ?? null;
   const locked = Boolean(result?.submitted);
-  const inDept = useMemo(() => [...registrations.values()].filter((item) => item.dept === event.dept && isActive(item)), [registrations, event.dept]);
+  // The department's own students, and anyone who registered themselves (they may join any event).
+  const inDept = useMemo(() => [...registrations.values()].filter((item) => canJoin(item, event) && isActive(item)), [registrations, event]);
   const registered = useMemo(() => inDept.filter((item) => entryOf(item, event.id)).sort((a, b) => a.id.localeCompare(b.id)), [inDept, event.id]);
   const totals = totalsOf(registered, event.id);
   const q = query.trim();
