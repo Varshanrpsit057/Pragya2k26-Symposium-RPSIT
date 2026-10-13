@@ -19,7 +19,8 @@ interface PanelProps {
 }
 
 const STUDENT_SWITCHES: SwitchName[] = ['selfRegistration', 'studentLookup'];
-const STAFF_SWITCHES: SwitchName[] = ['deskRegistration', 'eventEntry', 'results', 'downloads'];
+const EVENT_SWITCHES: SwitchName[] = ['ownDepartmentEvents', 'eventEntry', 'results'];
+const STAFF_SWITCHES: SwitchName[] = ['deskRegistration', 'downloads'];
 
 /** Makes the QR code picture small enough to send (a PNG when it fits; it stays sharp enough to scan). */
 export async function shrinkQr(file: File): Promise<string> {
@@ -205,7 +206,14 @@ export function PortalPanel({ token, onSignedOut }: PanelProps) {
       </section>
 
       <section className="adm-card adm-pad">
-        <h3 className="adm-h3">Staff work</h3>
+        <h3 className="adm-h3">Events</h3>
+        {EVENT_SWITCHES.map((name) => (
+          <Switch key={name} name={name} on={portal[name]} busy={busy === name} onFlip={() => flip(name)} />
+        ))}
+      </section>
+
+      <section className="adm-card adm-pad">
+        <h3 className="adm-h3">Desks and downloads</h3>
         {STAFF_SWITCHES.map((name) => (
           <Switch key={name} name={name} on={portal[name]} busy={busy === name} onFlip={() => flip(name)} />
         ))}

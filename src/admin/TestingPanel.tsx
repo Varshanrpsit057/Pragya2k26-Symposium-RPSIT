@@ -13,7 +13,7 @@ import { formatIst, parseEventStart } from '../lib/countdown';
 import type { SessionInfo } from '../lib/staff';
 import { CLEAR_PHRASE, type ClearResult, type TimelineMode } from '../lib/testTools';
 import { SignedOut, clearTestData, currentAdmin, markTest, setTimeline, startTestSession, stopTestSession, testingState, type TimelineRequest } from './adminApi';
-import { clearFestTestData } from './fest/festApi';
+import { clearFestTestData, seedFestTestData } from './fest/festApi';
 import { Badge, ErrorNote, LiveStatus, useLiveData, when } from './ui';
 
 interface PanelProps {
@@ -61,6 +61,7 @@ export function TestingPanel({ token, onSignedOut, onSession }: PanelProps) {
   const [phrase, setPhrase] = useState('');
   const [cleared, setCleared] = useState<ClearResult[] | null>(null);
   const [festCleared, setFestCleared] = useState<{ cleared: number; results: number; restarted: string[] } | null>(null);
+  const [seeded, setSeeded] = useState<{ added: number; total: number; cap: number } | null>(null);
 
   const run = async (what: string, task: () => Promise<unknown>, done: string) => {
     setBusy(what);
@@ -108,6 +109,22 @@ export function TestingPanel({ token, onSignedOut, onSession }: PanelProps) {
         setPhrase('');
       },
       options.finish ? 'Test data deleted, the test session ended and the website is back on the real schedule.' : 'Test data deleted.',
+    );
+
+  // The load test: mock participants a batch per call, until there are 1,000 test registrations.
+  const seed = () =>
+    run(
+      'seed',
+      async () => {
+        let progress = { added: 0, total: 0, cap: 1000 };
+        for (let round = 0; round < 10; round += 1) {
+          const result = await seedFestTestData(token);
+          progress = { added: progress.added + result.added, total: result.total, cap: result.cap };
+          setSeeded(progress);
+          if (!result.remaining || !result.added) break;
+        }
+      },
+      'Load test data added: every dashboard shows it within 15 seconds.',
     );
 
   if (!state) {
@@ -328,6 +345,26 @@ export function TestingPanel({ token, onSignedOut, onSession }: PanelProps) {
             Mark as test
           </button>
         </form>
+      </section>
+
+      <section className="adm-card adm-pad" aria-label="Load test">
+        <h3 className="adm-h3">Load test: 1,000 mock participants</h3>
+        <p className="adm-muted">
+          Adds mock students, most from the colleges around Salem (Sona, Dhirajlal Gandhi, PMC Tech, Shreenivasa, GEC Salem and others), spread over the 8 departments with phone IDs
+          (CSE-2001…): some paid at a desk, some waiting for a desk to check their UTR, some not paid, with events, fees and attendance. Every one is marked <strong>TEST</strong>. There are
+          never more than 1,000 test registrations: pressing it again only tops up to 1,000. Delete them below with <strong>Delete the test data</strong>.
+        </p>
+        <span className="adm-inline adm-inline--wrap">
+          <button className="adm-button adm-button--primary" type="button" disabled={busy !== ''} onClick={() => void seed()}>
+            {busy === 'seed' ? `Adding… ${seeded ? `${seeded.total} of ${seeded.cap}` : ''}` : 'Add 1,000 mock participants'}
+          </button>
+          {seeded && busy !== 'seed' && (
+            <span className="adm-muted" role="status">
+              {seeded.added ? `Added ${seeded.added}. ` : 'Nothing added: '}
+              {seeded.total} test participants now (the most there can be is {seeded.cap}).
+            </span>
+          )}
+        </span>
       </section>
 
       <section className="adm-card adm-pad" aria-label="Delete test data">

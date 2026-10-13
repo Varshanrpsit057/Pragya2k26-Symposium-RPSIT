@@ -62,6 +62,8 @@ interface Cache {
   /** The server's "test data deleted at" when this copy was loaded. */
   resetAt?: string | null;
   switches?: DashboardSwitches;
+  /** The departments this copy holds ('CSE' or 'CSE,AIDS,…'). */
+  scope?: string | null;
   savedAt: number;
 }
 
@@ -148,7 +150,7 @@ export function FestProvider({ token, session, pageDept = null, onSignedOut, chi
   const [filters, setFilters] = useState<FestFilters>(() => ({ ...NO_FILTERS, dept: session.department ?? pageDept ?? '' }));
 
   // The latest values, for the timers and the outbox (which run outside renders).
-  const state = useRef({ cursor: initial?.cursor ?? '', resetAt: initial?.resetAt ?? null, switches: initial?.switches ?? ALL_ON, catalog, registrations, results, outbox, flushing: false, syncing: false, retry: 0 });
+  const state = useRef({ cursor: initial?.cursor ?? '', resetAt: initial?.resetAt ?? null, scope: initial?.scope ?? (null as string | null), switches: initial?.switches ?? ALL_ON, catalog, registrations, results, outbox, flushing: false, syncing: false, retry: 0 });
   useEffect(() => {
     state.current.catalog = catalog;
     state.current.registrations = registrations;
@@ -166,8 +168,8 @@ export function FestProvider({ token, session, pageDept = null, onSignedOut, chi
   );
 
   const saveCache = useCallback(() => {
-    const { catalog: currentCatalog, registrations: regs, results: res, cursor, resetAt, switches: lastSwitches } = state.current;
-    write(keys.cache, { catalog: currentCatalog, registrations: [...regs.values()], results: [...res.values()], cursor, resetAt, switches: lastSwitches, savedAt: Date.now() } satisfies Cache);
+    const { catalog: currentCatalog, registrations: regs, results: res, cursor, resetAt, switches: lastSwitches, scope } = state.current;
+    write(keys.cache, { catalog: currentCatalog, registrations: [...regs.values()], results: [...res.values()], cursor, resetAt, switches: lastSwitches, scope, savedAt: Date.now() } satisfies Cache);
   }, [keys.cache]);
 
   const putRegistration = useCallback((registration: FestRegistration, replaces?: string) => {
@@ -199,6 +201,11 @@ export function FestProvider({ token, session, pageDept = null, onSignedOut, chi
       // Test data was deleted since this copy was loaded: records that are gone never come as
       // changes, so load everything afresh (what waits to be sent stays).
       if (!answer.full && (answer.resetAt ?? null) !== state.current.resetAt) answer = await festSync(token, '');
+      // The departments this account sees changed (e.g. events opened to every department, or not
+      // any more): load afresh, so nothing from a department no longer shown stays on the phone.
+      const scope = (answer.departments ?? []).join(',');
+      if (!answer.full && state.current.scope !== null && scope !== state.current.scope) answer = await festSync(token, '');
+      state.current.scope = (answer.departments ?? []).join(',');
       state.current.resetAt = answer.resetAt ?? null;
       const waiting = new Set(state.current.outbox.filter((op) => !op.failed).map((op) => op.target));
       setRegistrations((current) => {

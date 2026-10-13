@@ -22,6 +22,7 @@ import { TXN_SCOPE } from './festStore';
 import type { FileStore } from './files';
 import type { FestSheetBackup, FestSnapshot } from './festSheet';
 import type { FestCreate, FestStore } from './festStore';
+import { mockParticipant, mockRegistration, MAX_TEST_PARTICIPANTS } from './festLoadTest';
 import { describeError } from './google';
 import { requirePermission, type Actor } from './roles';
 import type { Store } from './store';
@@ -51,6 +52,8 @@ const STUDENT_KEY = /^[A-Za-z0-9-]{20,80}$/;
 /** Whether a request carries a private key: one rule for the rate limits (service.ts) and the lookup here. */
 export const isStudentKey = (value: unknown): value is string => typeof value === 'string' && STUDENT_KEY.test(value);
 const MAX_PLACES = 3;
+/** Mock participants added per call of the load test (the dashboard calls again until it has them all). */
+const SEED_BATCH = 250;
 
 export interface FestDeps {
   store: FestStore;
@@ -269,6 +272,8 @@ export class FestService {
     }
     const own = this.ownDepartment(actor);
     if (wanted && wanted !== own) throw new ApiError(403, 'OTHER_DEPARTMENT', `Your account is for ${deptShort(own)}.`);
+    // Events open to every department: an event's coordinators find students of any department.
+    if (actor.role === 'COORDINATOR' && !(await this.portal()).ownDepartmentEvents) return catalog.departments.map((dept) => dept.code);
     return [own];
   }
 
@@ -331,8 +336,8 @@ export class FestService {
 
   /** The switches the dashboards follow (hiding what is off; the server refuses it anyway). */
   private async dashboardSwitches() {
-    const { deskRegistration, eventEntry, results, downloads, onlinePayment } = await this.portal();
-    return { deskRegistration, eventEntry, results, downloads, onlinePayment };
+    const { deskRegistration, eventEntry, results, downloads, onlinePayment, ownDepartmentEvents } = await this.portal();
+    return { deskRegistration, eventEntry, results, downloads, onlinePayment, ownDepartmentEvents };
   }
 
   /** IDs for a desk phone (50 at a time), or a block of paper slips. */
@@ -352,12 +357,13 @@ export class FestService {
   // Registering
 
   /** The events asked for: the department's own, or any department's for a self-registered student. */
-  private readEventIds(catalog: FestCatalog, dept: string, value: unknown): string[] {
+  private async readEventIds(catalog: FestCatalog, dept: string, value: unknown): Promise<string[]> {
     const requested = Array.isArray(value) ? value.filter((id): id is string => typeof id === 'string').slice(0, 60) : [];
     const ids: string[] = [];
+    const ownOnly = requested.length ? (await this.portal()).ownDepartmentEvents : true;
     for (const id of requested) {
       const event = eventOf(catalog, id);
-      if (!event || !canJoin({ dept }, event)) throw new ApiError(400, 'INVALID', `${showId(id)} is not an event of ${deptShort(dept)}.`);
+      if (!event || !canJoin({ dept }, event, ownOnly)) throw new ApiError(400, 'INVALID', `${showId(id)} is not an event of ${deptShort(dept)}: students take part in their own department’s events.`);
       if (!event.active || departmentOf(catalog, event.dept)?.active === false) throw new ApiError(400, 'INVALID', `${event.name} is closed for registration.`);
       if (!ids.includes(id)) ids.push(id);
     }
@@ -421,7 +427,7 @@ export class FestService {
     const problems = participantProblems(participant);
     if (Object.keys(problems).length) throw new ApiError(400, 'INVALID', Object.values(problems)[0]!, undefined, undefined, problems as Record<string, string>);
     const catalog = await this.catalog();
-    const eventIds = this.readEventIds(catalog, dept, body.events);
+    const eventIds = await this.readEventIds(catalog, dept, body.events);
     await this.ensureOpenEvents(eventIds);
     const payment = this.readPayment(actor, body.payment, catalog.entryFee);
     const stamp = this.stamp(actor);
@@ -636,7 +642,7 @@ export class FestService {
 
   /** Adds and removes events (a fee paid or attendance marked keeps an event). */
   private async changeEvents(catalog: FestCatalog, dept: string, id: string, input: Record<string, unknown>, stamp: FestStamp) {
-    const add = this.readEventIds(catalog, dept, input.add);
+    const add = await this.readEventIds(catalog, dept, input.add);
     await this.ensureOpenEvents(add);
     const remove = Array.isArray(input.remove) ? input.remove.filter((value): value is string => typeof value === 'string') : [];
     await this.ensureOpenEvents(remove);
@@ -705,7 +711,7 @@ export class FestService {
     const participant = readParticipant(body.participant);
     const problems = selfRegistrationProblems(participant);
     if (Object.keys(problems).length) throw new ApiError(400, 'INVALID', Object.values(problems)[0]!, undefined, undefined, problems as Record<string, string>);
-    const eventIds = this.readEventIds(catalog, dept, body.events);
+    const eventIds = await this.readEventIds(catalog, dept, body.events);
     await this.ensureOpenEvents(eventIds);
     const txn = text(body.txn, 40).replace(/\s/g, '');
     if (txn && !TXN.test(txn)) throw new ApiError(400, 'INVALID', 'Check the UPI transaction ID (UTR).', undefined, undefined, { txn: 'Check the UPI transaction ID (UTR).' });
@@ -839,11 +845,15 @@ export class FestService {
   async eventAct(actor: Actor, rawId: string, eventId: string, body: unknown) {
     const { id, dept } = this.target(rawId);
     const event = await this.festEvent(eventId);
-    if (!canJoin({ dept }, event)) throw new ApiError(400, 'OTHER_DEPARTMENT', `${showId(id)} is not in ${deptShort(event.dept)}.`);
     const action = isObject(body) ? body.action : null;
     if (!['add', 'fee', 'present', 'absent', 'void-fee'].includes(String(action))) throw new ApiError(400, 'INVALID', 'Choose what to do.');
     requirePermission(actor, action === 'void-fee' ? 'fest.correct' : 'fest.event');
     if (action !== 'void-fee') this.eventAccess(actor, event);
+    // Adding a student needs their own department's event (unless Website controls opened events to
+    // every department); one already in the event (added while they were open) keeps it.
+    if (action === 'add' && !canJoin({ dept }, event, (await this.portal()).ownDepartmentEvents)) {
+      throw new ApiError(400, 'OTHER_DEPARTMENT', `${showId(id)} is registered under ${deptShort(dept)}: they take part in ${deptShort(dept)} events only.`);
+    }
     if (action !== 'void-fee') await this.requireSwitch(actor, 'eventEntry', 'Event entry is switched off by the web assist team.');
     await this.ensureOpenEvents([event.id]);
     const input = body as Record<string, unknown>;
@@ -939,7 +949,7 @@ export class FestService {
       for (const id of ids) {
         const owner = parseFestId(id);
         const registration = owner ? await this.deps.store.getRegistration(owner.dept, id) : null;
-        const entry = registration && canJoin(registration, event) && isActive(registration) ? entryOf(registration, event.id) : null;
+        const entry = registration && isActive(registration) ? entryOf(registration, event.id) : null;
         if (!entry) throw new ApiError(400, 'INVALID', `${showId(id)} is not registered for ${event.name}.`);
         if (!entry.present) throw new ApiError(400, 'INVALID', `${showId(id)} is not marked present at ${event.name}.`);
       }
@@ -1075,6 +1085,70 @@ export class FestService {
     }
     this.deps.log('Fest test data deleted', { registrations: batch.length, remaining, results, restarted, by: actor.username });
     return { success: true as const, cleared: batch.length, remaining, results, restarted };
+  }
+
+  /**
+   * The load test: mock participants (most from the colleges around Salem), marked TEST and spread
+   * over the departments, at most MAX_TEST_PARTICIPANTS test registrations in all. Adds a batch per
+   * call; the dashboard calls again until `remaining` is 0. "Delete the test data" removes them.
+   */
+  async seedTest(actor: Actor, body: unknown) {
+    const catalog = await this.catalog();
+    const departments = catalog.departments.filter((dept) => dept.active);
+    if (!departments.length) throw new ApiError(400, 'INVALID', 'No department is taking registrations.');
+    const target = Math.min(Math.max(int(isObject(body) ? body.count : undefined, MAX_TEST_PARTICIPANTS), 1), MAX_TEST_PARTICIPANTS);
+    const everything = await Promise.all(catalog.departments.map((dept) => this.deps.store.changes(dept.code, '')));
+    const existing = everything.flatMap((part) => part.registrations).filter((registration) => registration.test).length;
+    const batch = Math.max(0, Math.min(target - existing, SEED_BATCH));
+    if (!batch) return { success: true as const, added: 0, total: existing, remaining: 0, cap: MAX_TEST_PARTICIPANTS };
+
+    // Spread over the departments, continuing where earlier calls stopped.
+    const counts = new Map<string, number>();
+    for (let index = 0; index < batch; index += 1) {
+      const code = departments[(existing + index) % departments.length]!.code;
+      counts.set(code, (counts.get(code) ?? 0) + 1);
+    }
+    const random = Math.random;
+    const now = this.deps.now();
+    const by = `load-test (${actor.username})`;
+    const phoneBase = Math.floor(random() * 900_000_000);
+    const planned: { dept: string; number: number }[] = [];
+    for (const [dept, count] of counts) {
+      const first = await this.deps.store.takeNumbers(dept, 'SELF', count);
+      for (let number = first; number < first + count && number <= ID_RANGES.SELF.last; number += 1) planned.push({ dept, number });
+    }
+    let added = 0;
+    const create = async ({ dept, number }: { dept: string; number: number }, index: number) => {
+      const events = catalog.events.filter((event) => event.dept === dept && event.active);
+      for (let attempt = 0; attempt < 3; attempt += 1) {
+        const sid = `loadtest-${now.toString(36)}-${index}-${attempt}-${Math.floor(random() * 1e9).toString(36)}`;
+        const registration = mockRegistration(random, {
+          id: formatFestId(dept, number),
+          dept,
+          participant: mockParticipant(random, index * 7 + attempt * 3_001, phoneBase),
+          events,
+          entryFee: catalog.entryFee,
+          by,
+          now,
+          sid,
+        });
+        const payment = registration.entry.payment;
+        await this.claimPayment(payment, registration.id).catch(() => undefined);
+        const created = await this.deps.store.createRegistration(registration, sid);
+        if (created.created) {
+          added += 1;
+          return;
+        }
+        await this.releasePayment(payment, registration.id);
+        if (created.reason !== 'phone') return; // the ID is taken: skip it
+      }
+    };
+    for (let index = 0; index < planned.length; index += PURGE_PARALLEL) {
+      await Promise.all(planned.slice(index, index + PURGE_PARALLEL).map((item, offset) => create(item, existing + index + offset)));
+    }
+    const total = existing + added;
+    this.deps.log('Fest load test participants added', { added, total, by: actor.username });
+    return { success: true as const, added, total, remaining: added ? Math.max(0, target - total) : 0, cap: MAX_TEST_PARTICIPANTS };
   }
 
   /** Every department's registrations and results, as they are now (for the backups). */

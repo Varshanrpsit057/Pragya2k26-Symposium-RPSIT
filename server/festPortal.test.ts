@@ -144,7 +144,7 @@ describe('Website controls', () => {
     await controls(h, { deskRegistration: false, eventEntry: false, results: false, downloads: false });
 
     const sync = await h.call('POST', '/api/admin/fest/sync', {}, { token: desk.token });
-    expect(sync.body.switches).toEqual({ deskRegistration: false, eventEntry: false, results: false, downloads: false, onlinePayment: true });
+    expect(sync.body.switches).toEqual({ deskRegistration: false, eventEntry: false, results: false, downloads: false, onlinePayment: true, ownDepartmentEvents: true });
     const block = await h.call('POST', '/api/admin/fest/blocks', {}, { token: desk.token });
     const walkIn = { submissionId: 'walk-in-000001', id: `CSE-${String(block.body.first).padStart(4, '0')}`, participant: form().participant, events: [], payment: { method: 'CASH', confirmed: true } };
     expect((await h.call('POST', '/api/admin/fest/registrations', walkIn, { token: desk.token })).body.code).toBe('SWITCHED_OFF');

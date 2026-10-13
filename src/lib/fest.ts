@@ -441,8 +441,11 @@ export const UPI_ID = /^[A-Za-z0-9._-]{2,64}@[A-Za-z0-9.-]{2,40}$/;
 /** A UPI transaction ID (UTR) or bank reference: letters and digits. */
 export const TXN = /^[A-Za-z0-9]{6,35}$/;
 
-/** A student takes part in their own department's events. */
-export const canJoin = (registration: Pick<FestRegistration, 'dept'>, event: Pick<FestEvent, 'dept'>) => registration.dept === event.dept;
+/**
+ * A student takes part in their own department's events (Website controls can open every
+ * department's events to everyone: `ownDepartmentOnly` false).
+ */
+export const canJoin = (registration: Pick<FestRegistration, 'dept'>, event: Pick<FestEvent, 'dept'>, ownDepartmentOnly = true) => !ownDepartmentOnly || registration.dept === event.dept;
 /** A self-registered student whose transaction ID waits for a desk. */
 export const awaitingCheck = (registration: FestRegistration) => registration.entry.status === 'DUE' && Boolean(registration.entry.claim) && !registration.entry.rejected;
 /** The department's name, or what a self-registered student's "department" is called. */

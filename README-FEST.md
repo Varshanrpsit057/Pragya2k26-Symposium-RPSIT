@@ -246,6 +246,15 @@ sample CSV first so the column matching can be checked.
    ID counters start again from 0001 where nothing real was registered.
 4. Check that the yellow banner has gone.
 
+**Load test with 1,000 mock participants:** **Testing → Load test → Add 1,000 mock participants**.
+It adds mock students, most from the colleges around Salem (Sona, Dhirajlal Gandhi, PMC Tech,
+Shreenivasa, GEC Salem, then the others nearby), 125 in each department with phone IDs (CSE-2001…):
+some paid at a desk, some waiting for a desk to check their UTR, some not paid, with events, fees and
+attendance. All are marked **TEST**, and there are never more than **1,000** test registrations
+(pressing it again only tops up to 1,000). Every dashboard shows them within 15 seconds; delete them
+with **Delete the test data**. On the live site they are real records in the database until
+deleted, so the overall coordinator sees them (with the TEST badge) in every count meanwhile.
+
 Note: a test timeline changes the public website's registration times for everyone while it is on.
 
 ### 2.9 Before the day (physical)
@@ -656,6 +665,7 @@ fix things).
 | Online payment (UPI QR code) | After registering: pay by UPI here (and send the UTR) or at the desk | Pay at the desk only |
 | Desk registration of walk-ins | Desks register walk-ins | Desks only verify payments and check students in |
 | Event entry at the venues | Coordinators enter students, take fees, mark attendance | Event windows are read-only |
+| Students join only their own department's events (on by default) | An AI&DS student takes part in AI&DS events only; each coordinator sees only their department's students | Any student can join any department's event; coordinators find students of every department |
 | Results entry | Coordinators enter and submit winners | Winners cannot be entered |
 | Excel downloads | The overall coordinator and department admins download | Download buttons hidden |
 | Sign-in by role: overall coordinator, department admins, desks, coordinators | Can sign in (with how many are signed in now) | Everyone of that role is signed out at once and cannot sign in |

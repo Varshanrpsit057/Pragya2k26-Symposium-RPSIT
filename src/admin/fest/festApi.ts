@@ -10,8 +10,10 @@ export interface DashboardSwitches {
   results: boolean;
   downloads: boolean;
   onlinePayment: boolean;
+  /** Students join only their own department's events (off: any department's). */
+  ownDepartmentEvents: boolean;
 }
-export const ALL_ON: DashboardSwitches = { deskRegistration: true, eventEntry: true, results: true, downloads: true, onlinePayment: true };
+export const ALL_ON: DashboardSwitches = { deskRegistration: true, eventEntry: true, results: true, downloads: true, onlinePayment: true, ownDepartmentEvents: true };
 
 export interface SyncAnswer {
   full: boolean;
@@ -55,6 +57,9 @@ export interface ImportOutcome {
 export const importFest = (token: string, body: { dept?: string; rows: ImportRow[]; dryRun: boolean; eventFeesPaid?: boolean }) =>
   request<{ outcomes: ImportOutcome[] }>('/api/admin/fest/import', { method: 'POST', body, token }).then((data) => data.outcomes);
 /** Deletes a batch of test registrations; `remaining` says how many are left for the next call. */
+/** The load test: adds mock participants (TEST) up to 1,000 in all, a batch per call. */
+export const seedFestTestData = (token: string, count?: number) =>
+  request<{ added: number; total: number; remaining: number; cap: number }>('/api/admin/fest/test-data/seed', { method: 'POST', body: count ? { count } : {}, token });
 export const clearFestTestData = (token: string, results: boolean) =>
   request<{ cleared: number; remaining?: number; results: number; restarted: string[] }>('/api/admin/fest/test-data/clear', { method: 'POST', body: { results }, token });
 

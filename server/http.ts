@@ -206,6 +206,8 @@ export const STAFF_ROUTES: readonly StaffRoute[] = [
   { method: 'POST', path: route_(`/fest/events/${EVENT}/results`), permission: ['fest.event', 'fest.correct'], run: (s, { actor, body, params: [eventId] }) => s.fest.results(actor, eventId, body) },
   { method: 'POST', path: route_('/fest/import'), permission: 'fest.import', run: (s, { actor, body }) => s.fest.importRows(actor, body) },
   { method: 'POST', path: route_('/fest/test-data/clear'), permission: 'system.testing', run: (s, { actor, body }) => s.fest.clearTest(actor, body) },
+  // The load test: up to 1,000 mock participants (marked TEST), a batch per call.
+  { method: 'POST', path: route_('/fest/test-data/seed'), permission: 'system.testing', run: (s, { actor, body }) => s.fest.seedTest(actor, body) },
   // Website controls: every switch, the UPI account and the QR code students pay with.
   { method: 'GET', path: route_('/portal'), permission: 'site.switches', run: (s) => s.fest.portalView() },
   { method: 'POST', path: route_('/portal'), permission: 'site.switches', run: (s, { actor, body }) => s.fest.savePortal(actor, body) },
