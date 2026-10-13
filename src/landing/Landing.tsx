@@ -2,7 +2,7 @@ import { SkyBackdrop } from '../components/background/SkyBackdrop';
 import { SiteNotice } from '../components/help/SiteNotice';
 import { Footer, type FooterLink } from '../components/sections/Footer';
 import { site } from '../content/site';
-import { DEFAULT_CATALOG } from '../lib/fest';
+import { DEFAULT_CATALOG, deptShort } from '../lib/fest';
 import './Landing.css';
 
 /** Where staff sign in (every role; department staff may also use their department's page). */
@@ -43,7 +43,7 @@ const LOOP_PATH =
 /** Stations at odd eighths of the loop, so none sits on the crossing in the middle. */
 const STATIONS = departments.slice(0, 8).map((dept, index) => {
   const { x, y } = loopPoint(((2 * index + 1) * Math.PI) / 8);
-  return { code: dept.code, x: round(x), y: round(y), above: y < LOOP_H / 2 };
+  return { code: deptShort(dept.code), x: round(x), y: round(y), above: y < LOOP_H / 2 };
 });
 
 function Loop() {
@@ -145,7 +145,7 @@ export function Landing() {
             {departments.map((dept) => (
               <li key={dept.code}>
                 <a href={`/landing/${dept.code.toLowerCase()}/admin/`}>
-                  <span className="landing-depts__code">{dept.code}</span>
+                  <span className="landing-depts__code">{deptShort(dept.code)}</span>
                   <span className="landing-depts__name">{dept.name}</span>
                 </a>
               </li>

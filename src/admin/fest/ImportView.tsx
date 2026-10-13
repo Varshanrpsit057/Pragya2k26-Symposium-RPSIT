@@ -3,7 +3,7 @@
  * online form's CSV before the event day, and paper slips for when there is no signal.
  */
 import { useState, type ChangeEvent } from 'react';
-import { IMPORT_FIELDS, formatFestId, guessColumns, parseCsv, toCsv, type ImportField } from '../../lib/fest';
+import { deptShort, formatFestId, guessColumns, IMPORT_FIELDS, parseCsv, showId, toCsv, type ImportField } from '../../lib/fest';
 import { ApiFailure, SignedOut } from '../adminApi';
 import { saveFile } from '../ui';
 import { DeptPicker, RegisterForm, useWorkDept } from './DeskView';
@@ -110,9 +110,9 @@ function OnlineImport({ dept, token, onSignedOut }: { dept: string; token: strin
 
   return (
     <section className="adm-card adm-pad">
-      <h2 className="adm-h2">Online registrations for {dept}</h2>
+      <h2 className="adm-h2">Online registrations for {deptShort(dept)}</h2>
       <p className="adm-muted">
-        Export the {dept} registrations from the online form as a CSV file and upload it here before the event day. Each student gets a {dept}-5001… ID and counts as paid. Uploading the same file
+        Export the {deptShort(dept)} registrations from the online form as a CSV file and upload it here before the event day. Each student gets a {deptShort(dept)}-5001… ID and counts as paid. Uploading the same file
         again adds only new students.
       </p>
       <label className="adm-field">
@@ -193,7 +193,7 @@ function OnlineImport({ dept, token, onSignedOut }: { dept: string; token: strin
               type="button"
               disabled={busy !== '' || !checked || count('ok') === 0 || Boolean(done)}
               onClick={() => {
-                if (window.confirm(`Import ${count('ok')} new registrations into ${dept}?`)) void run(false);
+                if (window.confirm(`Import ${count('ok')} new registrations into ${deptShort(dept)}?`)) void run(false);
               }}
             >
               {busy === 'import' ? 'Importing…' : checked ? `Import ${count('ok')} new registrations` : 'Import'}
@@ -223,7 +223,7 @@ function OnlineImport({ dept, token, onSignedOut }: { dept: string; token: strin
                       <tr key={item.row}>
                         <td>{item.row}</td>
                         <td>{byRow.get(item.row)?.name}</td>
-                        <td>{item.status === 'created' ? `${item.id}` : `${item.status === 'duplicate' ? 'Already registered' : 'Problem'}: ${item.message ?? ''}`}</td>
+                        <td>{item.status === 'created' ? `${showId(item.id ?? '')}` : `${item.status === 'duplicate' ? 'Already registered' : 'Problem'}: ${item.message ?? ''}`}</td>
                       </tr>
                     ))}
                 </tbody>
@@ -269,7 +269,7 @@ function PaperSlips({ dept, token, onSignedOut }: { dept: string; token: string;
   };
   return (
     <section className="adm-card adm-pad">
-      <h2 className="adm-h2">Paper slips for {dept}</h2>
+      <h2 className="adm-h2">Paper slips for {deptShort(dept)}</h2>
       <p className="adm-muted">
         For a desk that has no signal and no IDs left on its phone. Print numbered slips (name, phone, college, events, paid by) before the day, give each desk a bundle, then type them in from
         “Type in a paper slip”. Each number is used once.

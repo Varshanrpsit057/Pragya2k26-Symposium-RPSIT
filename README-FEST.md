@@ -52,7 +52,7 @@ wrong department's page is told which page is theirs.
 | Code | Department | Dashboard link | Staff coordinator | Student coordinator | Events |
 | --- | --- | --- | --- | --- | --- |
 | **CSE** | Computer Science and Engineering | https://pragya2k26.online/landing/cse/admin/ | Mr. M. Ramesh (9500535551) | Mr. P. Bhuvankumar (9342232411) | 6 |
-| **AIDS** | Artificial Intelligence and Data Science | https://pragya2k26.online/landing/aids/admin/ | Mrs. S. Priyanka (9025593180) | Mr. Balajimanikandhaan S S (7358213736) | 5 |
+| **AI&DS** | Artificial Intelligence and Data Science | https://pragya2k26.online/landing/aids/admin/ | Mrs. S. Priyanka (9025593180) | Mr. Balajimanikandhaan S S (7358213736) | 5 |
 | **IT** | Information Technology | https://pragya2k26.online/landing/it/admin/ | Mrs. A. Santhi (8667845282) | Ms. G. Akshaya (6381761876) | 6 |
 | **ECE** | Electronics and Communication Engineering | https://pragya2k26.online/landing/ece/admin/ | Mrs. S. Apshanaparvin (9943044232) | Mr. N. S. Shamraj (9894183263) | 6 |
 | **CYS** | Computer Science and Engineering (Cyber Security) | https://pragya2k26.online/landing/cys/admin/ | Mr. C. Mahavishu (9629039155) | Ms. R. Kavisri (6374794582) | 6 |
@@ -308,7 +308,7 @@ downloaded when they were created.
 | Code | HOD | Department admin | Desks (desk number is fixed) |
 | --- | --- | --- | --- |
 | CSE | `cse-hod` | `cse-admin` | `cse-desk1`, `cse-desk2`, `cse-desk3`, `cse-desk4` |
-| AIDS | `aids-hod` | `aids-admin` | `aids-desk1`, `aids-desk2`, `aids-desk3`, `aids-desk4` |
+| AI&DS | `aids-hod` | `aids-admin` | `aids-desk1`, `aids-desk2`, `aids-desk3`, `aids-desk4` |
 | IT | `it-hod` | `it-admin` | `it-desk1`, `it-desk2`, `it-desk3`, `it-desk4` |
 | ECE | `ece-hod` | `ece-admin` | `ece-desk1`, `ece-desk2`, `ece-desk3`, `ece-desk4` |
 | CYS | `cys-hod` | `cys-admin` | `cys-desk1`, `cys-desk2`, `cys-desk3`, `cys-desk4` |
@@ -347,7 +347,9 @@ Department page: https://pragya2k26.online/landing/cse/admin/
 | 5 | Cyber Hunt (Technical Quiz) | `cse-cyber-hunt` | https://pragya2k26.online/landing/cse/admin/?event=cse-cyber-hunt | `cse-cyber-hunt-1`, `cse-cyber-hunt-2` |
 | 6 | AI Prompt Battle (Using Claude AI) | `cse-ai-prompt-battle` | https://pragya2k26.online/landing/cse/admin/?event=cse-ai-prompt-battle | `cse-ai-prompt-battle-1`, `cse-ai-prompt-battle-2` |
 
-#### AIDS · Artificial Intelligence and Data Science (5 events)
+#### AI&DS · Artificial Intelligence and Data Science (5 events)
+
+(AI&DS's addresses, usernames and event IDs use `aids`, as `&` cannot go in them.)
 
 Department page: https://pragya2k26.online/landing/aids/admin/
 

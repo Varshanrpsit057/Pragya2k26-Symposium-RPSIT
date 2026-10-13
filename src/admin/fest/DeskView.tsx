@@ -5,24 +5,7 @@
  */
 import { useMemo, useState, type FormEvent } from 'react';
 import { NEARBY_COLLEGES, OTHER_COLLEGES } from '../../content/colleges';
-import {
-  OPEN_DEPT,
-  YEARS,
-  awaitingCheck,
-  eventLabel,
-  eventsOf,
-  isActive,
-  normaliseFestId,
-  parseFestId,
-  participantProblems,
-  readParticipant,
-  rupees,
-  sourceOfNumber,
-  teamRule,
-  tidyPhone,
-  type FestParticipant,
-  type FestRegistration,
-} from '../../lib/fest';
+import { awaitingCheck, deptShort, eventLabel, eventsOf, isActive, normaliseFestId, OPEN_DEPT, parseFestId, participantProblems, readParticipant, rupees, showId, sourceOfNumber, teamRule, tidyPhone, YEARS, type FestParticipant, type FestRegistration } from '../../lib/fest';
 import { hasPermission } from '../../lib/staff';
 import { Badge, when } from '../ui';
 import { useFest } from './FestData';
@@ -47,7 +30,7 @@ export function DeptPicker({ value, onChange, label = 'Department' }: { value: s
         <option value="">Choose…</option>
         {catalog?.departments.map((dept) => (
           <option key={dept.code} value={dept.code}>
-            {dept.code} · {dept.name}
+            {deptShort(dept.code)} · {dept.name}
           </option>
         ))}
       </select>
@@ -111,14 +94,14 @@ export function RegisterForm({ dept, paper = false }: { dept: string; paper?: bo
   const left = paper ? 1 : idsLeft(dept);
   const slip = normaliseFestId(slipId);
   const slipNumber = parseFestId(slip);
-  const slipProblem = !paper ? '' : !slipNumber || slipNumber.dept !== dept || sourceOfNumber(slipNumber.number) !== 'PAPER' ? `Type the slip’s number (${dept}-9001 to ${dept}-9999).` : registrations.has(slip) ? `${slip} is already typed in.` : '';
+  const slipProblem = !paper ? '' : !slipNumber || slipNumber.dept !== dept || sourceOfNumber(slipNumber.number) !== 'PAPER' ? `Type the slip’s number (${deptShort(dept)}-9001 to ${deptShort(dept)}-9999).` : registrations.has(slip) ? `${slip} is already typed in.` : '';
 
   if (!catalog) return <p className="adm-muted">Loading the events…</p>;
   if (done) {
     return (
       <section className="adm-card adm-pad fest-done" aria-live="polite">
         <p className="adm-muted">Tell the student their Registration ID:</p>
-        <p className="fest-done__id">{done.id}</p>
+        <p className="fest-done__id">{showId(done.id)}</p>
         <p>
           <strong>{done.name}</strong> · {done.college}
         </p>
@@ -162,7 +145,7 @@ export function RegisterForm({ dept, paper = false }: { dept: string; paper?: bo
       {paper ? (
         <label className="adm-field">
           <span>Slip number</span>
-          <input value={slipId} autoComplete="off" placeholder={`${dept}-9001`} onChange={(event) => setSlipId(event.target.value)} />
+          <input value={slipId} autoComplete="off" placeholder={`${deptShort(dept)}-9001`} onChange={(event) => setSlipId(event.target.value)} />
           {tried && slipProblem && <span className="adm-field__error">{slipProblem}</span>}
         </label>
       ) : (
@@ -274,7 +257,7 @@ function FindAndCheckIn({ dept }: { dept: string }) {
       registration.id,
       `/api/admin/fest/registrations/${registration.id}`,
       { action: 'checkin', ...(withPayment && { payment: paymentBody(payment) }) },
-      `Check in ${registration.id}`,
+      `Check in ${showId(registration.id)}`,
       (current) => ({
         ...current,
         checkedIn: { ...stamp, ...(session.deskNumber && { desk: session.deskNumber }) },
@@ -491,7 +474,7 @@ function DeskTotals({ dept }: { dept: string }) {
       <h3 className="adm-h3">Your registrations</h3>
       <ShortList items={recent} empty="None yet." render={(registration) => <RegistrationCard key={registration.id} registration={registration} />} />
       {catalog && <p className="adm-muted">Entry fee {rupees(catalog.entryFee)} per student.</p>}
-      <Badge tone="plain">{dept}</Badge>
+      <Badge tone="plain">{deptShort(dept)}</Badge>
     </section>
   );
 }

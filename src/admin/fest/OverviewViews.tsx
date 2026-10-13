@@ -9,25 +9,7 @@
  * - Colleges: students per college and the 1st, 2nd and 3rd places each college won
  */
 import { useMemo, useState } from 'react';
-import {
-  OPEN_DEPT,
-  canJoin,
-  collegeSummary,
-  eventLabel,
-  eventOf,
-  feePaid,
-  isActive,
-  participantProblems,
-  readParticipant,
-  rupees,
-  toCsv,
-  totalsOf,
-  type CollegeRow,
-  type FestCatalog,
-  type FestEvent,
-  type FestParticipant,
-  type FestRegistration,
-} from '../../lib/fest';
+import { canJoin, collegeSummary, deptShort, eventLabel, eventOf, feePaid, isActive, OPEN_DEPT, participantProblems, readParticipant, rupees, showId, toCsv, totalsOf, type CollegeRow, type FestCatalog, type FestEvent, type FestParticipant, type FestRegistration } from '../../lib/fest';
 import { hasPermission } from '../../lib/staff';
 import { Badge, saveFile, when } from '../ui';
 import { ordinal } from './EventWindow';
@@ -96,7 +78,7 @@ export function FestOverview() {
                   return (
                     <tr key={dept.code} className="fest-row-link" onClick={() => setFilters({ ...filters, dept: dept.code })}>
                       <th scope="row">
-                        {dept.code} <span className="adm-muted">{dept.name}</span>
+                        {deptShort(dept.code)} <span className="adm-muted">{dept.name}</span>
                       </th>
                       <td>{part.registered}</td>
                       <td>
@@ -139,7 +121,7 @@ export function FestOverview() {
                 return (
                   <tr key={event.id} className="fest-row-link" onClick={() => setFilters({ ...filters, dept: event.dept, eventId: event.id })}>
                     <th scope="row">
-                      {viewAll && <span className="adm-muted">{event.dept} · </span>}
+                      {viewAll && <span className="adm-muted">{deptShort(event.dept)} · </span>}
                       {eventLabel(event)}
                       {!event.active && <Badge tone="plain">Closed</Badge>}
                     </th>
@@ -160,7 +142,7 @@ export function FestOverview() {
 
       {deskDept && deskCount > 0 && (
         <section className="adm-card adm-pad">
-          <h3 className="adm-h3">{deskDept} desks</h3>
+          <h3 className="adm-h3">{deptShort(deskDept)} desks</h3>
           <div className="adm-table-wrap">
             <table className="adm-table adm-table--static fest-table">
               <thead>
@@ -284,7 +266,7 @@ export function FestRegistrations() {
               {slice.map((item) => (
                 <tr key={item.id} className={`fest-row-link${isActive(item) ? '' : ' is-inactive'}`} onClick={() => setOpen(item.id)}>
                   <th scope="row" className="adm-mono">
-                    {item.id}
+                    {showId(item.id)}
                   </th>
                   <td>
                     {item.name}
@@ -346,7 +328,7 @@ function RegistrationDetail({ id, onClose }: { id: string; onClose: () => void }
       <div className="fest-drawer__panel">
         <header className="adm-toolbar">
           <h2 className="adm-h2">
-            {registration.id} · {registration.name}
+            {showId(registration.id)} · {registration.name}
           </h2>
           <button className="adm-button" type="button" onClick={onClose}>
             Close
@@ -355,7 +337,7 @@ function RegistrationDetail({ id, onClose }: { id: string; onClose: () => void }
         <dl className="fest-facts">
           <dt>Department</dt>
           <dd>
-            {registration.dept} · {deptName(catalog, registration.dept)}
+            {deptShort(registration.dept)} · {deptName(catalog, registration.dept)}
           </dd>
           <dt>Phone · email</dt>
           <dd>
@@ -644,7 +626,7 @@ export function FestResults() {
       for (const place of result.places) {
         for (const id of place.ids) {
           const who = person(id);
-          rows.push([event.dept, eventLabel(event), event.venue, ordinal(place.place), place.team ?? '', id, who?.name ?? '', who?.college ?? '', who?.phone ?? '', who?.email ?? '', result.submitted.by, when(result.submitted.at)]);
+          rows.push([deptShort(event.dept), eventLabel(event), event.venue, ordinal(place.place), place.team ?? '', showId(id), who?.name ?? '', who?.college ?? '', who?.phone ?? '', who?.email ?? '', result.submitted.by, when(result.submitted.at)]);
         }
       }
     }
@@ -674,7 +656,7 @@ export function FestResults() {
             <section key={event.id} className="adm-card adm-pad fest-result">
               <header className="adm-toolbar">
                 <h3 className="adm-h3">
-                  {viewAll && <span className="adm-muted">{event.dept} · </span>}
+                  {viewAll && <span className="adm-muted">{deptShort(event.dept)} · </span>}
                   {eventLabel(event)}
                 </h3>
                 {result?.submitted ? <Badge tone="good">Submitted {when(result.submitted.at)}</Badge> : result?.places.length ? <Badge tone="warn">Saved, not submitted</Badge> : <Badge tone="plain">No winners yet</Badge>}
@@ -687,7 +669,7 @@ export function FestResults() {
                   {result.places.map((place) => (
                     <li key={place.place}>
                       <strong>{ordinal(place.place)}</strong> {place.team && <>Team {place.team} · </>}
-                      {place.ids.map((id) => `${person(id)?.name ?? id} (${id}, ${person(id)?.college ?? ''})`).join('; ')}
+                      {place.ids.map((id) => `${person(id)?.name ?? showId(id)} (${showId(id)}, ${person(id)?.college ?? ''})`).join('; ')}
                     </li>
                   ))}
                 </ol>
