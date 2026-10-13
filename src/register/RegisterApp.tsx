@@ -5,7 +5,7 @@
  */
 import { useCallback, useEffect, useMemo, useState, type FormEvent, type ReactNode } from 'react';
 import { COLLEGES, OTHER_COLLEGE } from '../content/colleges';
-import { DEFAULT_UPI, TXN, YEARS, participantProblems, readParticipant, type StudentView } from '../lib/fest';
+import { DEFAULT_UPI, deptShort, participantProblems, readParticipant, showId, TXN, YEARS, type StudentView } from '../lib/fest';
 import { NO_CONNECTION, StudentApiError, changeMyEvents, fetchInfo, fetchMe, registerSelf, sendMyPayment, type PublicEvent, type PublicInfo, type StudentPass } from './registerApi';
 
 const SAVED = 'techfest-student';
@@ -294,7 +294,7 @@ function EventPicker({ info, chosen, onChange, exclude = [] }: { info: PublicInf
         return (
           <details key={dept.code} className="reg-dept">
             <summary>
-              <strong>{dept.code}</strong> {dept.name}
+              <strong>{deptShort(dept.code)}</strong> {dept.name}
               {picked > 0 && <span className="reg-count">{picked}</span>}
             </summary>
             {events.map((event) => (
@@ -415,7 +415,7 @@ function MyRegistration({ saved, info, onForget }: { saved: Saved; info: PublicI
     <section className="reg-panel">
       <div className="reg-idcard" aria-live="polite">
         <span className="reg-idcard__label">Your registration ID</span>
-        <strong className="reg-idcard__id">{saved.id}</strong>
+        <strong className="reg-idcard__id">{showId(saved.id)}</strong>
         {view && <span className="reg-idcard__name">{view.name}</span>}
         {view && <span className="reg-idcard__college">{view.college}</span>}
         {status && <span className={`reg-status reg-status--${status.tone}`}>{status.label}</span>}
@@ -466,7 +466,7 @@ function MyRegistration({ saved, info, onForget }: { saved: Saved; info: PublicI
                 const event = eventName(item.eventId);
                 return (
                   <li key={item.eventId}>
-                    <strong>{event ? `${event.dept} · ${event.name}` : item.eventId}</strong>
+                    <strong>{event ? `${deptShort(event.dept)} · ${event.name}` : item.eventId}</strong>
                     {event && <span className="reg-muted">{eventFacts(event)}</span>}
                     {item.present && <span className="reg-status reg-status--good">Attended</span>}
                   </li>

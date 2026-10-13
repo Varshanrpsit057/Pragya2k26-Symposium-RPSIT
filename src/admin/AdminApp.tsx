@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState, type FormEvent } from 'react';
 import { formatIst, parseEventStart } from '../lib/countdown';
-import { DEFAULT_CATALOG } from '../lib/fest';
+import { DEFAULT_CATALOG, deptShort } from '../lib/fest';
 import { ROLE_INFO, hasPermission, type Permission, type SessionInfo } from '../lib/staff';
 import { SignedOut, currentAdmin, listHelp, myHelp, savedToken, setDeskNumber, signIn, signOut } from './adminApi';
 import { CatalogEditor } from './fest/CatalogEditor';
@@ -47,7 +47,7 @@ export const pageDepartment = (path: string) => {
   const code = /\/landing\/([a-z]{2,6})\/admin/i.exec(path)?.[1]?.toUpperCase() ?? null;
   return code && code !== 'ADMIN' ? code : null;
 };
-const deptTitle = (code: string | null) => (code ? `${code} · ${DEFAULT_CATALOG.departments.find((dept) => dept.code === code)?.name ?? ''}` : '');
+const deptTitle = (code: string | null) => (code ? `${deptShort(code)} · ${DEFAULT_CATALOG.departments.find((dept) => dept.code === code)?.name ?? ''}` : '');
 
 const can = (session: SessionInfo, permission: Permission) => hasPermission(session.role, permission);
 

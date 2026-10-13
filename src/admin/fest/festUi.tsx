@@ -1,20 +1,6 @@
 /** Pieces every fest screen uses: the live status, the filters, payments and registration cards. */
 import { useMemo, useState, type ReactNode } from 'react';
-import {
-  OPEN_DEPT,
-  awaitingCheck,
-  collegeKey,
-  collegeSummary,
-  entryOf,
-  eventLabel,
-  eventOf,
-  feePaid,
-  isActive,
-  rupees,
-  type FestCatalog,
-  type FestEvent,
-  type FestRegistration,
-} from '../../lib/fest';
+import { awaitingCheck, collegeKey, collegeSummary, deptShort, entryOf, eventLabel, eventOf, feePaid, isActive, OPEN_DEPT, rupees, showId, type FestCatalog, type FestEvent, type FestRegistration } from '../../lib/fest';
 import { Badge, clockTime, when } from '../ui';
 import { NO_FILTERS, useFest, type FestFilters } from './FestData';
 
@@ -69,7 +55,8 @@ export const deptName = (catalog: FestCatalog | null, code: string) =>
 export const matches = (registration: FestRegistration, query: string) => {
   const q = query.trim().toLowerCase();
   if (!q) return true;
-  const compact = q.replace(/[\s-]/g, '');
+  // 'AI&DS-7' finds AIDS-0007 (IDs keep the code AIDS).
+  const compact = q.replace(/ai\s*&\s*ds/g, 'aids').replace(/[\s-]/g, '');
   return (
     registration.id.toLowerCase().replace('-', '').includes(compact) ||
     registration.name.toLowerCase().includes(q) ||
@@ -121,7 +108,7 @@ export function FilterBar({ showDept }: { showDept: boolean }) {
             <option value="">All departments</option>
             {catalog.departments.map((dept) => (
               <option key={dept.code} value={dept.code}>
-                {dept.code} · {dept.name}
+                {deptShort(dept.code)} · {dept.name}
               </option>
             ))}
             <option value={OPEN_DEPT}>Self-registered (IDs 20001…)</option>
@@ -134,7 +121,7 @@ export function FilterBar({ showDept }: { showDept: boolean }) {
           <option value="">All events</option>
           {events.map((event) => (
             <option key={event.id} value={event.id}>
-              {showDept && !filters.dept ? `${event.dept} · ` : ''}
+              {showDept && !filters.dept ? `${deptShort(event.dept)} · ` : ''}
               {eventLabel(event)}
             </option>
           ))}
@@ -265,7 +252,7 @@ export function RegistrationCard({ registration, children, showDept = false, eve
   return (
     <article className={`fest-card${isActive(registration) ? '' : ' is-inactive'}`}>
       <header className="fest-card__head">
-        <span className="fest-card__id">{registration.id}</span>
+        <span className="fest-card__id">{showId(registration.id)}</span>
         <strong className="fest-card__name">{registration.name}</strong>
         {pending.has(registration.id) && <Badge tone="warn">Waiting to send</Badge>}
         {registration.source === 'ONLINE' && <Badge tone={registration.checkedIn ? 'good' : 'plain'}>{registration.checkedIn ? 'Online · arrived' : 'Online · not arrived'}</Badge>}
@@ -279,7 +266,7 @@ export function RegistrationCard({ registration, children, showDept = false, eve
         {registration.test && <Badge tone="warn">TEST</Badge>}
       </header>
       <p className="fest-card__meta">
-        {(showDept || registration.dept === OPEN_DEPT) && <>{registration.dept === OPEN_DEPT ? 'Self-registered' : registration.dept} · </>}
+        {(showDept || registration.dept === OPEN_DEPT) && <>{registration.dept === OPEN_DEPT ? 'Self-registered' : deptShort(registration.dept)} · </>}
         {registration.phone} · {registration.college}
         {registration.team && <> · Team {registration.team}</>}
       </p>

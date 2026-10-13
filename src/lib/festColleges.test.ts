@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { collegeKey, collegeSummary, normaliseFestId, parseFestId, type FestRegistration, type FestResult } from './fest';
+import { collegeKey, collegeSummary, deptShort, normaliseFestId, parseFestId, showId, type FestRegistration, type FestResult } from './fest';
 
 const person = (id: string, college: string, extra: Partial<FestRegistration> = {}): FestRegistration => ({
   id,
@@ -59,5 +59,16 @@ describe('IDs of students who registered themselves', () => {
     expect(parseFestId('20017')).toEqual({ dept: 'OPEN', number: 20017 });
     expect(normaliseFestId('12345')).toBe('');
     expect(normaliseFestId('cse 12')).toBe('CSE-0012');
+  });
+});
+
+describe('AI&DS', () => {
+  it('is how the AIDS department reads everywhere, and is understood however an ID is typed', () => {
+    expect(deptShort('AIDS')).toBe('AI&DS');
+    expect(deptShort('CSE')).toBe('CSE');
+    expect(showId('AIDS-0007')).toBe('AI&DS-0007');
+    expect(showId('CSE-0007')).toBe('CSE-0007');
+    expect(showId('20017')).toBe('20017');
+    for (const typed of ['AI&DS-7', 'ai&ds 0007', 'AI & DS-7', 'AIDS-0007', 'aids 7']) expect(normaliseFestId(typed)).toBe('AIDS-0007');
   });
 });

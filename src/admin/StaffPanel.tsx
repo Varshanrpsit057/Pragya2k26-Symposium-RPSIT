@@ -1,7 +1,7 @@
 /** Staff accounts (admins): create, set roles, assign events, reset passwords, deactivate, delete. */
 import { useCallback, useState, type FormEvent } from 'react';
 import { events as allEvents } from '../content/events';
-import { eventLabel, toCsv, type FestCatalog } from '../lib/fest';
+import { deptShort, eventLabel, toCsv, type FestCatalog } from '../lib/fest';
 import { CREATABLE_ROLES, DEPARTMENT_ROLES, ROLE_INFO, type SessionInfo, type StaffAccountView, type StaffRole } from '../lib/staff';
 import { ApiFailure, SignedOut, createStaff, deleteStaff, listStaff, signOutStaff, signedInNow, updateStaff, type StaffChange } from './adminApi';
 import { useFestCatalog } from './fest/FestData';
@@ -174,7 +174,7 @@ function ScopeFields({ role, department, deskNumber, onChange }: { role: StaffRo
           <option value="">Choose…</option>
           {catalog.departments.map((dept) => (
             <option key={dept.code} value={dept.code}>
-              {dept.code} · {dept.name}
+              {deptShort(dept.code)} · {dept.name}
             </option>
           ))}
         </select>
@@ -462,11 +462,11 @@ function planFor(catalog: FestCatalog, code: string): PlannedAccount[] {
   if (!dept) return [];
   const lower = code.toLowerCase();
   const plan: PlannedAccount[] = [
-    { username: `${lower}-hod`, displayName: `${code} HOD`, role: 'HOD', department: code, eventIds: [], password: generatePassword() },
-    { username: `${lower}-admin`, displayName: `${code} Department admin`, role: 'DEPT_ADMIN', department: code, eventIds: [], password: generatePassword() },
+    { username: `${lower}-hod`, displayName: `${deptShort(code)} HOD`, role: 'HOD', department: code, eventIds: [], password: generatePassword() },
+    { username: `${lower}-admin`, displayName: `${deptShort(code)} Department admin`, role: 'DEPT_ADMIN', department: code, eventIds: [], password: generatePassword() },
     ...Array.from({ length: dept.desks }, (_, index) => ({
       username: `${lower}-desk${index + 1}`,
-      displayName: `${code} Desk ${index + 1}`,
+      displayName: `${deptShort(code)} Desk ${index + 1}`,
       role: 'DESK' as StaffRole,
       department: code,
       deskNumber: index + 1,
@@ -537,7 +537,7 @@ function DepartmentAccounts({ token, existing, onCreated, onSignedOut }: { token
           <option value="">Choose…</option>
           {catalog.departments.map((dept) => (
             <option key={dept.code} value={dept.code}>
-              {dept.code} · {dept.name}
+              {deptShort(dept.code)} · {dept.name}
             </option>
           ))}
         </select>

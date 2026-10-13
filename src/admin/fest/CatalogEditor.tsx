@@ -4,7 +4,7 @@
  * every phone picks the change up within seconds.
  */
 import { useState } from 'react';
-import { DEFAULT_UPI, catalogProblem, type FestCatalog, type FestDepartment, type FestEvent } from '../../lib/fest';
+import { catalogProblem, DEFAULT_UPI, deptShort, type FestCatalog, type FestDepartment, type FestEvent } from '../../lib/fest';
 import { SignedOut } from '../adminApi';
 import { Badge, when } from '../ui';
 import { saveFestCatalog } from './festApi';
@@ -95,7 +95,7 @@ export function CatalogEditor({ token, onSignedOut }: { token: string; onSignedO
         return (
           <section key={dept.code} className="adm-card adm-pad">
             <button className="fest-catalog__head" type="button" aria-expanded={isOpen} onClick={() => setOpen(isOpen ? '' : dept.code)}>
-              <strong>{dept.code}</strong> {dept.name} <span className="adm-muted">· {events.length} events · {dept.desks} desks</span> {!dept.active && <Badge tone="bad">Off</Badge>}
+              <strong>{deptShort(dept.code)}</strong> {dept.name} <span className="adm-muted">· {events.length} events · {dept.desks} desks</span> {!dept.active && <Badge tone="bad">Off</Badge>}
             </button>
             {isOpen && (
               <>

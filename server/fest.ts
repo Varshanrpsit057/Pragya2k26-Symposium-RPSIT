@@ -11,40 +11,7 @@
  *
  * Every rule is checked here; the dashboards only hide what a role cannot use.
  */
-import {
-  DEFAULT_CATALOG,
-  DEFAULT_UPI,
-  ID_BLOCK,
-  ID_RANGES,
-  OPEN_DEPT,
-  TXN,
-  canJoin,
-  toStudentView,
-  catalogProblem,
-  departmentOf,
-  entryOf,
-  eventOf,
-  feePaid,
-  formatFestId,
-  isActive,
-  matchEvents,
-  normaliseFestId,
-  parseFestId,
-  participantProblems,
-  readParticipant,
-  sourceOfNumber,
-  type FestCatalog,
-  type FestDepartment,
-  type FestEvent,
-  type FestMethod,
-  type FestParticipant,
-  type FestPayment,
-  type FestPlace,
-  type FestRegistration,
-  type FestResult,
-  type FestSource,
-  type FestStamp,
-} from '../src/lib/fest';
+import { canJoin, catalogProblem, DEFAULT_CATALOG, DEFAULT_UPI, departmentOf, deptShort, entryOf, eventOf, feePaid, formatFestId, ID_BLOCK, ID_RANGES, isActive, matchEvents, normaliseFestId, OPEN_DEPT, parseFestId, participantProblems, readParticipant, showId, sourceOfNumber, toStudentView, TXN, type FestCatalog, type FestDepartment, type FestEvent, type FestMethod, type FestParticipant, type FestPayment, type FestPlace, type FestRegistration, type FestResult, type FestSource, type FestStamp } from '../src/lib/fest';
 import { timingSafeEqual } from 'node:crypto';
 import { formatIst, parseEventStart } from '../src/lib/countdown';
 import { registrationPhase, type RegistrationSchedule } from '../src/lib/schedule';
@@ -193,7 +160,7 @@ export class FestService {
       return [wanted, OPEN_DEPT];
     }
     const own = this.ownDepartment(actor);
-    if (wanted && wanted !== own && wanted !== OPEN_DEPT) throw new ApiError(403, 'OTHER_DEPARTMENT', `Your account is for ${own}.`);
+    if (wanted && wanted !== own && wanted !== OPEN_DEPT) throw new ApiError(403, 'OTHER_DEPARTMENT', `Your account is for ${deptShort(own)}.`);
     return [own, OPEN_DEPT];
   }
 
@@ -209,7 +176,7 @@ export class FestService {
     let code: string;
     if (DEPARTMENT_ROLES.includes(actor.role)) {
       code = this.ownDepartment(actor);
-      if (wanted && wanted !== code) throw new ApiError(403, 'OTHER_DEPARTMENT', `Your account is for ${code}.`);
+      if (wanted && wanted !== code) throw new ApiError(403, 'OTHER_DEPARTMENT', `Your account is for ${deptShort(code)}.`);
     } else {
       if (!wanted) throw new ApiError(400, 'INVALID', 'Choose the department.');
       code = wanted;
@@ -261,7 +228,7 @@ export class FestService {
     const count = source === 'PAPER' ? Math.min(Math.max(int(isObject(body) ? body.count : 0, 50), 1), 200) : ID_BLOCK;
     const first = await this.deps.store.takeNumbers(department.code, source, count);
     const last = first + count - 1;
-    if (last > ID_RANGES[source].last) throw new ApiError(409, 'IDS_EXHAUSTED', `${department.code} has used every ${source === 'PAPER' ? 'paper' : 'desk'} ID. Ask the web assist team.`);
+    if (last > ID_RANGES[source].last) throw new ApiError(409, 'IDS_EXHAUSTED', `${deptShort(department.code)} has used every ${source === 'PAPER' ? 'paper' : 'desk'} ID. Ask the web assist team.`);
     this.deps.log('Fest IDs handed out', { dept: department.code, source, first, last, by: actor.username });
     return { success: true as const, dept: department.code, source, first, last };
   }
@@ -275,7 +242,7 @@ export class FestService {
     const ids: string[] = [];
     for (const id of requested) {
       const event = eventOf(catalog, id);
-      if (!event || !canJoin({ dept }, event)) throw new ApiError(400, 'INVALID', `${id} is not an event of ${dept}.`);
+      if (!event || !canJoin({ dept }, event)) throw new ApiError(400, 'INVALID', `${showId(id)} is not an event of ${deptShort(dept)}.`);
       if (!event.active || departmentOf(catalog, event.dept)?.active === false) throw new ApiError(400, 'INVALID', `${event.name} is closed for registration.`);
       if (!ids.includes(id)) ids.push(id);
     }
@@ -317,7 +284,7 @@ export class FestService {
   async register(actor: Actor, body: unknown) {
     if (!isObject(body)) throw new ApiError(400, 'INVALID', 'The registration could not be read.');
     const department = await this.workDepartment(actor, body.dept);
-    if (!department.active) throw new ApiError(400, 'INVALID', `${department.code} is not taking registrations.`);
+    if (!department.active) throw new ApiError(400, 'INVALID', `${deptShort(department.code)} is not taking registrations.`);
     const dept = department.code;
     const source: 'DESK' | 'PAPER' = body.source === 'PAPER' ? 'PAPER' : 'DESK';
     if (source === 'PAPER') requirePermission(actor, 'fest.import');
@@ -332,7 +299,7 @@ export class FestService {
     const id = normaliseFestId(text(body.id, 20));
     const parsed = parseFestId(id);
     if (!parsed || parsed.dept !== dept || sourceOfNumber(parsed.number) !== source) {
-      throw new ApiError(400, 'INVALID_ID', `The ID must be a ${dept} ${source === 'PAPER' ? 'paper slip' : 'desk'} ID.`);
+      throw new ApiError(400, 'INVALID_ID', `The ID must be a ${deptShort(dept)} ${source === 'PAPER' ? 'paper slip' : 'desk'} ID.`);
     }
     const participant = readParticipant(body.participant);
     const problems = participantProblems(participant);
@@ -364,9 +331,9 @@ export class FestService {
     }
     if (created.reason === 'submission') return { success: true as const, registration: await this.required(dept, created.existingId!), replayed: true };
     if (created.reason === 'phone') {
-      throw new ApiError(409, 'DUPLICATE_PHONE', `This phone number is already registered in ${dept} as ${created.existingId}.`, undefined, undefined, { existingId: created.existingId ?? '' });
+      throw new ApiError(409, 'DUPLICATE_PHONE', `This phone number is already registered in ${deptShort(dept)} as ${showId(created.existingId ?? '')}.`, undefined, undefined, { existingId: created.existingId ?? '' });
     }
-    throw new ApiError(409, 'ID_TAKEN', `${id} is already used. The next free ID will be used.`);
+    throw new ApiError(409, 'ID_TAKEN', `${showId(id)} is already used. The next free ID will be used.`);
   }
 
   private async required(dept: string, id: string) {
@@ -389,7 +356,7 @@ export class FestService {
       if (await this.deps.store.saveRegistration(next, current.v, result.phone)) return { success: true as const, registration: next, changed: true };
       if (result.phone?.to) {
         const holder = await this.deps.store.findPhone(dept, result.phone.to);
-        if (holder && holder !== id) throw new ApiError(409, 'DUPLICATE_PHONE', `That phone number is already registered in ${dept} as ${holder}.`, undefined, undefined, { existingId: holder });
+        if (holder && holder !== id) throw new ApiError(409, 'DUPLICATE_PHONE', `That phone number is already registered in ${deptShort(dept)} as ${showId(holder)}.`, undefined, undefined, { existingId: holder });
       }
     }
     throw new ApiError(409, 'BUSY', 'Someone else changed this registration at the same moment. Please try again.');
@@ -444,7 +411,7 @@ export class FestService {
       if (!TXN.test(txn)) throw new ApiError(400, 'INVALID', 'Type the transaction ID as it appears in the payment.');
       if (input.confirmed !== true) throw new ApiError(400, 'INVALID', `Tick that you have seen ₹${claim.amount} received with this transaction ID.`);
       const holder = await this.deps.store.claimTxn(OPEN_DEPT, txn, id);
-      if (holder && holder !== id) throw new ApiError(409, 'TXN_USED', `This transaction ID was already accepted for ${holder}.`, undefined, undefined, { existingId: holder });
+      if (holder && holder !== id) throw new ApiError(409, 'TXN_USED', `This transaction ID was already accepted for ${showId(holder)}.`, undefined, undefined, { existingId: holder });
       try {
         return await this.mutate(dept, id, (registration) => {
           live(registration);
@@ -572,7 +539,7 @@ export class FestService {
     const codes = [...catalog.departments.map((dept) => dept.code), OPEN_DEPT];
     const holders = await Promise.all(codes.map(async (dept) => ((await this.deps.store.findPhone(dept, participant.phone)) ? dept : null)));
     const holder = holders.find(Boolean);
-    if (holder) throw new ApiError(409, 'DUPLICATE_PHONE', holder === OPEN_DEPT ? ALREADY_SELF : `This mobile number is already registered with ${holder}. Go to a registration desk with it.`);
+    if (holder) throw new ApiError(409, 'DUPLICATE_PHONE', holder === OPEN_DEPT ? ALREADY_SELF : `This mobile number is already registered with ${deptShort(holder)}. Go to a registration desk with it.`);
 
     const stamp: FestStamp = { at: this.iso(), by: STUDENT };
     const mark = await this.deps.testMark();
@@ -657,7 +624,7 @@ export class FestService {
     if (actor.role === 'COORDINATOR') {
       if (actor.department !== event.dept || !actor.eventIds.includes(event.id)) throw new ApiError(403, 'EVENT_NOT_ASSIGNED', 'This event is not assigned to your account.');
     } else if (DEPARTMENT_ROLES.includes(actor.role)) {
-      if (actor.department !== event.dept) throw new ApiError(403, 'OTHER_DEPARTMENT', `Your account is for ${actor.department ?? 'another department'}.`);
+      if (actor.department !== event.dept) throw new ApiError(403, 'OTHER_DEPARTMENT', `Your account is for ${actor.department ? deptShort(actor.department) : 'another department'}.`);
     }
   }
 
@@ -671,7 +638,7 @@ export class FestService {
   async eventAct(actor: Actor, rawId: string, eventId: string, body: unknown) {
     const { id, dept } = this.target(rawId);
     const event = await this.festEvent(eventId);
-    if (!canJoin({ dept }, event)) throw new ApiError(400, 'OTHER_DEPARTMENT', `${id} is not in ${event.dept}.`);
+    if (!canJoin({ dept }, event)) throw new ApiError(400, 'OTHER_DEPARTMENT', `${showId(id)} is not in ${deptShort(event.dept)}.`);
     const action = isObject(body) ? body.action : null;
     if (!['add', 'fee', 'present', 'absent', 'void-fee'].includes(String(action))) throw new ApiError(400, 'INVALID', 'Choose what to do.');
     requirePermission(actor, action === 'void-fee' ? 'fest.correct' : 'fest.event');
@@ -690,7 +657,7 @@ export class FestService {
         if (!event.active) throw new ApiError(400, 'INVALID', `${event.name} is closed for registration.`);
         return { next: { events: [...registration.events, { eventId: event.id, added: stamp }] } };
       }
-      if (!entry) throw new ApiError(409, 'NOT_IN_EVENT', `${id} is not registered for ${event.name}. Add them first.`);
+      if (!entry) throw new ApiError(409, 'NOT_IN_EVENT', `${showId(id)} is not registered for ${event.name}. Add them first.`);
       switch (action) {
         case 'fee': {
           if (feePaid(entry)) return null;
@@ -770,8 +737,8 @@ export class FestService {
         const owner = parseFestId(id);
         const registration = owner && canJoin(owner, event) ? await this.deps.store.getRegistration(owner.dept, id) : null;
         const entry = registration && isActive(registration) ? entryOf(registration, event.id) : null;
-        if (!entry) throw new ApiError(400, 'INVALID', `${id} is not registered for ${event.name}.`);
-        if (!entry.present) throw new ApiError(400, 'INVALID', `${id} is not marked present at ${event.name}.`);
+        if (!entry) throw new ApiError(400, 'INVALID', `${showId(id)} is not registered for ${event.name}.`);
+        if (!entry.present) throw new ApiError(400, 'INVALID', `${showId(id)} is not marked present at ${event.name}.`);
       }
       places.push({ place, ids, ...(text(item.team, 60) && { team: text(item.team, 60) }) });
     }
@@ -830,7 +797,7 @@ export class FestService {
     }
     if (ready.length) {
       const first = await this.deps.store.takeNumbers(dept, 'ONLINE', ready.length);
-      if (first + ready.length - 1 > ID_RANGES.ONLINE.last) throw new ApiError(409, 'IDS_EXHAUSTED', `${dept} has used every online ID.`);
+      if (first + ready.length - 1 > ID_RANGES.ONLINE.last) throw new ApiError(409, 'IDS_EXHAUSTED', `${deptShort(dept)} has used every online ID.`);
       const mark = await this.deps.testMark();
       for (const [index, item] of ready.entries()) {
         const id = formatFestId(dept, first + index);

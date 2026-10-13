@@ -356,6 +356,22 @@ export const ID_RANGES: Record<FestSource, { first: number; last: number }> = {
 export const ID_BLOCK = 50;
 export const ID_TOP_UP_AT = 15;
 
+/**
+ * How a department's code is shown to people: AIDS reads as AI&DS. The code itself stays in web
+ * addresses (/landing/aids/admin/), usernames (aids-desk1), event IDs and stored records, where
+ * '&' would break things.
+ */
+const SHOWN_CODES: Record<string, string> = { AIDS: 'AI&DS' };
+export const deptShort = (code: string) => SHOWN_CODES[code] ?? code;
+/** How a registration ID is shown: 'AIDS-0007' → 'AI&DS-0007' (others unchanged). */
+export const showId = (id: string) => {
+  const match = /^([A-Z]{2,6})-(\d{4})$/.exec(id);
+  return match && SHOWN_CODES[match[1]] ? `${SHOWN_CODES[match[1]]}-${match[2]}` : id;
+};
+/** 'AI&DS-7', 'ai & ds 7' → 'AIDS-7' (then read as usual). */
+const typedCode = (input: string) =>
+  Object.entries(SHOWN_CODES).reduce((text, [code, shown]) => text.replace(new RegExp(shown.replace(/[&]/g, '\\s*&\\s*'), 'i'), code), input);
+
 export const FEST_ID = /^([A-Z]{2,6})-(\d{4})$/;
 const SELF_ID = /^\d{5}$/;
 export const formatFestId = (dept: string, number: number) => (dept === OPEN_DEPT ? String(number) : `${dept}-${String(number).padStart(4, '0')}`);
@@ -374,7 +390,7 @@ export const sourceOfNumber = (number: number): FestSource | null =>
 export function normaliseFestId(input: string): string {
   const self = /^\s*(\d{5})\s*$/.exec(input);
   if (self) return Number(self[1]) >= ID_RANGES.SELF.first ? self[1] : '';
-  const match = /^\s*([a-z]{2,6})\s*-?\s*(\d{1,4})\s*$/i.exec(input);
+  const match = /^\s*([a-z]{2,6})\s*-?\s*(\d{1,4})\s*$/i.exec(typedCode(input));
   return match ? formatFestId(match[1].toUpperCase(), Number(match[2])) : '';
 }
 
@@ -443,7 +459,7 @@ export const canJoin = (registration: Pick<FestRegistration, 'dept'>, event: Pic
 /** A self-registered student whose transaction ID waits for a desk. */
 export const awaitingCheck = (registration: FestRegistration) => registration.entry.status === 'DUE' && Boolean(registration.entry.claim) && !registration.entry.rejected;
 /** The department's name, or what a self-registered student's "department" is called. */
-export const deptLabel = (catalog: FestCatalog | null, code: string) => (code === OPEN_DEPT ? 'Self-registered (any department)' : (catalog && departmentOf(catalog, code)?.name) || code);
+export const deptLabel = (catalog: FestCatalog | null, code: string) => (code === OPEN_DEPT ? 'Self-registered (any department)' : (catalog && departmentOf(catalog, code)?.name) || deptShort(code));
 
 /** Neither cancelled nor deleted: counts everywhere. */
 export const isActive = (registration: Pick<FestRegistration, 'cancelled' | 'deleted'>) => !registration.cancelled && !registration.deleted;

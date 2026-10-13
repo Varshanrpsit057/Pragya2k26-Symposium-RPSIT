@@ -11,7 +11,7 @@ and what to do when something goes wrong.
 
 ## 0. The college-wide fest (INFINITE TECHFEST'26)
 
-The staff dashboard runs the whole college's fest: **8 departments** (CSE, AIDS, IT, ECE, CYS, EEE,
+The staff dashboard runs the whole college's fest: **8 departments** (CSE, AI&DS, IT, ECE, CYS, EEE,
 MECH, SH), **44 events**, 4 registration desks per department and 2 coordinators per event, built
 for about 300 phones on mobile data.
 

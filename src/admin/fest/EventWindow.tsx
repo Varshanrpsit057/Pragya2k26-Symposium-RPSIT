@@ -4,21 +4,7 @@
  * straight to the venue, and the winners, submitted to the overall coordinator.
  */
 import { useMemo, useState } from 'react';
-import {
-  canJoin,
-  entryOf,
-  eventLabel,
-  eventOf,
-  eventsOf,
-  feePaid,
-  isActive,
-  parseIdList,
-  rupees,
-  teamRule,
-  totalsOf,
-  type FestEvent,
-  type FestRegistration,
-} from '../../lib/fest';
+import { canJoin, deptShort, entryOf, eventLabel, eventOf, eventsOf, feePaid, isActive, parseIdList, rupees, showId, teamRule, totalsOf, type FestEvent, type FestRegistration } from '../../lib/fest';
 import { Badge, when } from '../ui';
 import { DeptPicker, useWorkDept } from './DeskView';
 import { useFest } from './FestData';
@@ -178,7 +164,7 @@ function EventPanel({ event }: { event: FestEvent }) {
             />
           </>
         )}
-        {q.length >= 2 && !shown.length && !others.length && <p className="adm-muted">Not registered in {event.dept}: send them to a {event.dept} registration desk first.</p>}
+        {q.length >= 2 && !shown.length && !others.length && <p className="adm-muted">Not registered in {deptShort(event.dept)}: send them to a registration desk first.</p>}
       </section>
 
       <Winners event={event} registered={registered} />
@@ -193,13 +179,13 @@ function Winners({ event, registered }: { event: FestEvent; registered: FestRegi
   const initial = () =>
     [1, 2, 3].map((place) => {
       const saved = result?.places.find((item) => item.place === place);
-      return { place, ids: saved ? saved.ids.join(', ') : '', team: saved?.team ?? '' };
+      return { place, ids: saved ? saved.ids.map(showId).join(', ') : '', team: saved?.team ?? '' };
     });
   const [rows, setRows] = useState(initial);
   const [message, setMessage] = useState('');
   const presentIds = new Set(registered.filter((item) => entryOf(item, event.id)?.present).map((item) => item.id));
   const parsed = rows.map((row) => ({ ...row, list: parseIdList(row.ids) }));
-  const problems = parsed.flatMap((row) => row.list.filter((id) => !presentIds.has(id)).map((id) => `${id} (place ${row.place}) is not marked present here`));
+  const problems = parsed.flatMap((row) => row.list.filter((id) => !presentIds.has(id)).map((id) => `${showId(id)} (place ${row.place}) is not marked present here`));
   const places = parsed.filter((row) => row.list.length).map((row) => ({ place: row.place, ids: row.list, ...(row.team.trim() && { team: row.team.trim() }) }));
   const send = (action: 'save' | 'submit') => {
     if (action === 'submit' && !window.confirm(`Submit the results of ${event.name}?\n\nThe event closes: no more fees, attendance or changes. The overall coordinator receives the winners.`)) return;
@@ -216,7 +202,7 @@ function Winners({ event, registered }: { event: FestEvent; registered: FestRegi
           {result!.places.map((place) => (
             <li key={place.place}>
               <strong>{ordinal(place.place)}</strong> {place.team && <>Team {place.team} · </>}
-              {place.ids.map((id) => `${id} ${nameOf(id)}`).join(', ')}
+              {place.ids.map((id) => `${showId(id)} ${nameOf(id)}`).join(', ')}
             </li>
           ))}
         </ol>
@@ -227,7 +213,7 @@ function Winners({ event, registered }: { event: FestEvent; registered: FestRegi
             <div key={row.place} className="fest-form__row">
               <label className="adm-field">
                 <span>{ordinal(row.place)} place</span>
-                <input value={row.ids} placeholder={`${event.dept}-0001`} onChange={(change_) => setRows(rows.map((item, at) => (at === index ? { ...item, ids: change_.target.value } : item)))} />
+                <input value={row.ids} placeholder={`${deptShort(event.dept)}-0001`} onChange={(change_) => setRows(rows.map((item, at) => (at === index ? { ...item, ids: change_.target.value } : item)))} />
               </label>
               {event.teamMax > 1 && (
                 <label className="adm-field">
