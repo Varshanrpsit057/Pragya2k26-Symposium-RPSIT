@@ -3,10 +3,10 @@
  * register for the fest (details, the ₹100 entry fee by UPI and its transaction ID), then see
  * their ID and whether a desk has verified the payment. The ID stays on the phone.
  */
-import { useCallback, useEffect, useMemo, useState, type FormEvent, type ReactNode } from 'react';
+import { useCallback, useEffect, useState, type FormEvent, type ReactNode } from 'react';
 import { COLLEGES, OTHER_COLLEGE } from '../content/colleges';
 import { DEFAULT_UPI, deptShort, participantProblems, readParticipant, showId, TXN, YEARS, type StudentView } from '../lib/fest';
-import { NO_CONNECTION, StudentApiError, changeMyEvents, fetchInfo, fetchMe, registerSelf, sendMyPayment, type PublicEvent, type PublicInfo, type StudentPass } from './registerApi';
+import { NO_CONNECTION, StudentApiError, fetchInfo, fetchMe, registerSelf, sendMyPayment, type PublicEvent, type PublicInfo, type StudentPass } from './registerApi';
 
 const SAVED = 'techfest-student';
 const DRAFT = 'techfest-draft';
@@ -24,7 +24,6 @@ interface Draft {
   branch: string;
   year: string;
   team: string;
-  events: string[];
   txn: string;
 }
 
@@ -51,7 +50,7 @@ const newId = () => {
   const bytes = random.getRandomValues(new Uint8Array(16));
   return `s-${Array.from(bytes, (byte: number) => byte.toString(16).padStart(2, '0')).join('')}`;
 };
-const emptyDraft = (): Draft => ({ submissionId: newId(), name: '', phone: '', email: '', college: '', branch: '', year: '', team: '', events: [], txn: '' });
+const emptyDraft = (): Draft => ({ submissionId: newId(), name: '', phone: '', email: '', college: '', branch: '', year: '', team: '', txn: '' });
 const rupees = (amount: number) => `₹${amount.toLocaleString('en-IN')}`;
 const upiLink = (info: PublicInfo) =>
   `upi://pay?pa=${encodeURIComponent(info.upiId)}&pn=${encodeURIComponent(info.upiPayee)}&am=${info.entryFee}&cu=INR&tn=${encodeURIComponent("INFINITE TECHFEST'26 entry")}`;
@@ -61,7 +60,9 @@ export function RegisterApp() {
   const [info, setInfo] = useState<PublicInfo | null>(null);
   const [infoError, setInfoError] = useState('');
   const [saved, setSaved] = useState<Saved | null>(() => read<Saved>(SAVED));
-  const [signingIn, setSigningIn] = useState(false);
+  // "My registration ID" on the home page comes here as /register/?my: straight to the registration
+  // (this phone's own if it registered here, otherwise the ID and mobile number).
+  const [signingIn, setSigningIn] = useState(() => typeof window !== 'undefined' && new URLSearchParams(window.location.search).has('my'));
 
   const loadInfo = useCallback(
     () =>
@@ -169,7 +170,7 @@ function RegisterForm({ info, onRegistered, onSignIn }: { info: PublicInfo; onRe
     }
     setBusy(true);
     try {
-      const view = await registerSelf({ submissionId: draft.submissionId, participant, events: draft.events, txn });
+      const view = await registerSelf({ submissionId: draft.submissionId, participant, events: [], txn });
       write(DRAFT, null);
       onRegistered(view, participant.phone, draft.submissionId);
     } catch (failure) {
@@ -225,12 +226,6 @@ function RegisterForm({ info, onRegistered, onSignIn }: { info: PublicInfo; onRe
       </fieldset>
 
       <fieldset className="reg-group">
-        <legend>Events (optional)</legend>
-        <p className="reg-muted">You can register for any event of any department at its venue. Pick some now if you like.</p>
-        <EventPicker info={info} chosen={draft.events} onChange={(events) => set({ events })} />
-      </fieldset>
-
-      <fieldset className="reg-group">
         <legend>Entry fee: {rupees(info.entryFee)}</legend>
         <ol className="reg-steps">
           <li>
@@ -283,37 +278,6 @@ function Field({ label, error, hint, children }: { label: string; error?: string
   );
 }
 
-/** Every open event, a department at a time. */
-function EventPicker({ info, chosen, onChange, exclude = [] }: { info: PublicInfo; chosen: string[]; onChange: (events: string[]) => void; exclude?: string[] }) {
-  const byDept = useMemo(() => info.departments.map((dept) => ({ dept, events: info.events.filter((event) => event.dept === dept.code && !exclude.includes(event.id)) })).filter((part) => part.events.length), [info, exclude]);
-  const toggle = (id: string) => onChange(chosen.includes(id) ? chosen.filter((item) => item !== id) : [...chosen, id]);
-  return (
-    <div className="reg-events">
-      {byDept.map(({ dept, events }) => {
-        const picked = events.filter((event) => chosen.includes(event.id)).length;
-        return (
-          <details key={dept.code} className="reg-dept">
-            <summary>
-              <strong>{deptShort(dept.code)}</strong> {dept.name}
-              {picked > 0 && <span className="reg-count">{picked}</span>}
-            </summary>
-            {events.map((event) => (
-              <label key={event.id} className="reg-event">
-                <input type="checkbox" checked={chosen.includes(event.id)} onChange={() => toggle(event.id)} />
-                <span>
-                  <strong>{event.name}</strong>
-                  {event.subtitle && <> ({event.subtitle})</>}
-                  <span className="reg-muted">{eventFacts(event)}</span>
-                </span>
-              </label>
-            ))}
-          </details>
-        );
-      })}
-    </div>
-  );
-}
-
 const eventFacts = (event: PublicEvent) =>
   [event.venue, event.time, event.fee ? `${rupees(event.fee)} at the venue` : 'No fee', event.teamMax > 1 ? `teams up to ${event.teamMax}` : 'individual'].filter(Boolean).join(' · ');
 
@@ -356,7 +320,7 @@ function SignIn({ onDone, onBack }: { onDone: (saved: Saved) => void; onBack: ()
       </button>
       <p className="reg-muted">Forgot your ID? Ask at any registration desk with your mobile number.</p>
       <button className="reg-link" type="button" onClick={onBack}>
-        Back to the form
+        Not registered yet? Register
       </button>
     </form>
   );
@@ -373,7 +337,6 @@ const STATUS: Record<StudentView['status'], { label: string; tone: string }> = {
 function MyRegistration({ saved, info, onForget }: { saved: Saved; info: PublicInfo | null; onForget: () => void }) {
   const [view, setView] = useState<StudentView | null>(null);
   const [error, setError] = useState('');
-  const [adding, setAdding] = useState<string[] | null>(null);
   const [txn, setTxn] = useState('');
   const [busy, setBusy] = useState(false);
 
@@ -400,7 +363,6 @@ function MyRegistration({ saved, info, onForget }: { saved: Saved; info: PublicI
     setError('');
     try {
       setView(await work());
-      setAdding(null);
       setTxn('');
     } catch (failure) {
       setError(messageOf(failure));
@@ -455,43 +417,21 @@ function MyRegistration({ saved, info, onForget }: { saved: Saved; info: PublicI
         </p>
       )}
 
-      {view && (
+      {view && view.events.length > 0 && (
         <div className="reg-group">
           <h2 className="reg-h2">Your events</h2>
-          {view.events.length === 0 ? (
-            <p className="reg-muted">None chosen. Register at any event’s venue, or add some here.</p>
-          ) : (
-            <ul className="reg-myevents">
-              {view.events.map((item) => {
-                const event = eventName(item.eventId);
-                return (
-                  <li key={item.eventId}>
-                    <strong>{event ? `${deptShort(event.dept)} · ${event.name}` : item.eventId}</strong>
-                    {event && <span className="reg-muted">{eventFacts(event)}</span>}
-                    {item.present && <span className="reg-status reg-status--good">Attended</span>}
-                  </li>
-                );
-              })}
-            </ul>
-          )}
-          {!view.canChange && <p className="reg-muted">To add events here, use the phone you registered with. You can always register for an event at its venue.</p>}
-          {info && view.canChange && view.status !== 'cancelled' && (adding ? (
-            <>
-              <EventPicker info={info} chosen={adding} exclude={view.events.map((item) => item.eventId)} onChange={setAdding} />
-              <div className="reg-row">
-                <button className="reg-button" type="button" disabled={busy || !adding.length} onClick={() => void act(() => changeMyEvents(saved, adding))}>
-                  Add {adding.length || ''} event{adding.length === 1 ? '' : 's'}
-                </button>
-                <button className="reg-link" type="button" onClick={() => setAdding(null)}>
-                  Cancel
-                </button>
-              </div>
-            </>
-          ) : (
-            <button className="reg-link" type="button" onClick={() => setAdding([])}>
-              Add events
-            </button>
-          ))}
+          <ul className="reg-myevents">
+            {view.events.map((item) => {
+              const event = eventName(item.eventId);
+              return (
+                <li key={item.eventId}>
+                  <strong>{event ? `${deptShort(event.dept)} · ${event.name}` : item.eventId}</strong>
+                  {event && <span className="reg-muted">{eventFacts(event)}</span>}
+                  {item.present && <span className="reg-status reg-status--good">Attended</span>}
+                </li>
+              );
+            })}
+          </ul>
         </div>
       )}
 

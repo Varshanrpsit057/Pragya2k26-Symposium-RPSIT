@@ -141,19 +141,48 @@
   stroke-width: 2.5;
 }
 
+/* Each department's name at its dot, in the loop's own colour there with a soft glow (no outline).
+   The loop scales with the screen, so the text is set larger on phones (about 15px there) and
+   smaller on wide screens (about 16px). */
 .landing-loop__station text {
-  fill: var(--l-muted);
   font-family: var(--font);
-  font-size: 15px;
-  font-weight: 650;
+  font-size: 27px;
+  font-weight: 700;
   font-stretch: 112%;
-  /* Too small to read on a phone: the department list below says the same */
-  display: none;
+  filter: drop-shadow(0 0 6px rgb(110 92 255 / 0.55));
+}
+
+/* AI&DS at the crossing: a brighter dot with a ring; its name over a halo in the sky's own blue,
+   so the lines crossing behind it fade out rather than show an outline. */
+.landing-loop__hub circle {
+  fill: url(#landing-loop-ink);
+  stroke: #ffffff;
+  stroke-width: 2.5;
+}
+
+.landing-loop__hub .landing-loop__hub-ring {
+  fill: none;
+  stroke: rgb(170 150 255 / 0.5);
+  stroke-width: 2;
+}
+
+.landing-loop__hub text {
+  fill: #ffffff;
+  font-size: 30px;
+  paint-order: stroke;
+  stroke: rgb(28 30 104 / 0.9);
+  stroke-width: 10px;
+  stroke-linejoin: round;
 }
 
 @media (min-width: 40rem) {
   .landing-loop__station text {
-    display: inline;
+    font-size: 18px;
+  }
+
+  .landing-loop__hub text {
+    font-size: 21px;
+    stroke-width: 8px;
   }
 }
 

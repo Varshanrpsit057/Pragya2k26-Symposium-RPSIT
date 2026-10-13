@@ -57,8 +57,11 @@ export const matches = (registration: FestRegistration, query: string) => {
   if (!q) return true;
   // 'AI&DS-7' finds AIDS-0007 (IDs keep the code AIDS).
   const compact = q.replace(/ai\s*&\s*ds/g, 'aids').replace(/[\s-]/g, '');
+  const letters = (text: string) => text.toLowerCase().replace(/[^a-z0-9]/g, '');
   return (
     registration.id.toLowerCase().replace('-', '').includes(compact) ||
+    // As the ID is shown: 'CYBER-0007' for CYS-0007.
+    letters(showId(registration.id)).includes(letters(q)) ||
     registration.name.toLowerCase().includes(q) ||
     registration.phone.includes(compact) ||
     registration.college.toLowerCase().includes(q) ||
