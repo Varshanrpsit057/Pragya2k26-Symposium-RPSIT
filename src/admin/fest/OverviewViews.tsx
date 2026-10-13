@@ -9,21 +9,23 @@
  * - Colleges: students per college and the 1st, 2nd and 3rd places each college won
  */
 import { useMemo, useState } from 'react';
-import { canJoin, collegeSummary, deptShort, eventLabel, eventOf, feePaid, isActive, participantProblems, readParticipant, rupees, showId, toCsv, totalsOf, type CollegeRow, type FestCatalog, type FestEvent, type FestParticipant, type FestRegistration } from '../../lib/fest';
+import { canJoin, collegeSummary, deptShort, eventLabel, eventOf, feePaid, isActive, participantProblems, readParticipant, rupees, showId, totalsOf, type CollegeRow, type FestCatalog, type FestEvent, type FestParticipant, type FestRegistration } from '../../lib/fest';
 import { hasPermission } from '../../lib/staff';
-import { Badge, saveFile, when } from '../ui';
+import { Badge, when } from '../ui';
+import { filterNote, saveTable, today } from './excel';
 import { ordinal } from './EventWindow';
 import { useFest } from './FestData';
 import { FilterBar, NO_PAYMENT, PaymentChoice, ShortList, Stat, applyFilters, deptName, paymentBody, paymentReady, stampNow, type PaymentDraft } from './festUi';
 
 const sourceLabel = { DESK: 'Desk', ONLINE: 'Online', PAPER: 'Paper', SELF: 'Own phone' } as const;
-const today = () => new Date().toISOString().slice(0, 10);
 
 function useFiltered() {
-  const { registrations, filters, catalog, session } = useFest();
+  const { registrations, filters, catalog, session, switches } = useFest();
   const viewAll = hasPermission(session.role, 'fest.viewAll');
   const list = useMemo(() => applyFilters(registrations.values(), filters, catalog), [registrations, filters, catalog]);
-  return { list, viewAll };
+  // Website controls can hide the downloads (the web assist team keeps them).
+  const canDownload = switches.downloads || session.role === 'ADMIN';
+  return { list, viewAll, canDownload };
 }
 
 // ------------------------------------------------------------------------------------------ Overview
@@ -190,13 +192,13 @@ export function FestOverview() {
 function exportRows(list: FestRegistration[], catalog: FestCatalog) {
   const name = (id: string) => eventOf(catalog, id)?.name ?? id;
   const rows: (string | number)[][] = [
-    ['Registration ID', 'Department', 'Name', 'Phone', 'Email', 'College', 'Branch', 'Year', 'Team', 'Registered', 'Desk', 'Entry fee', 'Paid by', 'UPI transaction', 'Arrived', 'Events', 'Event fees paid', 'Present at', 'Registered at', 'Registered by', 'Status'],
+    ['Registration ID', 'Department', 'Name', 'Phone', 'Email', 'College', 'Department / course', 'Year', 'Team', 'Registered', 'Desk', 'Entry fee', 'Paid by', 'UTR accepted', 'UTR sent by student', 'Verified by', 'Arrived', 'Events', 'Event fees paid', 'Present at', 'Registered at', 'Registered by', 'Status'],
   ];
   for (const item of list) {
     const payment = item.entry.payment;
     rows.push([
-      item.id,
-      item.dept,
+      showId(item.id),
+      deptShort(item.dept),
       item.name,
       item.phone,
       item.email,
@@ -206,9 +208,11 @@ function exportRows(list: FestRegistration[], catalog: FestCatalog) {
       item.team,
       sourceLabel[item.source],
       item.desk ?? '',
-      item.entry.status === 'PAID' ? (payment?.amount ?? '') : 'DUE',
+      item.entry.status === 'PAID' ? (payment?.amount ?? '') : item.entry.rejected ? 'NOT FOUND' : item.entry.claim ? 'TO CHECK' : 'DUE',
       payment?.method ?? '',
       payment?.txn ?? '',
+      item.entry.claim?.txn ?? '',
+      payment ? `${payment.by}${payment.desk ? ` (desk ${payment.desk})` : ''}` : '',
       item.source === 'ONLINE' ? (item.checkedIn ? when(item.checkedIn.at) : 'No') : 'Yes',
       item.events.map((entry) => name(entry.eventId)).join('; '),
       item.events.filter((entry) => feePaid(entry)).map((entry) => `${name(entry.eventId)} (${entry.fee!.method})`).join('; '),
@@ -222,8 +226,8 @@ function exportRows(list: FestRegistration[], catalog: FestCatalog) {
 }
 
 export function FestRegistrations() {
-  const { catalog, filters } = useFest();
-  const { list, viewAll } = useFiltered();
+  const { catalog, filters, session } = useFest();
+  const { list, viewAll, canDownload } = useFiltered();
   const [open, setOpen] = useState<string | null>(null);
   const [page, setPage] = useState(0);
   const PAGE = 50;
@@ -239,14 +243,16 @@ export function FestRegistrations() {
         <FilterBar showDept={viewAll} />
         <div className="adm-toolbar">
           <strong>{list.length} registrations</strong>
-          <button
-            className="adm-button adm-button--small"
-            type="button"
-            disabled={!list.length}
-            onClick={() => saveFile(`techfest-registrations-${filters.dept || 'all'}-${today()}.csv`, toCsv(exportRows(list, catalog)), 'text/csv;charset=utf-8')}
-          >
-            Download these (CSV for Excel)
-          </button>
+          {canDownload && (
+            <button
+              className="adm-button adm-button--small"
+              type="button"
+              disabled={!list.length}
+              onClick={() => saveTable(`techfest-registrations-${filters.dept || 'all'}-${today()}.xlsx`, 'Registrations', filterNote(filters, session.displayName), exportRows(list, catalog))}
+            >
+              Download these (Excel)
+            </button>
+          )}
         </div>
         <div className="adm-table-wrap">
           <table className="adm-table fest-table">
@@ -418,7 +424,7 @@ function RegistrationDetail({ id, onClose }: { id: string; onClose: () => void }
           <section>
             {paying ? (
               <>
-                <PaymentChoice amount={catalog.entryFee} value={payment} onChange={setPayment} name="detail-entry" />
+                <PaymentChoice amount={catalog.entryFee} value={payment} onChange={setPayment} name="detail-entry" forId={registration.id} />
                 <button
                   className="adm-button adm-button--primary"
                   type="button"
@@ -533,8 +539,8 @@ const COLLEGE_COLUMNS: { key: keyof CollegeRow; label: string }[] = [
 
 /** College-wise: how many students each college sent, and how many 1st, 2nd and 3rd places they won. */
 export function FestColleges() {
-  const { catalog, results, filters, setFilters } = useFest();
-  const { list, viewAll } = useFiltered();
+  const { catalog, results, filters, setFilters, session } = useFest();
+  const { list, viewAll, canDownload } = useFiltered();
   const [sort, setSort] = useState<{ key: keyof CollegeRow; down: boolean }>({ key: 'places', down: true });
   const rows = useMemo(() => {
     // Places count for the events the filters show (all events when none is chosen).
@@ -549,8 +555,8 @@ export function FestColleges() {
   if (!catalog) return <p className="adm-loading">Loading the live data…</p>;
   const totals = rows.reduce((sum, row) => ({ students: sum.students + row.students, first: sum.first + row.first, second: sum.second + row.second, third: sum.third + row.third }), { students: 0, first: 0, second: 0, third: 0 });
   const download = () => {
-    const csv: (string | number)[][] = [['College', 'Students', '1st places', '2nd places', '3rd places', 'Places won'], ...rows.map((row) => [row.name, row.students, row.first, row.second, row.third, row.places])];
-    saveFile(`techfest-colleges-${filters.dept || 'all'}-${today()}.csv`, toCsv(csv), 'text/csv;charset=utf-8');
+    const table: (string | number)[][] = [['College', 'Students', '1st places', '2nd places', '3rd places', 'Places won'], ...rows.map((row) => [row.name, row.students, row.first, row.second, row.third, row.places])];
+    saveTable(`techfest-colleges-${filters.dept || 'all'}-${today()}.xlsx`, 'Colleges', filterNote(filters, session.displayName), table);
   };
   return (
     <main className="adm-page">
@@ -567,9 +573,11 @@ export function FestColleges() {
       <section className="adm-card adm-pad">
         <div className="adm-toolbar">
           <h3 className="adm-h3">By college</h3>
-          <button className="adm-button adm-button--small" type="button" disabled={!rows.length} onClick={download}>
-            Download (CSV for Excel)
-          </button>
+          {canDownload && (
+            <button className="adm-button adm-button--small" type="button" disabled={!rows.length} onClick={download}>
+              Download (Excel)
+            </button>
+          )}
         </div>
         <p className="adm-muted">Places from submitted results only; a team counts once for its college. Tap a heading to sort, a college to see its students.</p>
         <div className="adm-table-wrap">
@@ -610,7 +618,7 @@ export function FestColleges() {
 
 export function FestResults() {
   const { catalog, results, registrations, filters, session, change } = useFest();
-  const { viewAll } = useFiltered();
+  const { viewAll, canDownload } = useFiltered();
   if (!catalog) return <p className="adm-loading">Loading the live data…</p>;
   const events = catalog.events.filter((event) => (!filters.dept || event.dept === filters.dept) && (!filters.eventId || event.id === filters.eventId) && (!filters.venue || event.venue === filters.venue));
   const submitted = events.filter((event) => results.get(event.id)?.submitted);
@@ -629,7 +637,7 @@ export function FestResults() {
         }
       }
     }
-    saveFile(`techfest-winners-${filters.dept || 'all'}-${today()}.csv`, toCsv(rows), 'text/csv;charset=utf-8');
+    saveTable(`techfest-winners-${filters.dept || 'all'}-${today()}.xlsx`, 'Winners', filterNote(filters, session.displayName), rows);
   };
 
   return (
@@ -640,9 +648,11 @@ export function FestResults() {
           <strong>
             {submitted.length} of {events.length} events submitted
           </strong>
-          <button className="adm-button adm-button--small" type="button" disabled={!submitted.length} onClick={download}>
-            Download winners (CSV for Excel)
-          </button>
+          {canDownload && (
+            <button className="adm-button adm-button--small" type="button" disabled={!submitted.length} onClick={download}>
+              Download winners (Excel)
+            </button>
+          )}
         </div>
       </section>
       <ShortList

@@ -523,3 +523,26 @@
   outline: 2px solid var(--adm-accent, #4338ca);
   outline-offset: 2px;
 }
+
+/* The UTR the desk typed: matches the student's, does not, or is used elsewhere */
+.fest-match {
+  margin: 0;
+  padding: 0.45rem 0.65rem;
+  border-radius: 8px;
+  font-weight: 600;
+}
+
+.fest-match.is-good {
+  color: var(--adm-green);
+  background: var(--adm-green-soft);
+}
+
+.fest-match.is-warn {
+  color: var(--adm-amber);
+  background: var(--adm-amber-soft);
+}
+
+.fest-match.is-bad {
+  color: var(--adm-red);
+  background: var(--adm-red-soft);
+}

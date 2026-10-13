@@ -199,6 +199,10 @@ export class DynamoFestStore implements FestStore {
     }
   }
 
+  findTxn(dept: string, txn: string) {
+    return this.claim(dept, `T#${txn.toUpperCase()}`);
+  }
+
   async purgeRegistration(registration: FestRegistration) {
     const { dept, id, phone } = registration;
     const [phoneOwner, submissionOwner] = await Promise.all([this.findPhone(dept, phone), registration.sid ? this.findSubmission(dept, registration.sid) : null]);

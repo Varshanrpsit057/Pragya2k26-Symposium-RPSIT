@@ -5,13 +5,13 @@
   background: linear-gradient(180deg, transparent, rgb(9 10 34 / 0.9) 40%);
 }
 
-/* Brand · Contact on top; the credits (with follow and explore) beside the map below */
+/* Brand · Contact on top; the credits beside follow and explore below */
 .footer__grid {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(0, 1.15fr);
   grid-template-areas:
     'brand contact'
-    'more location';
+    'more more';
   gap: clamp(2.25rem, 4vw, 3.5rem) clamp(2rem, 5vw, 4.5rem);
 }
 
@@ -26,12 +26,9 @@
 .footer__more {
   grid-area: more;
   display: grid;
-  align-content: start;
-  gap: 2rem;
-}
-
-.footer__location {
-  grid-area: location;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.15fr);
+  align-items: start;
+  gap: 2rem clamp(2rem, 5vw, 4.5rem);
 }
 
 .footer__brand {
@@ -92,7 +89,7 @@
   color: var(--c-text-dim);
 }
 
-/* Developer credit: its heading level with "Location", its card level with the map */
+/* Developer credit */
 .footer__credits ul {
   display: grid;
   gap: 0.6rem;
@@ -210,23 +207,6 @@
   gap: 2rem;
 }
 
-/* Embedded Google map, framed like the cards */
-.footer__map {
-  aspect-ratio: 16 / 10;
-  overflow: hidden;
-  border: 1px solid var(--c-line-strong);
-  border-radius: var(--r-md);
-  background: var(--c-void-2);
-  box-shadow: 0 24px 60px -36px rgb(140 108 255 / 0.6);
-}
-
-.footer__map iframe {
-  display: block;
-  width: 100%;
-  height: 100%;
-  border: 0;
-}
-
 /* Text links only; the round icon links style themselves */
 .footer a:not(.icon-link) {
   color: var(--c-text-muted);
@@ -236,16 +216,6 @@
 
 .footer a:not(.icon-link):hover {
   color: var(--c-text);
-}
-
-.footer a.footer__map-link {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.4rem;
-  margin-top: 0.85rem;
-  font-size: var(--step--1);
-  font-weight: 600;
-  color: var(--c-synapse);
 }
 
 .footer__base {
@@ -279,14 +249,17 @@
   pointer-events: none;
 }
 
-/* Phones: one column, the map last */
+/* Phones: one column */
 @media (max-width: 719px) {
   .footer__grid {
     grid-template-columns: minmax(0, 1fr);
     grid-template-areas:
       'brand'
       'contact'
-      'more'
-      'location';
+      'more';
+  }
+
+  .footer__more {
+    grid-template-columns: minmax(0, 1fr);
   }
 }

@@ -6,6 +6,7 @@ describe('the front door (pragya2k26.online)', () => {
   it('names the fest and its day, and sends students to register', () => {
     render(<Landing />);
     expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent(/Infinite\s*Techfest’26/);
+    expect(screen.getByText('On-site Registration Portal')).toBeInTheDocument();
     expect(screen.getByText('17 October 2026', { selector: '.landing-date' })).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Register now' })).toHaveAttribute('href', '/register/');
     for (const link of screen.getAllByRole('link', { name: 'My registration ID' })) expect(link).toHaveAttribute('href', '/register/?my');
@@ -18,21 +19,21 @@ describe('the front door (pragya2k26.online)', () => {
     expect(container.querySelector('a[href*="/admin"]')).toBeNull();
   });
 
-  it('tells students the three steps: register on the phone, pay at their department’s desk, events at the venue', () => {
+  it('tells students the three steps: register on the phone, pay by UPI there or in cash at the desk, events at the venue', () => {
     render(<Landing />);
     const steps = screen.getByRole('region', { name: 'Taking part?' });
     expect(steps).toHaveTextContent('Register on your phone');
-    expect(steps).not.toHaveTextContent('transaction ID');
-    expect(steps).toHaveTextContent('Pay the ₹100 entry fee by UPI at your department’s registration desk');
+    expect(steps).toHaveTextContent('by UPI right after registering (scan the QR code and send the UTR), or in cash at your department’s registration desk');
+    expect(steps).toHaveTextContent('your mobile number and email find it');
     expect(steps).toHaveTextContent('Register for events at each event’s venue, in any department');
     expect(screen.queryByRole('link', { name: 'Events and route map' })).toBeNull();
   });
 
-  it('ends with PRAGYA’s contact, location and Dev Crew, coordinated by the AI&DS department', () => {
+  it('ends with PRAGYA’s contact and Dev Crew (no map), coordinated by the AI&DS department', () => {
     render(<Landing />);
     expect(screen.getByRole('heading', { name: 'Developed by' })).toBeInTheDocument();
     for (const name of ['Mohan Prabu K', 'Varshan C', 'Barath S', 'Sivakasi N']) expect(screen.getByText(name)).toBeInTheDocument();
-    expect(screen.getByRole('heading', { name: 'Location' })).toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: 'Location' })).toBeNull();
     expect(screen.getByRole('heading', { name: 'Follow Us' })).toBeInTheDocument();
     expect(screen.getByText(/Overall coordinated by the/)).toHaveTextContent('Overall coordinated by the Department of Artificial Intelligence and Data Science');
   });

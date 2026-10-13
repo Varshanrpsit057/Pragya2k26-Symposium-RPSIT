@@ -9,7 +9,7 @@ import './Landing.css';
 
 /** The students' page: register on their phone, then their ID and payment status. */
 export const REGISTER = '/register/';
-/** "My registration ID": the students' page opened on their registration (ID and mobile number). */
+/** "My registration ID": the students' page opened on their registration (this phone's own, or found by mobile number and email). */
 export const MY_ID = '/register/?my';
 
 const FOOTER_LINKS: readonly FooterLink[] = [
@@ -188,6 +188,7 @@ export function Landing() {
             <span className="landing-title__wide">Infinite</span>
             <span className="landing-title__narrow">Techfest’26</span>
           </h1>
+          <p className="landing-portal">On-site Registration Portal</p>
           {site.dates && <p className="landing-date">{site.dates}</p>}
           <p className="landing-lead">
             Infinite Techfest’26, the college-wide technical fest of {site.institution}: {eventCount} events across {departments.length} departments.
@@ -216,10 +217,13 @@ export function Landing() {
               </a>
               : choose your department and fill in your details. You get your registration ID at once.
             </li>
-            <li>Pay the ₹{DEFAULT_CATALOG.entryFee} entry fee by UPI at your department’s registration desk: show your ID, and the desk verifies your payment.</li>
+            <li>
+              Pay the ₹{DEFAULT_CATALOG.entryFee} entry fee: by UPI right after registering (scan the QR code and send the UTR), or in cash at your department’s registration desk. Show
+              your ID at the desk: it verifies your payment.
+            </li>
             <li>Register for events at each event’s venue, in any department, on {festDay}.</li>
           </ol>
-          <p>Registered online already? Give the desk the mobile number you registered with.</p>
+          <p>Lost your ID? Open My registration ID: on the phone you registered with it shows at once; on another phone, your mobile number and email find it.</p>
           {EVENTS_SITE_URL && (
             <p>
               Every department’s events, and the way to each venue, are on the <a href={EVENTS_SITE_URL}>events and route map website</a>.

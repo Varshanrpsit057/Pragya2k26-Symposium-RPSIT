@@ -215,8 +215,18 @@ export const NO_PAYMENT: PaymentDraft = { method: '', txn: '', confirmed: false 
 export const paymentReady = (draft: PaymentDraft) => draft.method !== '' && draft.confirmed && (draft.method === 'CASH' || /^[A-Za-z0-9]{6,35}$/.test(draft.txn.replace(/\s/g, '')));
 export const paymentBody = (draft: PaymentDraft) => ({ method: draft.method, confirmed: draft.confirmed, ...(draft.method === 'UPI' && { txn: draft.txn.replace(/\s/g, '') }) });
 
-/** Cash (ticked as received) or UPI (with the transaction ID from the student's screen). */
-export function PaymentChoice({ amount, value, onChange, name }: { amount: number; value: PaymentDraft; onChange: (next: PaymentDraft) => void; name: string }) {
+/** Other registrations with this UPI transaction ID: accepted for them, or sent by them and waiting. */
+export function txnHolders(registrations: Map<string, FestRegistration>, txn: string, exceptId: string) {
+  const wanted = txn.replace(/[\s-]/g, '').toUpperCase();
+  if (wanted.length < 6) return [];
+  const same = (value: string | undefined) => (value ?? '').replace(/[\s-]/g, '').toUpperCase() === wanted;
+  return [...registrations.values()].filter((item) => item.id !== exceptId && isActive(item) && (same(item.entry.payment?.txn) || (item.entry.status === 'DUE' && same(item.entry.claim?.txn))));
+}
+
+/** Cash (ticked as received) or UPI (with the transaction ID from the student's screen, checked against every other registration). */
+export function PaymentChoice({ amount, value, onChange, name, forId = '' }: { amount: number; value: PaymentDraft; onChange: (next: PaymentDraft) => void; name: string; forId?: string }) {
+  const { registrations } = useFest();
+  const holders = value.method === 'UPI' ? txnHolders(registrations, value.txn, forId) : [];
   return (
     <fieldset className="fest-pay">
       <legend>Payment of {rupees(amount)}</legend>
@@ -233,6 +243,11 @@ export function PaymentChoice({ amount, value, onChange, name }: { amount: numbe
           <span>UPI transaction ID (UTR) from the student’s payment screen</span>
           <input value={value.txn} inputMode="text" autoComplete="off" onChange={(event) => onChange({ ...value, txn: event.target.value })} placeholder="e.g. 412345678901" />
         </label>
+      )}
+      {holders.length > 0 && (
+        <p className="fest-match is-bad" role="alert">
+          Duplicate: this UTR is already used for {holders.map((item) => showId(item.id)).join(', ')}. A payment counts once.
+        </p>
       )}
       {value.method && (
         <label className="adm-check">

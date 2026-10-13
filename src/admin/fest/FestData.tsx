@@ -20,7 +20,7 @@ import {
 } from '../../lib/fest';
 import type { SessionInfo } from '../../lib/staff';
 import { ApiFailure, SignedOut } from '../adminApi';
-import { festCatalog, festSync, festWrite, takeIds } from './festApi';
+import { ALL_ON, festCatalog, festSync, festWrite, takeIds, type DashboardSwitches } from './festApi';
 
 const SYNC_MS = 15_000;
 const RETRY_MS = [3_000, 6_000, 12_000, 30_000, 60_000];
@@ -61,6 +61,7 @@ interface Cache {
   cursor: string;
   /** The server's "test data deleted at" when this copy was loaded. */
   resetAt?: string | null;
+  switches?: DashboardSwitches;
   savedAt: number;
 }
 
@@ -79,6 +80,8 @@ export interface FestContextValue {
   online: boolean;
   syncing: boolean;
   error: string | null;
+  /** What Website controls has switched off (hidden here; the server refuses it anyway). */
+  switches: DashboardSwitches;
   outbox: FestOp[];
   /** Registrations with a change still waiting to be sent. */
   pending: Set<string>;
@@ -139,12 +142,13 @@ export function FestProvider({ token, session, pageDept = null, onSignedOut, chi
   const [outbox, setOutbox] = useState<FestOp[]>(() => read<FestOp[]>(keys.outbox, []));
   const [lastSync, setLastSync] = useState<number | null>(initial?.savedAt ?? null);
   const [online, setOnline] = useState(true);
+  const [switches, setSwitches] = useState<DashboardSwitches>(initial?.switches ?? ALL_ON);
   const [syncing, setSyncing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [filters, setFilters] = useState<FestFilters>(() => ({ ...NO_FILTERS, dept: session.department ?? pageDept ?? '' }));
 
   // The latest values, for the timers and the outbox (which run outside renders).
-  const state = useRef({ cursor: initial?.cursor ?? '', resetAt: initial?.resetAt ?? null, catalog, registrations, results, outbox, flushing: false, syncing: false, retry: 0 });
+  const state = useRef({ cursor: initial?.cursor ?? '', resetAt: initial?.resetAt ?? null, switches: initial?.switches ?? ALL_ON, catalog, registrations, results, outbox, flushing: false, syncing: false, retry: 0 });
   useEffect(() => {
     state.current.catalog = catalog;
     state.current.registrations = registrations;
@@ -162,8 +166,8 @@ export function FestProvider({ token, session, pageDept = null, onSignedOut, chi
   );
 
   const saveCache = useCallback(() => {
-    const { catalog: currentCatalog, registrations: regs, results: res, cursor, resetAt } = state.current;
-    write(keys.cache, { catalog: currentCatalog, registrations: [...regs.values()], results: [...res.values()], cursor, resetAt, savedAt: Date.now() } satisfies Cache);
+    const { catalog: currentCatalog, registrations: regs, results: res, cursor, resetAt, switches: lastSwitches } = state.current;
+    write(keys.cache, { catalog: currentCatalog, registrations: [...regs.values()], results: [...res.values()], cursor, resetAt, switches: lastSwitches, savedAt: Date.now() } satisfies Cache);
   }, [keys.cache]);
 
   const putRegistration = useCallback((registration: FestRegistration, replaces?: string) => {
@@ -218,6 +222,10 @@ export function FestProvider({ token, session, pageDept = null, onSignedOut, chi
         return next;
       });
       state.current.cursor = answer.cursor ?? '';
+      if (answer.switches) {
+        state.current.switches = answer.switches;
+        setSwitches(answer.switches);
+      }
       if (!state.current.catalog || state.current.catalog.revision !== answer.catalogRevision) {
         const fresh = await festCatalog(token);
         if (fresh?.departments) {
@@ -451,6 +459,7 @@ export function FestProvider({ token, session, pageDept = null, onSignedOut, chi
     online,
     syncing,
     error,
+    switches,
     outbox,
     pending,
     filters,

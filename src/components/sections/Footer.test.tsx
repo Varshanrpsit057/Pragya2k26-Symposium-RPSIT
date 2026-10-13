@@ -70,26 +70,15 @@ describe('Footer', () => {
     expect(container.querySelector('.footer__wordmark')).toHaveTextContent('Infinite Techfest’26');
   });
 
-  it('puts the map beside the credits, after the contact details', () => {
+  it('puts the credits after the contact details, and no map (the page loads without Google Maps)', () => {
     const { container } = render(<Footer links={[]} />);
 
     const blocks = [...container.querySelectorAll('.footer__grid > *')].map((block) => block.className);
-    expect(blocks).toEqual(['footer__brand', 'footer__contact', 'footer__more', 'footer__location']);
+    expect(blocks).toEqual(['footer__brand', 'footer__contact', 'footer__more']);
     expect(container.querySelector('.footer__more .footer__credits')).not.toBeNull();
-  });
-
-  it('embeds the campus map lazily and links to it on Google Maps', () => {
-    render(<Footer links={[]} />);
-
-    const map = screen.getByTitle(`Map showing ${site.college.name}`);
-    expect(map.tagName).toBe('IFRAME');
-    expect(map).toHaveAttribute('loading', 'lazy');
-    expect(map.getAttribute('src')).toMatch(/^https:\/\/www\.google\.com\/maps\/embed\?pb=/);
-
-    const link = screen.getByRole('link', { name: /Open in Google Maps/ });
-    expect(link).toHaveAttribute('href', site.college.map.url);
-    expect(link).toHaveAttribute('target', '_blank');
-    expect(link).toHaveAttribute('rel', 'noopener noreferrer');
+    expect(container.querySelector('iframe')).toBeNull();
+    expect(screen.queryByRole('heading', { name: 'Location' })).toBeNull();
+    expect(screen.queryByRole('link', { name: /Google Maps/ })).toBeNull();
   });
 
   it('links to the college Instagram', () => {

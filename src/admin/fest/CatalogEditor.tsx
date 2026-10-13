@@ -4,7 +4,7 @@
  * every phone picks the change up within seconds.
  */
 import { useState } from 'react';
-import { catalogProblem, DEFAULT_UPI, deptShort, type FestCatalog, type FestDepartment, type FestEvent } from '../../lib/fest';
+import { catalogProblem, deptShort, type FestCatalog, type FestDepartment, type FestEvent } from '../../lib/fest';
 import { SignedOut } from '../adminApi';
 import { Badge, when } from '../ui';
 import { saveFestCatalog } from './festApi';
@@ -62,19 +62,10 @@ export function CatalogEditor({ token, onSignedOut }: { token: string; onSignedO
           <span className="adm-muted">{catalog.updatedBy ? `Last saved by ${catalog.updatedBy} ${when(catalog.updatedAt)}` : 'As on the poster (not changed yet)'}</span>
         </div>
         <label className="adm-field fest-narrow">
-          <span>Entry fee (₹, paid at the desk)</span>
+          <span>Entry fee (₹)</span>
           <input type="number" min={0} value={value.entryFee} onChange={(event) => setDraft({ ...value, entryFee: Number(event.target.value) })} />
         </label>
-        <div className="adm-inline adm-inline--wrap">
-          <label className="adm-field">
-            <span>UPI ID students pay the entry fee to (their own page)</span>
-            <input value={value.upiId ?? ''} placeholder={DEFAULT_UPI.upiId} onChange={(event) => setDraft({ ...value, upiId: event.target.value.trim() })} />
-          </label>
-          <label className="adm-field">
-            <span>Account holder’s name</span>
-            <input value={value.upiPayee ?? ''} placeholder={DEFAULT_UPI.upiPayee} onChange={(event) => setDraft({ ...value, upiPayee: event.target.value })} />
-          </label>
-        </div>
+        <p className="adm-muted">The UPI account and the QR code students pay with are in Website controls.</p>
         {problem && <p className="adm-field__error">{problem}</p>}
         {error && <p className="adm-error">{error}</p>}
         {note && <p className="adm-note">{note}</p>}

@@ -11,16 +11,17 @@
  *
  * Every rule is checked here; the dashboards only hide what a role cannot use.
  */
-import { canJoin, catalogProblem, DEFAULT_CATALOG, DEFAULT_UPI, departmentOf, deptShort, entryOf, eventOf, feePaid, formatFestId, ID_BLOCK, ID_RANGES, isActive, matchEvents, normaliseFestId, parseFestId, participantProblems, readParticipant, selfRegistrationProblems, showId, sourceOfNumber, toStudentView, TXN, type FestCatalog, type FestDepartment, type FestEvent, type FestMethod, type FestParticipant, type FestPayment, type FestPlace, type FestRegistration, type FestResult, type FestSource, type FestStamp } from '../src/lib/fest';
+import { canJoin, catalogProblem, DEFAULT_CATALOG, departmentOf, deptShort, entryOf, eventOf, feePaid, formatFestId, ID_BLOCK, ID_RANGES, isActive, matchEvents, normaliseFestId, parseFestId, participantProblems, readParticipant, selfRegistrationProblems, showId, sourceOfNumber, toStudentView, TXN, type FestCatalog, type FestDepartment, type FestEvent, type FestMethod, type FestParticipant, type FestPayment, type FestPlace, type FestRegistration, type FestResult, type FestSource, type FestStamp } from '../src/lib/fest';
 import { timingSafeEqual } from 'node:crypto';
 import { formatIst, parseEventStart } from '../src/lib/countdown';
+import { DEFAULT_PORTAL, portalProblem, QR_IMAGE, QR_MAX_CHARS, readPortal, tidyUtr, UTR, type BackupStatus, type PortalSettings, type SwitchName } from '../src/lib/portal';
 import { registrationPhase, type RegistrationSchedule } from '../src/lib/schedule';
 import { DEPARTMENT_ROLES, hasPermission, type Permission } from '../src/lib/staff';
 import { ApiError } from './errors';
 import { TXN_SCOPE } from './festStore';
 import type { FileStore } from './files';
 import type { FestSheetBackup, FestSnapshot } from './festSheet';
-import type { FestStore } from './festStore';
+import type { FestCreate, FestStore } from './festStore';
 import { describeError } from './google';
 import { requirePermission, type Actor } from './roles';
 import type { Store } from './store';
@@ -28,6 +29,12 @@ import type { Store } from './store';
 export const CATALOG_SETTING = 'fest-catalog';
 /** When test data was last deleted: every phone that sees a new value drops its copy and loads afresh. */
 export const RESET_SETTING = 'fest-reset';
+/** The website's switches and the online payment settings (Website controls). */
+export const PORTAL_SETTING = 'portal-settings';
+/** The UPI QR code picture students pay with (a data: URL), kept apart so the switches stay small. */
+export const QR_SETTING = 'fest-upi-qr';
+/** How the last scheduled backups went (shown in Website controls). */
+export const BACKUP_SETTING = 'fest-backup-status';
 /** Test registrations deleted per call (the dashboard calls again until none are left), several at a time. */
 const CLEAR_BATCH = 250;
 const PURGE_PARALLEL = 20;
@@ -73,6 +80,8 @@ const int = (value: unknown, fallback: number) => (typeof value === 'number' && 
 export class FestService {
   private cached: { at: number; catalog: FestCatalog } | null = null;
   private resetCached: { at: number; value: string | null } | null = null;
+  private portalCached: { at: number; portal: PortalSettings } | null = null;
+  private qrCached: { at: number; image: string | null } | null = null;
 
   constructor(private readonly deps: FestDeps) {}
 
@@ -151,6 +160,103 @@ export class FestService {
   }
 
   // -----------------------------------------------------------------------------------------
+  // Website controls: the switches and the online payment settings
+
+  async portal(force = false): Promise<PortalSettings> {
+    const now = this.deps.now();
+    if (!force && this.portalCached && now - this.portalCached.at < CATALOG_TTL_MS) return this.portalCached.portal;
+    let portal = DEFAULT_PORTAL;
+    try {
+      const stored = await this.deps.settings.getSetting(PORTAL_SETTING);
+      if (stored) portal = readPortal(JSON.parse(stored));
+    } catch (error) {
+      if (this.portalCached) return this.portalCached.portal;
+      this.deps.log('Could not read the website switches; using the defaults', { error: error instanceof Error ? error.message : String(error) });
+    }
+    this.portalCached = { at: now, portal };
+    return portal;
+  }
+
+  private async qrImage(force = false): Promise<string | null> {
+    const now = this.deps.now();
+    if (!force && this.qrCached && now - this.qrCached.at < CATALOG_TTL_MS) return this.qrCached.image;
+    let image: string | null = null;
+    try {
+      image = (await this.deps.settings.getSetting(QR_SETTING)) || null;
+    } catch {
+      if (this.qrCached) return this.qrCached.image;
+    }
+    this.qrCached = { at: now, image };
+    return image;
+  }
+
+  /** A switch the web assist team turned off stops everyone but the web assist team (who may fix things). */
+  async requireSwitch(actor: Actor | null, name: SwitchName, message: string) {
+    if (actor?.role === 'ADMIN') return;
+    if (!(await this.portal())[name]) throw new ApiError(403, 'SWITCHED_OFF', message);
+  }
+
+  async portalView() {
+    return { success: true as const, portal: await this.portal(true), qr: await this.qrImage(true), backup: await this.backupStatus() };
+  }
+
+  private async backupStatus(): Promise<BackupStatus | null> {
+    try {
+      const raw = await this.deps.settings.getSetting(BACKUP_SETTING);
+      return raw ? (JSON.parse(raw) as BackupStatus) : null;
+    } catch {
+      return null;
+    }
+  }
+
+  /** The web assist team changes the switches and the UPI account (the QR picture has its own route). */
+  async savePortal(actor: Actor, body: unknown) {
+    if (!isObject(body) || !isObject(body.portal)) throw new ApiError(400, 'INVALID', 'The settings could not be read.');
+    const current = await this.portal(true);
+    const next: PortalSettings = { ...readPortal(body.portal, current), qrAt: current.qrAt, updatedAt: this.iso(), updatedBy: actor.username };
+    const problem = portalProblem(next);
+    if (problem) throw new ApiError(400, 'INVALID', problem);
+    await this.deps.settings.putSetting(PORTAL_SETTING, JSON.stringify(next));
+    this.portalCached = { at: this.deps.now(), portal: next };
+    this.deps.log('Website controls saved', { by: actor.username, off: offSwitches(next) });
+    return { success: true as const, portal: next, qr: await this.qrImage() };
+  }
+
+  /** Uploads (or replaces) the UPI QR code picture, or removes it. */
+  async saveQr(actor: Actor, body: unknown) {
+    if (!isObject(body)) throw new ApiError(400, 'INVALID', 'The picture could not be read.');
+    const current = await this.portal(true);
+    let image = '';
+    if (body.remove !== true) {
+      image = typeof body.image === 'string' ? body.image : '';
+      if (!QR_IMAGE.test(image) || image.length > QR_MAX_CHARS || !looksLikeImage(image)) {
+        throw new ApiError(400, 'INVALID', 'Upload the QR code as a PNG, JPEG or WebP picture (it is made smaller before it is sent).');
+      }
+    }
+    const next: PortalSettings = { ...current, qrAt: image ? this.iso() : null, updatedAt: this.iso(), updatedBy: actor.username };
+    if (!image && next.onlinePayment && !next.upiId) next.onlinePayment = false;
+    await this.deps.settings.putSetting(QR_SETTING, image);
+    await this.deps.settings.putSetting(PORTAL_SETTING, JSON.stringify(next));
+    this.qrCached = { at: this.deps.now(), image: image || null };
+    this.portalCached = { at: this.deps.now(), portal: next };
+    this.deps.log(image ? 'UPI QR code uploaded' : 'UPI QR code removed', { by: actor.username, ...(image && { chars: image.length }) });
+    return { success: true as const, portal: next, qr: image || null };
+  }
+
+  /** The students' page's payment step: the QR code and the UPI account (none while online payment is off). */
+  async publicPayment() {
+    const portal = await this.portal();
+    const online = portal.onlinePayment && Boolean(portal.upiId || portal.qrAt);
+    return {
+      success: true as const,
+      online,
+      upiId: online ? portal.upiId : '',
+      upiPayee: online ? portal.upiPayee : '',
+      qr: online && portal.qrAt ? await this.qrImage() : null,
+    };
+  }
+
+  // -----------------------------------------------------------------------------------------
   // Who may see and work on which department
 
   private async viewDepartments(actor: Actor, requested: unknown): Promise<string[]> {
@@ -218,8 +324,15 @@ export class FestService {
       cursor: this.iso(-SYNC_OVERLAP_MS),
       catalogRevision: catalog.revision,
       resetAt: await this.resetMark(),
+      switches: await this.dashboardSwitches(),
       serverTime: this.iso(),
     };
+  }
+
+  /** The switches the dashboards follow (hiding what is off; the server refuses it anyway). */
+  private async dashboardSwitches() {
+    const { deskRegistration, eventEntry, results, downloads, onlinePayment } = await this.portal();
+    return { deskRegistration, eventEntry, results, downloads, onlinePayment };
   }
 
   /** IDs for a desk phone (50 at a time), or a block of paper slips. */
@@ -292,6 +405,7 @@ export class FestService {
     if (source === 'PAPER') requirePermission(actor, 'fest.import');
     // Paper slips filled during an outage may be typed in after closing time.
     if (source === 'DESK' && registrationPhase(this.deps.schedule, this.deps.now()) === 'closed') throw new ApiError(403, 'ONSITE_CLOSED', this.closedMessage());
+    if (source === 'DESK') await this.requireSwitch(actor, 'deskRegistration', 'Desk registration is switched off by the web assist team. Students register on their phones.');
 
     const submissionId = text(body.submissionId, 80);
     if (!SUBMISSION.test(submissionId)) throw new ApiError(400, 'INVALID', 'The registration could not be read. Please try again.');
@@ -326,7 +440,16 @@ export class FestService {
       v: 1,
       u: this.iso(),
     };
-    const created = await this.deps.store.createRegistration(registration, submissionId);
+    // A UPI payment is accepted once across the fest.
+    await this.claimPayment(payment, id);
+    let created: FestCreate;
+    try {
+      created = await this.deps.store.createRegistration(registration, submissionId);
+    } catch (error) {
+      await this.releasePayment(payment, id);
+      throw error;
+    }
+    if (!created.created) await this.releasePayment(payment, id);
     if (created.created) {
       this.deps.log('Fest registration', { id, dept, source, events: eventIds.length, by: actor.username, ...(registration.test && { test: true }) });
       return { success: true as const, registration, replayed: false };
@@ -336,6 +459,17 @@ export class FestService {
       throw new ApiError(409, 'DUPLICATE_PHONE', `This phone number is already registered in ${deptShort(dept)} as ${showId(created.existingId ?? '')}.`, undefined, undefined, { existingId: created.existingId ?? '' });
     }
     throw new ApiError(409, 'ID_TAKEN', `${showId(id)} is already used. The next free ID will be used.`);
+  }
+
+  /** Claims a UPI payment's transaction ID for this registration (refused when another one has it). */
+  private async claimPayment(payment: FestPayment | undefined, id: string) {
+    if (payment?.method !== 'UPI' || !payment.txn) return;
+    const holder = await this.deps.store.claimTxn(TXN_SCOPE, payment.txn, id);
+    if (holder && holder !== id) throw new ApiError(409, 'TXN_USED', `This UPI transaction ID was already accepted for ${showId(holder)}.`, undefined, undefined, { existingId: holder });
+  }
+
+  private async releasePayment(payment: FestPayment | undefined, id: string) {
+    if (payment?.method === 'UPI' && payment.txn) await this.deps.store.releaseTxn(TXN_SCOPE, payment.txn, id);
   }
 
   private async required(dept: string, id: string) {
@@ -401,6 +535,29 @@ export class FestService {
 
     if (action === 'events') return this.changeEvents(catalog, dept, id, input, stamp);
 
+    if ((action === 'checkin' || action === 'entry') && isObject(input.payment) && input.payment.method === 'UPI') {
+      // A UPI payment taken at the desk: its transaction ID is accepted once across the fest.
+      const current = await this.required(dept, id);
+      live(current);
+      if (current.entry.status === 'DUE' && !(action === 'checkin' && current.checkedIn)) {
+        const payment = this.readPayment(actor, input.payment, catalog.entryFee);
+        await this.claimPayment(payment, id);
+        try {
+          const result = await this.mutate(dept, id, (registration) => {
+            live(registration);
+            if (registration.entry.status === 'PAID' || (action === 'checkin' && registration.checkedIn)) return null;
+            const entry = { status: 'PAID' as const, payment };
+            return { next: action === 'checkin' ? { checkedIn: { ...stamp, ...(actor.deskNumber && { desk: actor.deskNumber }) }, entry } : { entry } };
+          });
+          if (!result.changed) await this.releasePayment(payment, id);
+          return result;
+        } catch (error) {
+          await this.releasePayment(payment, id);
+          throw error;
+        }
+      }
+    }
+
     if (action === 'verify') {
       // The desk has seen the money arrive with this transaction ID (it may correct a typo).
       const current = await this.required(dept, id);
@@ -408,8 +565,12 @@ export class FestService {
       if (current.entry.status === 'PAID') return { success: true as const, registration: current, changed: false };
       const claim = current.entry.claim;
       if (!claim) throw new ApiError(409, 'NO_CLAIM', 'There is no transaction ID to check: take the entry fee instead.');
-      const txn = (text(input.txn, 40) || claim.txn).replace(/\s/g, '');
-      if (!TXN.test(txn)) throw new ApiError(400, 'INVALID', 'Type the transaction ID as it appears in the payment.');
+      // The desk types the UTR from the payment it received: it must be the one the student sent.
+      const txn = tidyUtr(text(input.txn, 40)).toUpperCase();
+      if (!TXN.test(txn)) throw new ApiError(400, 'INVALID', 'Type the UTR from the payment you received.');
+      if (txn !== tidyUtr(claim.txn).toUpperCase()) {
+        throw new ApiError(409, 'TXN_MISMATCH', `That UTR does not match the one ${showId(id)} sent (it ends ${claim.txn.slice(-4)}). Check it again, or mark the payment not found.`);
+      }
       if (input.confirmed !== true) throw new ApiError(400, 'INVALID', `Tick that you have seen ₹${claim.amount} received with this transaction ID.`);
       const holder = await this.deps.store.claimTxn(TXN_SCOPE, txn, id);
       if (holder && holder !== id) throw new ApiError(409, 'TXN_USED', `This transaction ID was already accepted for ${showId(holder)}.`, undefined, undefined, { existingId: holder });
@@ -503,13 +664,18 @@ export class FestService {
     const catalog = await this.catalog();
     const departments = catalog.departments.filter((dept) => dept.active);
     const open = new Set(departments.map((dept) => dept.code));
+    const portal = await this.portal();
     return {
       success: true as const,
       open: registrationPhase(this.deps.schedule, this.deps.now()) !== 'closed',
+      /** Registration on phones (off: the page sends students to a desk). */
+      selfRegistration: portal.selfRegistration,
+      /** Finding a registration by mobile number and email. */
+      lookup: portal.studentLookup,
+      /** Paying on the website by UPI (the QR code comes from /api/fest/payment when it is needed). */
+      onlinePayment: portal.onlinePayment && Boolean(portal.upiId || portal.qrAt),
       closesAt: this.deps.schedule.onsiteClosesAt ?? null,
       entryFee: catalog.entryFee,
-      upiId: catalog.upiId || DEFAULT_UPI.upiId,
-      upiPayee: catalog.upiPayee || DEFAULT_UPI.upiPayee,
       departments: departments.map((dept) => ({ code: dept.code, name: dept.name })),
       events: catalog.events
         .filter((event) => event.active && open.has(event.dept))
@@ -525,6 +691,7 @@ export class FestService {
   async selfRegister(body: unknown) {
     if (!isObject(body)) throw new ApiError(400, 'INVALID', 'The registration could not be read.');
     if (registrationPhase(this.deps.schedule, this.deps.now()) === 'closed') throw new ApiError(403, 'ONSITE_CLOSED', this.closedMessage());
+    await this.requireSwitch(null, 'selfRegistration', 'Registration on phones is paused. Please register at your department’s registration desk.');
     const catalog = await this.catalog();
     const department = departmentOf(catalog, text(body.dept, 6).toUpperCase());
     if (!department || !department.active) throw new ApiError(400, 'INVALID', 'Choose your department.', undefined, undefined, { dept: 'Choose your department.' });
@@ -593,6 +760,7 @@ export class FestService {
       return { registration, keyed: true };
     }
     // (Here, no key was sent.)
+    await this.requireSwitch(null, 'studentLookup', 'Looking up a registration is switched off. Please ask at a registration desk.');
     const phone = readParticipant({ phone: isObject(body) ? body.phone : '' }).phone;
     if (!registration || registration.deleted || registration.phone !== phone) throw new ApiError(404, 'NOT_FOUND', 'No registration has that ID with that mobile number.');
     if (change) throw new ApiError(403, 'KEY_NEEDED', 'Change your events or transaction ID on the phone you registered with, or ask at a registration desk.');
@@ -602,6 +770,30 @@ export class FestService {
   async studentView(body: unknown) {
     const { registration, keyed } = await this.ownRegistration(body, false);
     return { success: true as const, registration: toStudentView(registration, keyed) };
+  }
+
+  /**
+   * "My registration ID" on a phone that did not register: the mobile number and the email the
+   * student registered with find their registrations (shown, never changed), in every department.
+   */
+  async findOwn(body: unknown) {
+    await this.requireSwitch(null, 'studentLookup', 'Looking up a registration is switched off. Please ask at a registration desk.');
+    const phone = readParticipant({ phone: isObject(body) ? body.phone : '' }).phone;
+    const email = text(isObject(body) ? body.email : '', 120).toLowerCase();
+    const notFound = new ApiError(404, 'NOT_FOUND', 'No registration has that mobile number with that email. Check both, or ask at a registration desk.');
+    if (!/^\d{10}$/.test(phone) || !email.includes('@')) throw notFound;
+    const catalog = await this.catalog();
+    const found: FestRegistration[] = [];
+    await Promise.all(
+      catalog.departments.map(async ({ code }) => {
+        const id = await this.deps.store.findPhone(code, phone);
+        const registration = id ? await this.deps.store.getRegistration(code, id) : null;
+        if (registration && !registration.deleted && registration.email.trim().toLowerCase() === email) found.push(registration);
+      }),
+    );
+    if (!found.length) throw notFound;
+    found.sort((a, b) => a.created.at.localeCompare(b.created.at));
+    return { success: true as const, registrations: found.map((registration) => toStudentView(registration, false)) };
   }
 
   /** The student adds or removes their events (any department's), from the phone that registered. */
@@ -614,8 +806,12 @@ export class FestService {
   /** The student sends the right transaction ID after a desk did not find the payment (from the phone that registered). */
   async studentPayment(body: unknown) {
     const { registration: found } = await this.ownRegistration(body, true);
-    const txn = text(isObject(body) ? body.txn : '', 40).replace(/\s/g, '');
-    if (!TXN.test(txn)) throw new ApiError(400, 'INVALID', 'Type the UPI transaction ID (UTR) from your payment.');
+    if (!(await this.portal()).onlinePayment) throw new ApiError(403, 'SWITCHED_OFF', `Online payment is switched off. Pay at the ${deptShort(found.dept)} registration desk.`);
+    const txn = tidyUtr(text(isObject(body) ? body.txn : '', 40));
+    if (!UTR.test(txn)) throw new ApiError(400, 'INVALID', 'Type the 12-digit UPI reference number (UTR) from your payment.', undefined, undefined, { txn: 'Type the 12 digits of the UTR.' });
+    // A payment accepted for someone else cannot be used again.
+    const holder = await this.deps.store.findTxn(TXN_SCOPE, txn);
+    if (holder && holder !== found.id) throw new ApiError(409, 'TXN_USED', 'This UTR was already used for another registration. Check it in your UPI app.', undefined, undefined, { txn: 'Already used for another registration.' });
     const catalog = await this.catalog();
     const result = await this.mutate(found.dept, found.id, (registration) => {
       if (!isActive(registration)) throw new ApiError(409, 'CANCELLED', 'This registration was cancelled.');
@@ -648,6 +844,7 @@ export class FestService {
     if (!['add', 'fee', 'present', 'absent', 'void-fee'].includes(String(action))) throw new ApiError(400, 'INVALID', 'Choose what to do.');
     requirePermission(actor, action === 'void-fee' ? 'fest.correct' : 'fest.event');
     if (action !== 'void-fee') this.eventAccess(actor, event);
+    if (action !== 'void-fee') await this.requireSwitch(actor, 'eventEntry', 'Event entry is switched off by the web assist team.');
     await this.ensureOpenEvents([event.id]);
     const input = body as Record<string, unknown>;
     const stamp = this.stamp(actor);
@@ -699,6 +896,7 @@ export class FestService {
     if (!['save', 'submit', 'reopen'].includes(String(action))) throw new ApiError(400, 'INVALID', 'Choose what to do.');
     requirePermission(actor, action === 'reopen' ? 'fest.correct' : 'fest.event');
     if (action !== 'reopen') this.eventAccess(actor, event);
+    if (action !== 'reopen') await this.requireSwitch(actor, 'results', 'Results entry is switched off by the web assist team.');
     const input = body as Record<string, unknown>;
     const current = await this.deps.store.getResult(event.dept, event.id);
     const stamp = this.stamp(actor);
@@ -901,13 +1099,32 @@ export class FestService {
       this.deps.log('Fest backup file failed', { error: describeError(error) });
     }
     let sheet: 'written' | 'unchanged' | 'failed' | 'off' = 'off';
+    let sheetError: string | null = null;
     if (this.deps.sheet) {
       try {
         sheet = (await this.deps.sheet.save(data)).written ? 'written' : 'unchanged';
       } catch (error) {
+        // Nothing is lost: the live data stays in the database and the private copy; the next
+        // run (10 minutes later) writes the whole Sheet copy again.
         sheet = 'failed';
-        this.deps.log('Fest sheet backup failed', { error: describeError(error) });
+        sheetError = describeError(error).slice(0, 300);
+        this.deps.log('Fest sheet backup failed', { error: sheetError });
       }
+    }
+    // Kept for Website controls, so a failing copy is seen without opening the AWS logs.
+    const last = await this.backupStatus();
+    const status: BackupStatus = {
+      at: data.at,
+      file,
+      sheet,
+      sheetError,
+      lastFileAt: file === 'saved' ? data.at : (last?.lastFileAt ?? null),
+      lastSheetAt: sheet === 'written' || sheet === 'unchanged' ? data.at : (last?.lastSheetAt ?? null),
+    };
+    try {
+      await this.deps.settings.putSetting(BACKUP_SETTING, JSON.stringify(status));
+    } catch {
+      // Only the status: the copies themselves are done.
     }
     return { registrations: data.registrations.length, results: data.results.length, file, sheet };
   }
@@ -929,3 +1146,20 @@ const pick = (registration: FestRegistration): FestParticipant => ({
   year: registration.year,
   team: registration.team,
 });
+
+/** The switches that are off, for the log. */
+const offSwitches = (portal: PortalSettings) => [
+  ...(['selfRegistration', 'onlinePayment', 'studentLookup', 'deskRegistration', 'eventEntry', 'results', 'downloads'] as const).filter((name) => !portal[name]),
+  ...Object.entries(portal.logins)
+    .filter(([, on]) => !on)
+    .map(([role]) => `login:${role}`),
+];
+
+/** The picture's first bytes say what its data: URL says (a PNG, JPEG or WebP, nothing else). */
+function looksLikeImage(dataUrl: string) {
+  const [head = '', data = ''] = dataUrl.split(',');
+  const bytes = Buffer.from(data, 'base64');
+  if (head.includes('image/png')) return bytes.subarray(0, 8).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]));
+  if (head.includes('image/jpeg')) return bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff;
+  return bytes.subarray(0, 4).toString('latin1') === 'RIFF' && bytes.subarray(8, 12).toString('latin1') === 'WEBP';
+}

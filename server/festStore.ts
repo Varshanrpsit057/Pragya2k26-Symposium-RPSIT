@@ -49,6 +49,8 @@ export interface FestStore {
   claimTxn(dept: string, txn: string, id: string): Promise<string | null>;
   /** Releases the claim, if this registration holds it (a verification that could not be saved). */
   releaseTxn(dept: string, txn: string, id: string): Promise<void>;
+  /** The registration a UPI transaction ID was accepted for, if any. */
+  findTxn(dept: string, txn: string): Promise<string | null>;
   /** Removes a registration and its claims for good (test data only). */
   purgeRegistration(registration: FestRegistration): Promise<void>;
   purgeResult(dept: string, eventId: string): Promise<void>;
@@ -153,6 +155,10 @@ export class MemoryFestStore implements FestStore {
   async releaseTxn(dept: string, txn: string, id: string) {
     const key = `T#${dept}#${txn.toUpperCase()}`;
     if (this.claims.get(key) === id) this.claims.delete(key);
+  }
+
+  async findTxn(dept: string, txn: string) {
+    return this.claims.get(`T#${dept}#${txn.toUpperCase()}`) ?? null;
   }
 
   async purgeRegistration(registration: FestRegistration) {

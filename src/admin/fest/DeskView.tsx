@@ -5,11 +5,14 @@
  */
 import { useMemo, useState, type FormEvent } from 'react';
 import { NEARBY_COLLEGES, OTHER_COLLEGES } from '../../content/colleges';
+import { COURSE_DEPARTMENTS, OTHER, STREAMS, courseText } from '../../content/courses';
+import { SearchSelect } from '../../components/ui/SearchSelect';
 import { awaitingCheck, deptShort, eventLabel, eventsOf, isActive, normaliseFestId, parseFestId, participantProblems, readParticipant, rupees, showId, sourceOfNumber, teamRule, tidyPhone, YEARS, type FestParticipant, type FestRegistration } from '../../lib/fest';
 import { hasPermission } from '../../lib/staff';
 import { Badge, when } from '../ui';
 import { useFest } from './FestData';
-import { NO_PAYMENT, PaymentChoice, RegistrationCard, ShortList, Stat, matches, paymentBody, paymentReady, stampNow, type PaymentDraft } from './festUi';
+import { tidyUtr } from '../../lib/portal';
+import { NO_PAYMENT, PaymentChoice, RegistrationCard, ShortList, Stat, matches, paymentBody, paymentReady, stampNow, txnHolders, type PaymentDraft } from './festUi';
 
 const EMPTY: FestParticipant = { name: '', phone: '', email: '', college: '', branch: '', year: '', team: '' };
 const COLLEGES = [...NEARBY_COLLEGES, ...OTHER_COLLEGES];
@@ -39,8 +42,10 @@ export function DeptPicker({ value, onChange, label = 'Department' }: { value: s
 }
 
 export function DeskView() {
-  const { session } = useFest();
+  const { session, switches } = useFest();
   const [dept, setDept, canPick] = useWorkDept();
+  // Website controls can switch desk registration off: the desk then verifies and checks in only.
+  const registerOff = !switches.deskRegistration && session.role !== 'ADMIN';
   const { registrations } = useFest();
   const [tab, setTab] = useState<'verify' | 'register' | 'find' | 'totals'>('verify');
   const waiting = useMemo(() => [...registrations.values()].filter((item) => awaitingCheck(item) && item.dept === dept).length, [registrations, dept]);
@@ -66,7 +71,7 @@ export function DeskView() {
             ))}
           </nav>
           {tab === 'verify' && <VerifyPayments dept={dept} />}
-          {tab === 'register' && <RegisterForm dept={dept} />}
+          {tab === 'register' && (registerOff ? <p className="adm-note">Desk registration is switched off by the web assist team. Students register on their phones; verify their payments and check them in here.</p> : <RegisterForm dept={dept} />)}
           {tab === 'find' && <FindAndCheckIn dept={dept} />}
           {tab === 'totals' && <DeskTotals dept={dept} />}
         </>
@@ -80,6 +85,12 @@ export function RegisterForm({ dept, paper = false }: { dept: string; paper?: bo
   const { catalog, registrations, register, idsLeft, online } = useFest();
   const [slipId, setSlipId] = useState('');
   const [form, setForm] = useState<FestParticipant>(EMPTY);
+  // The stream and department, chosen from searchable lists, make up the "department / course" (B.E. CSE).
+  const [course, setCourse] = useState({ stream: '', dept: '', other: '' });
+  const setCourseTo = (next: typeof course) => {
+    setCourse(next);
+    setForm((current) => ({ ...current, branch: courseText(next.stream, next.dept, next.other) }));
+  };
   const [events, setEvents] = useState<string[]>([]);
   const [payment, setPayment] = useState<PaymentDraft>(NO_PAYMENT);
   const [tried, setTried] = useState(false);
@@ -115,6 +126,7 @@ export function RegisterForm({ dept, paper = false }: { dept: string; paper?: bo
           onClick={() => {
             setDone(null);
             setForm(EMPTY);
+            setCourse({ stream: '', dept: '', other: '' });
             setEvents([]);
             setPayment(NO_PAYMENT);
             setTried(false);
@@ -180,10 +192,32 @@ export function RegisterForm({ dept, paper = false }: { dept: string; paper?: bo
         {field('college')}
       </label>
       <div className="fest-form__row">
+        <div className="adm-field">
+          <span id="desk-stream-label">Stream (optional)</span>
+          <SearchSelect id="desk-stream" labelId="desk-stream-label" options={STREAMS} value={course.stream} onChange={(stream) => setCourseTo({ ...course, stream })} placeholder="B.E., B.Sc.…" searchPlaceholder="Search streams" searchLabel="Search streams" />
+        </div>
+        <div className="adm-field">
+          <span id="desk-course-label">Department (optional)</span>
+          <SearchSelect
+            id="desk-course"
+            labelId="desk-course-label"
+            options={COURSE_DEPARTMENTS}
+            value={course.dept}
+            onChange={(dept) => setCourseTo({ ...course, dept })}
+            placeholder="CSE, ECE…"
+            searchPlaceholder="Search departments"
+            searchLabel="Search departments"
+            bestFirst
+          />
+        </div>
+      </div>
+      {course.dept === OTHER && (
         <label className="adm-field">
-          <span>Branch (optional)</span>
-          <input value={form.branch} autoComplete="off" onChange={(event) => setForm({ ...form, branch: event.target.value })} placeholder="e.g. B.E. CSE" />
+          <span>Their department</span>
+          <input value={course.other} maxLength={60} autoComplete="off" onChange={(event) => setCourseTo({ ...course, other: event.target.value })} />
         </label>
+      )}
+      <div className="fest-form__row">
         <label className="adm-field">
           <span>Year</span>
           <select value={form.year} onChange={(event) => setForm({ ...form, year: event.target.value })}>
@@ -295,7 +329,7 @@ function FindAndCheckIn({ dept }: { dept: string }) {
               )}
               {paying === registration.id && (
                 <div className="fest-inline-form">
-                  <PaymentChoice amount={catalog.entryFee} value={payment} onChange={setPayment} name={`pay-${registration.id}`} />
+                  <PaymentChoice amount={catalog.entryFee} value={payment} onChange={setPayment} name={`pay-${registration.id}`} forId={registration.id} />
                   <span className="adm-inline">
                     <button className="adm-button adm-button--primary" type="button" disabled={!paymentReady(payment)} onClick={() => checkIn(registration, true)}>
                       Save and check in
@@ -360,11 +394,12 @@ function VerifyPayments({ dept }: { dept: string }) {
     <section className="adm-card adm-pad">
       <h2 className="adm-h2">Payments to check ({waiting.length})</h2>
       <p className="adm-muted">
-        Students who registered on their phone. Find each payment in the account receiving the money by its transaction ID and amount, then verify it. Oldest first.
+        Students who paid by UPI on their phone and sent the UTR. Type the UTR of each payment you received: the screen checks it matches and that nobody else has it, then verify. Oldest
+        first. Tip: type a received payment’s UTR in Find to see whose it is.
       </p>
       <label className="adm-field">
         <span>Find</span>
-        <input type="search" value={query} placeholder={`ID (${deptShort(dept)}-2001…), name, phone or transaction ID`} onChange={(event) => setQuery(event.target.value)} />
+        <input type="search" value={query} placeholder={`ID (${deptShort(dept)}-2001…), name, phone or UTR`} onChange={(event) => setQuery(event.target.value)} />
       </label>
       <ShortList items={shown} empty={waiting.length ? 'Nobody matches.' : 'No payments waiting. New ones appear here by themselves.'} render={(registration) => (
         <RegistrationCard key={registration.id} registration={registration}>
@@ -375,42 +410,73 @@ function VerifyPayments({ dept }: { dept: string }) {
   );
 }
 
-/** The transaction ID the student typed, with Verify (the money is there) and Not found. */
+/**
+ * The desk types the UTR from the payment it received: the screen says at once whether it matches
+ * the one the student sent (only its last 4 digits are shown) and whether any other registration
+ * has the same UTR. Verify needs a match; the server checks both again.
+ */
 function VerifyBox({ registration }: { registration: FestRegistration }) {
-  const { session, change } = useFest();
+  const { session, change, registrations } = useFest();
   const claim = registration.entry.claim!;
-  const [txn, setTxn] = useState(claim.txn);
+  const [typed, setTyped] = useState('');
   const [seen, setSeen] = useState(false);
   const [rejecting, setRejecting] = useState(false);
   const [reason, setReason] = useState('Not received');
   const path = `/api/admin/fest/registrations/${registration.id}` as const;
+  const sent = tidyUtr(claim.txn).toUpperCase();
+  const utr = tidyUtr(typed).toUpperCase();
+  const match = utr !== '' && utr === sent;
+  const mismatch = utr !== '' && !match && utr.length >= sent.length;
+  const others = useMemo(() => txnHolders(registrations, sent, registration.id), [registrations, sent, registration.id]);
+  const acceptedFor = others.find((item) => tidyUtr(item.entry.payment?.txn ?? '').toUpperCase() === sent);
   const verify = () => {
     const stamp = stampNow(session.username);
     const desk = session.deskNumber ?? undefined;
-    change(registration.id, path, { action: 'verify', txn: txn.replace(/\s/g, ''), confirmed: true }, `Verify ${registration.id}`, (current) => ({
+    change(registration.id, path, { action: 'verify', txn: utr, confirmed: true }, `Verify ${showId(registration.id)}`, (current) => ({
       ...current,
-      entry: { status: 'PAID', claim: current.entry.claim, payment: { method: 'UPI', amount: claim.amount, txn: txn.replace(/\s/g, ''), ...stamp, ...(desk && { desk }) } },
+      entry: { status: 'PAID', claim: current.entry.claim, payment: { method: 'UPI', amount: claim.amount, txn: utr, ...stamp, ...(desk && { desk }) } },
       checkedIn: current.checkedIn ?? { ...stamp, ...(desk && { desk }) },
     }));
   };
   const reject = () => {
     const stamp = stampNow(session.username);
-    change(registration.id, path, { action: 'reject', reason: reason.trim() }, `Payment not found · ${registration.id}`, (current) => ({ ...current, entry: { ...current.entry, rejected: { ...stamp, reason: reason.trim() } } }));
+    change(registration.id, path, { action: 'reject', reason: reason.trim() }, `Payment not found · ${showId(registration.id)}`, (current) => ({ ...current, entry: { ...current.entry, rejected: { ...stamp, reason: reason.trim() } } }));
     setRejecting(false);
   };
   return (
     <div className="fest-verify">
       <p className="fest-verify__claim">
-        {rupees(claim.amount)} by UPI · transaction ID <strong className="fest-verify__txn">{claim.txn}</strong> · {when(claim.at)}
+        Sent {rupees(claim.amount)} by UPI · UTR ending <strong className="fest-verify__txn">{sent.slice(-4)}</strong> · {when(claim.at)}
       </p>
-      {registration.entry.rejected && <p className="adm-field__error">Marked not found: {registration.entry.rejected.reason}. They may have sent a new ID.</p>}
+      {registration.entry.rejected && <p className="adm-field__error">Marked not found: {registration.entry.rejected.reason}. They may have sent a new UTR.</p>}
+      {acceptedFor ? (
+        <p className="fest-match is-bad" role="alert">
+          Duplicate: this UTR was already accepted for {showId(acceptedFor.id)} ({acceptedFor.name}). Do not verify; mark it not found.
+        </p>
+      ) : (
+        others.length > 0 && (
+          <p className="fest-match is-warn" role="alert">
+            Same UTR also sent by {others.map((item) => showId(item.id)).join(', ')}: only one payment can be verified with it.
+          </p>
+        )
+      )}
       <label className="adm-field">
-        <span>Transaction ID as it appears in the payment (correct a typo here)</span>
-        <input value={txn} inputMode="text" autoCapitalize="characters" onChange={(event) => setTxn(event.target.value)} />
+        <span>UTR of the payment you received (from the receiving account, or the student’s payment screen)</span>
+        <input value={typed} inputMode="numeric" autoComplete="off" spellCheck={false} placeholder="12 digits" onChange={(event) => setTyped(event.target.value)} />
       </label>
+      {match && (
+        <p className="fest-match is-good" role="status">
+          ✓ Matches the UTR {showId(registration.id)} sent{others.length ? '' : ' · no other registration has it'}.
+        </p>
+      )}
+      {mismatch && (
+        <p className="fest-match is-bad" role="status">
+          ✗ Does not match the UTR the student sent (it ends {sent.slice(-4)}). Check the digits, or mark the payment not found.
+        </p>
+      )}
       <label className="adm-check">
         <input type="checkbox" checked={seen} onChange={(event) => setSeen(event.target.checked)} />
-        <span>I have seen {rupees(claim.amount)} received with this transaction ID.</span>
+        <span>I have seen {rupees(claim.amount)} received with this UTR.</span>
       </label>
       {rejecting ? (
         <span className="adm-inline adm-inline--wrap">
@@ -424,8 +490,8 @@ function VerifyBox({ registration }: { registration: FestRegistration }) {
         </span>
       ) : (
         <span className="adm-inline adm-inline--wrap">
-          <button className="adm-button adm-button--approve" type="button" disabled={!seen || txn.replace(/\s/g, '').length < 6} onClick={verify}>
-            Verify {registration.id}
+          <button className="adm-button adm-button--approve" type="button" disabled={!seen || !match || Boolean(acceptedFor)} onClick={verify}>
+            Verify {showId(registration.id)}
           </button>
           <button className="adm-button adm-button--small" type="button" onClick={() => setRejecting(true)}>
             Not found…

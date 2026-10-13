@@ -1,6 +1,17 @@
 /** The fest's API calls (server/fest.ts). */
 import type { FestCatalog, FestRegistration, FestResult, FestSource } from '../../lib/fest';
+import type { BackupStatus, PortalSettings } from '../../lib/portal';
 import { request } from '../adminApi';
+
+/** The switches the dashboards follow (Website controls): what is off is hidden, and refused by the server. */
+export interface DashboardSwitches {
+  deskRegistration: boolean;
+  eventEntry: boolean;
+  results: boolean;
+  downloads: boolean;
+  onlinePayment: boolean;
+}
+export const ALL_ON: DashboardSwitches = { deskRegistration: true, eventEntry: true, results: true, downloads: true, onlinePayment: true };
 
 export interface SyncAnswer {
   full: boolean;
@@ -11,6 +22,7 @@ export interface SyncAnswer {
   catalogRevision: number;
   /** When test data was last deleted: a new value means "drop your copy and load afresh". */
   resetAt?: string | null;
+  switches?: DashboardSwitches;
   serverTime: string;
 }
 
@@ -49,3 +61,14 @@ export const clearFestTestData = (token: string, results: boolean) =>
 /** A change the outbox sends (path and body), answered with the registration or the results. */
 export const festWrite = (token: string, path: `/api/admin/fest/${string}`, body: unknown) =>
   request<{ registration?: FestRegistration; result?: FestResult; replayed?: boolean }>(path, { method: 'POST', body, token });
+
+/** Website controls (web assist team): the switches, the UPI account and the QR code picture. */
+export interface PortalView {
+  portal: PortalSettings;
+  qr: string | null;
+  /** How the last scheduled backups went (with the full view only). */
+  backup?: BackupStatus | null;
+}
+export const fetchPortal = (token: string) => request<PortalView>('/api/admin/portal', { token });
+export const savePortal = (token: string, portal: Partial<PortalSettings>) => request<PortalView>('/api/admin/portal', { method: 'POST', body: { portal }, token });
+export const saveQr = (token: string, image: string | null) => request<PortalView>('/api/admin/portal/qr', { method: 'POST', body: image ? { image } : { remove: true }, token });
