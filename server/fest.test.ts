@@ -345,7 +345,7 @@ describe('the backup', () => {
     const h = setup({ at: TIMES.eventDay });
     const { desk } = await department(h);
     await register(h, desk.token, 'CSE-0001', ['cse-hackathon']);
-    expect(await h.service.fest.backup()).toEqual({ registrations: 1, results: 0 });
+    expect(await h.service.fest.backup()).toEqual({ registrations: 1, results: 0, file: 'saved', sheet: 'off' });
     const saved = JSON.parse(new TextDecoder().decode(h.files.objects.get('backups/fest/all.json')!.bytes));
     expect(saved.registrations.map((item: FestRegistration) => item.id)).toEqual(['CSE-0001']);
     expect(saved.catalog.events).toHaveLength(44);

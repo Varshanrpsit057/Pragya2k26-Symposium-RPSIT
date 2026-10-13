@@ -2,14 +2,12 @@ import { render, screen, within } from '@testing-library/react';
 import { afterEach, describe, expect, it } from 'vitest';
 import { crew } from '../../content/crew';
 import { site } from '../../content/site';
-import { CONTACT_PENDING_MESSAGE, Footer } from './Footer';
+import { Footer } from './Footer';
 
-const originalContacts = site.contacts;
 const originalEmail = site.email;
 const originalPhones = site.college.phones;
 
 afterEach(() => {
-  site.contacts = originalContacts;
   site.email = originalEmail;
   site.college.phones = originalPhones;
 });
@@ -34,35 +32,12 @@ describe('Footer', () => {
     expect(screen.queryByRole('button', { name: 'Meet the Dev Crew' })).toBeNull();
   });
 
-  it('gives the overall coordinator as the contact, with a number to call', () => {
+  it('gives the help desk for any help, with no coordinator contact block', () => {
     render(<Footer links={[]} />);
 
-    expect(screen.getByRole('heading', { name: 'Coordinator contact' })).toBeInTheDocument();
-    expect(screen.getByText('Balajimanikandhaan S.S')).toBeInTheDocument();
-    for (const link of screen.getAllByRole('link', { name: '+91 73582 13736' })) expect(link).toHaveAttribute('href', 'tel:+917358213736');
-    // The help desk, for any help.
     expect(screen.getByRole('heading', { name: 'Help desk' })).toBeInTheDocument();
-  });
-
-  it('says contact details are coming while none are set', () => {
-    site.contacts = [];
-    site.email = null;
-    render(<Footer links={[]} />);
-
-    expect(screen.getByText(CONTACT_PENDING_MESSAGE)).toBeInTheDocument();
-  });
-
-  it('lists contacts once they are added', () => {
-    site.contacts = [{ name: 'Event Desk', role: 'Coordinator', email: 'desk@example.edu' }];
-    site.email = null;
-    render(<Footer links={[]} />);
-
-    expect(screen.queryByText(CONTACT_PENDING_MESSAGE)).toBeNull();
-    expect(screen.getByText('Event Desk')).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: 'desk@example.edu' })).toHaveAttribute(
-      'href',
-      'mailto:desk@example.edu',
-    );
+    expect(screen.queryByRole('heading', { name: 'Coordinator contact' })).toBeNull();
+    expect(screen.queryByText('Overall Student Coordinator · III Year AI&DS')).toBeNull();
   });
 
   it('names the institution', () => {
@@ -86,10 +61,13 @@ describe('Footer', () => {
     expect(screen.getByRole('link', { name: '+91 93449 72274' })).toHaveAttribute('href', 'tel:+919344972274');
   });
 
-  it('shows the RPSIT crest instead of the PRAGYA mark', () => {
+  it('shows the RPSIT lockup (crest, name, autonomous status) above the fest’s name', () => {
     const { container } = render(<Footer links={[]} />);
 
-    expect(container.querySelector('img.footer__logo')).toHaveAttribute('src', '/images/rpsit-crest.webp');
+    const lockup = container.querySelector('.footer__brand .college-lockup') as HTMLElement;
+    expect(lockup.querySelector('img')).toHaveAttribute('src', '/images/rpsit-crest.webp');
+    expect(lockup).toHaveTextContent(`${site.college.name}${site.college.status}`);
+    expect(container.querySelector('.footer__wordmark')).toHaveTextContent('Infinite Techfest’26');
   });
 
   it('puts the map beside the credits, after the contact details', () => {

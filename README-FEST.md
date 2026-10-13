@@ -37,9 +37,9 @@ created, downloaded once as a CSV and handed out privately. Settings are named, 
 
 | What | Link | For |
 | --- | --- | --- |
-| Home page | https://pragya2k26.online/ | The fest's front door: **Register now**, **Staff sign in**, the 8 department staff pages, the website notice, the PRAGYA footer (contacts, map, Dev Crew) |
+| Home page | https://pragya2k26.online/ | The fest's front door for students: **Register now**, **My registration ID**, the website notice, the footer (contacts, map, Dev Crew). No staff links: staff type the dashboard address |
 | **Students' page** | https://pragya2k26.online/register/ | Students register themselves on their phone and see their ID and payment status (also at the old `/landing/student/` address) |
-| Main dashboard | https://pragya2k26.online/landing/admin/ | Web assist team, overall coordinator |
+| Main dashboard | https://pragya2k26.online/landing/admin/ | Web assist team, overall coordinator; its sign-in also lists the 8 department staff pages |
 | API health check | https://683v5yp7k4.execute-api.us-east-1.amazonaws.com/api/health | Web assist team: shows `ready` when the API is up |
 | Live schedule (public) | https://683v5yp7k4.execute-api.us-east-1.amazonaws.com/api/schedule | The registration times the website is following now |
 
@@ -67,10 +67,11 @@ wrong department's page is told which page is theirs.
 
 pragya2k26.online's home page (`src/landing/Landing.tsx`) is the fest's front door on the PRAGYA sky
 background: the fest's name and date, **Register now** (a pop-up of the 8 departments, each to its form) and **My registration ID** (to `/register/?my`: the
-student's registration, by ID and mobile number), **Staff sign in** (to `/landing/admin/`), the department staff pages, the three steps
-for students, the **Notice on the website**, then the PRAGYA footer (Contact Us, Developed by,
+student's registration, by ID and mobile number), the three steps
+for students, the **Notice on the website**, then the footer (the RPSIT lockup and INFINITE TECHFEST’26, Contact Us, Developed by,
 Follow Us, Location) and "Overall coordinated by the Department of Artificial Intelligence and Data
-Science".
+Science". It links to no staff page (nor does the students' page): staff open `/landing/admin/`
+by its address, and its sign-in lists every department's own staff page.
 
 **The route map is no longer on this site.** Its code was archived to `routemap.zip` on the
 Desktop (13 October 2026). Every department's events and the route map are on a separate website run
@@ -148,9 +149,11 @@ Do them in this order. Each one is yours: nothing here happens by itself.
 
 ### 2.2 Keep AWS KMS free (5 minutes, once)
 
-The DynamoDB tables now use DynamoDB's own free encryption key, and the API runs its schedule every
-30 minutes instead of every 10, so far fewer KMS requests are made. To cut them further, move the four
-identifiers from secrets to plain environment variables:
+The DynamoDB tables now use DynamoDB's own free encryption key. The API runs its schedule every
+10 minutes (the fest's backup to the Google Sheet), and each run that starts a fresh function
+decrypts its secrets with KMS: up to a few tens of thousands of requests a month (the first 20,000
+are free; more cost about 3 cents per 10,000). To cut them, move the four identifiers from secrets to
+plain environment variables:
 
 1. Amplify console → the app → **Hosting → Environment variables** → for the `main` branch add, with
    **the same values** as their secrets:
@@ -716,8 +719,14 @@ Changing a password, deactivating or deleting an account signs that person out a
 
 - **Every registration is in DynamoDB** (the `FestRecords` table): point-in-time recovery (any second
   in the last 35 days), deletion protection, and kept even if the app is deleted.
-- **Every 30 minutes** a full copy of every department's data is written to the private files bucket
+- **Every 10 minutes** a full copy of every department's data is written to the private files bucket
   (`backups/fest/all.json`); every earlier version is kept.
+- **Every 10 minutes, the Google Sheet** (the one in `GOOGLE_SHEET_ID`) gets the same data in two tabs,
+  **Fest registrations** (one row per student: details, entry fee and how it was paid, events, fees,
+  attendance, status) and **Fest results** (one row per place). It is written only when something
+  changed, in one request (no request at all otherwise), so it stays far inside Google's limits. The
+  tabs are made the first time and rewritten whole each time: read and download them, do not edit
+  them (`server/festSheet.ts`).
 - **Test data** is saved to `backups/fest-test-data-*.json` before it is deleted.
 - **Each phone** keeps a copy of its department and everything not yet sent.
 - **Your own copy**: download **Registrations** (all departments) and **Results** as CSV at the end of
@@ -751,7 +760,7 @@ Changing a password, deactivating or deleting an account signs that person out a
 | Session length | 16 hours |
 | IDs per desk phone block | 50, topped up at 15 left |
 | Import | up to 200 rows per upload step (the page splits bigger files) |
-| Backups | every 30 minutes, every version kept |
+| Backups | every 10 minutes: the private bucket (every version kept) and the Google Sheet's fest tabs (when anything changed) |
 | AWS cost when idle | nothing for Lambda and API Gateway; DynamoDB on-demand and S3 cost cents for this size |
 
 ### Settings (names only)

@@ -11,7 +11,7 @@
  *
  * Every rule is checked here; the dashboards only hide what a role cannot use.
  */
-import { canJoin, catalogProblem, DEFAULT_CATALOG, DEFAULT_UPI, departmentOf, deptShort, entryOf, eventOf, feePaid, formatFestId, ID_BLOCK, ID_RANGES, isActive, matchEvents, normaliseFestId, parseFestId, participantProblems, readParticipant, showId, sourceOfNumber, toStudentView, TXN, type FestCatalog, type FestDepartment, type FestEvent, type FestMethod, type FestParticipant, type FestPayment, type FestPlace, type FestRegistration, type FestResult, type FestSource, type FestStamp } from '../src/lib/fest';
+import { canJoin, catalogProblem, DEFAULT_CATALOG, DEFAULT_UPI, departmentOf, deptShort, entryOf, eventOf, feePaid, formatFestId, ID_BLOCK, ID_RANGES, isActive, matchEvents, normaliseFestId, parseFestId, participantProblems, readParticipant, selfRegistrationProblems, showId, sourceOfNumber, toStudentView, TXN, type FestCatalog, type FestDepartment, type FestEvent, type FestMethod, type FestParticipant, type FestPayment, type FestPlace, type FestRegistration, type FestResult, type FestSource, type FestStamp } from '../src/lib/fest';
 import { timingSafeEqual } from 'node:crypto';
 import { formatIst, parseEventStart } from '../src/lib/countdown';
 import { registrationPhase, type RegistrationSchedule } from '../src/lib/schedule';
@@ -19,7 +19,9 @@ import { DEPARTMENT_ROLES, hasPermission, type Permission } from '../src/lib/sta
 import { ApiError } from './errors';
 import { TXN_SCOPE } from './festStore';
 import type { FileStore } from './files';
+import type { FestSheetBackup, FestSnapshot } from './festSheet';
 import type { FestStore } from './festStore';
+import { describeError } from './google';
 import { requirePermission, type Actor } from './roles';
 import type { Store } from './store';
 
@@ -47,6 +49,8 @@ export interface FestDeps {
   store: FestStore;
   settings: Pick<Store, 'getSetting' | 'putSetting'>;
   files: Pick<FileStore, 'put'>;
+  /** The Google Sheet copy of the backup (on AWS; none in tests and the local mock). */
+  sheet?: Pick<FestSheetBackup, 'save'>;
   /** The schedule in force (shared, changed in place by the registration times and test timelines). */
   schedule: RegistrationSchedule;
   /** { test } while a test session is on. */
@@ -515,7 +519,8 @@ export class FestService {
 
   /**
    * A student registers themselves for a department: an ID of that department (CSE-2001…), the entry
-   * fee's transaction ID for one of its desks to check; its event coordinators take them in.
+   * fee due; they pay it by UPI at that department's desk, which records it. Its event coordinators
+   * take them in. (A transaction ID sent by an older copy of the page is still kept for the desk.)
    */
   async selfRegister(body: unknown) {
     if (!isObject(body)) throw new ApiError(400, 'INVALID', 'The registration could not be read.');
@@ -531,12 +536,12 @@ export class FestService {
     if (replay) return { success: true as const, registration: toStudentView(await this.required(dept, replay), true), replayed: true };
 
     const participant = readParticipant(body.participant);
-    const problems = participantProblems(participant);
+    const problems = selfRegistrationProblems(participant);
     if (Object.keys(problems).length) throw new ApiError(400, 'INVALID', Object.values(problems)[0]!, undefined, undefined, problems as Record<string, string>);
     const eventIds = this.readEventIds(catalog, dept, body.events);
     await this.ensureOpenEvents(eventIds);
     const txn = text(body.txn, 40).replace(/\s/g, '');
-    if (!TXN.test(txn)) throw new ApiError(400, 'INVALID', 'Type the UPI transaction ID (UTR) from your payment.', undefined, undefined, { txn: 'Type the UPI transaction ID (UTR) from your payment.' });
+    if (txn && !TXN.test(txn)) throw new ApiError(400, 'INVALID', 'Check the UPI transaction ID (UTR).', undefined, undefined, { txn: 'Check the UPI transaction ID (UTR).' });
 
     const stamp: FestStamp = { at: this.iso(), by: STUDENT };
     const mark = await this.deps.testMark();
@@ -548,7 +553,7 @@ export class FestService {
         dept,
         source: 'SELF',
         ...participant,
-        entry: { status: 'DUE', claim: { txn, amount: catalog.entryFee, at: stamp.at } },
+        entry: txn ? { status: 'DUE', claim: { txn, amount: catalog.entryFee, at: stamp.at } } : { status: 'DUE' },
         events: eventIds.map((eventId) => ({ eventId, added: stamp })),
         created: stamp,
         sid: submissionId,
@@ -874,13 +879,37 @@ export class FestService {
     return { success: true as const, cleared: batch.length, remaining, results, restarted };
   }
 
-  /** Every department's data to a private file (S3 keeps each earlier version): run by the schedule. */
-  async backup() {
+  /** Every department's registrations and results, as they are now (for the backups). */
+  async snapshot(): Promise<FestSnapshot> {
     const catalog = await this.catalog();
     const parts = await Promise.all(catalog.departments.map((dept) => this.deps.store.changes(dept.code, '')));
-    const data = { at: this.iso(), catalog, registrations: parts.flatMap((part) => part.registrations), results: parts.flatMap((part) => part.results) };
-    await this.deps.files.put('backups/fest/all.json', new TextEncoder().encode(JSON.stringify(data)), 'application/json');
-    return { registrations: data.registrations.length, results: data.results.length };
+    return { at: this.iso(), catalog, registrations: parts.flatMap((part) => part.registrations), results: parts.flatMap((part) => part.results) };
+  }
+
+  /**
+   * Run by the schedule (every 10 minutes): every department's data to a private file (S3 keeps
+   * each earlier version), and to the Google Sheet's fest tabs when anything changed. Each copy is
+   * tried even if the other fails.
+   */
+  async backup() {
+    const data = await this.snapshot();
+    let file: 'saved' | 'failed' = 'saved';
+    try {
+      await this.deps.files.put('backups/fest/all.json', new TextEncoder().encode(JSON.stringify(data)), 'application/json');
+    } catch (error) {
+      file = 'failed';
+      this.deps.log('Fest backup file failed', { error: describeError(error) });
+    }
+    let sheet: 'written' | 'unchanged' | 'failed' | 'off' = 'off';
+    if (this.deps.sheet) {
+      try {
+        sheet = (await this.deps.sheet.save(data)).written ? 'written' : 'unchanged';
+      } catch (error) {
+        sheet = 'failed';
+        this.deps.log('Fest sheet backup failed', { error: describeError(error) });
+      }
+    }
+    return { registrations: data.registrations.length, results: data.results.length, file, sheet };
   }
 }
 

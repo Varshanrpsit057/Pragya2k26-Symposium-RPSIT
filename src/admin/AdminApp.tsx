@@ -214,6 +214,25 @@ function LoginForm({ notice, onSignedIn }: { notice: string; onSignedIn: (token:
           Problem signing in? Contact admin
         </button>
       </form>
+      {/* The front door links to no staff page, so the overall sign-in lists each department's own */}
+      {!pageDept && (
+        <nav className="adm-card adm-login__card adm-login__depts" aria-labelledby="adm-login-depts">
+          <h2 id="adm-login-depts" className="adm-login__depts-title">
+            Department staff pages
+          </h2>
+          <p className="adm-muted">Desks, event coordinators and HODs can also sign in on their department’s page.</p>
+          <ul>
+            {DEFAULT_CATALOG.departments.map((dept) => (
+              <li key={dept.code}>
+                <a href={`/landing/${dept.code.toLowerCase()}/admin/`}>
+                  <strong>{deptShort(dept.code)}</strong>
+                  <span>{dept.name}</span>
+                </a>
+              </li>
+            ))}
+          </ul>
+        </nav>
+      )}
       {help && <HelpDialog token={null} context={{ page: 'Sign-in page', category: 'SIGN_IN', ...(error && { error }) }} onClose={() => setHelp(false)} />}
     </main>
   );

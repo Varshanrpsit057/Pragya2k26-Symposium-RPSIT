@@ -1,9 +1,9 @@
 import { defineFunction, secret } from '@aws-amplify/backend';
 
 /**
- * The registration API (one Lambda function for every /api route, plus a schedule every 30
- * minutes that backs up the fest's data, retries failed Google syncs, passes and emails, and
- * copies event-day changes to the Google Sheet).
+ * The registration API (one Lambda function for every /api route, plus a schedule every 10
+ * minutes that backs up the fest's data to the private bucket and the Google Sheet's fest tabs,
+ * retries failed Google syncs, passes and emails, and copies event-day changes to the Google Sheet).
  *
  * Secrets are set per branch in the Amplify console (Hosting → Secrets) or, for a sandbox,
  * with `npx ampx sandbox secret set NAME`. Plain settings come from the Amplify
@@ -22,9 +22,9 @@ export const api = defineFunction({
   memoryMB: 1024,
   // API Gateway waits at most 30 s for an answer.
   timeoutSeconds: 29,
-  // Every 30 minutes: often enough for the backups and retries, and the function is not woken
-  // (and its secrets decrypted) every few minutes through the night.
-  schedule: 'every 30m',
+  // Every 10 minutes: the fest's backup (the private bucket, and the Google Sheet when anything
+  // changed: no Google request at all otherwise) and the retries.
+  schedule: 'every 10m',
   logging: { retention: '3 months' },
   environment: {
     // Credentials: always secrets.

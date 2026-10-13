@@ -80,6 +80,7 @@ import { requirePermission, type Actor } from './roles';
 import { RowNotFoundError, type SheetRow, type SheetsStore } from './sheets';
 import { StaffAccounts, staffCredential } from './staffAccounts';
 import { FestService, isStudentKey } from './fest';
+import type { FestSheetBackup } from './festSheet';
 import { MemoryFestStore, type FestStore } from './festStore';
 import { HelpDesk } from './helpDesk';
 import { StudentPortal } from './studentPortal';
@@ -105,6 +106,8 @@ export interface ServiceDeps {
   store: Store;
   /** The fest's registrations (DynamoDB on AWS; in memory for tests and the local mock). */
   fest?: FestStore;
+  /** The fest's backup in the Google Sheet, by the schedule (on AWS only). */
+  festSheet?: Pick<FestSheetBackup, 'save'>;
   files: FileStore;
   sheets: Pick<SheetsStore, 'ready' | 'ids' | 'append' | 'update'>;
   drive: Pick<DriveStore, 'upload' | 'replace' | 'findByProperties' | 'ensureFolder' | 'parentOf' | 'trash'>;
@@ -258,6 +261,7 @@ export class Service {
       store: deps.fest ?? new MemoryFestStore(),
       settings: deps.store,
       files: deps.files,
+      ...(deps.festSheet && { sheet: deps.festSheet }),
       schedule: this.schedule,
       testMark: () => this.testing.markNow(),
       now: this.now,

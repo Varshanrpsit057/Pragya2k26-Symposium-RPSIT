@@ -30,7 +30,6 @@ export interface SelfRegistration {
   dept: string;
   participant: { name: string; phone: string; email: string; college: string; branch: string; year: string; team: string };
   events: string[];
-  txn: string;
 }
 
 export class StudentApiError extends Error {
