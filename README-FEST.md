@@ -58,7 +58,7 @@ wrong department's page is told which page is theirs.
 | **CYBER** | Computer Science and Engineering (Cyber Security) | https://pragya2k26.online/landing/cys/admin/ | Mr. C. Mahavishu (9629039155) | Ms. R. Kavisri (6374794582) | 6 |
 | **EEE** | Electrical and Electronics Engineering | https://pragya2k26.online/landing/eee/admin/ | Mr. M. Dineshkumar (9626132311) | Mr. G. Santhosh (8667685436) | 5 |
 | **MECH** | Mechanical Engineering | https://pragya2k26.online/landing/mech/admin/ | Mr. S. Vijayakumar (9629723720) | Mr. N. Jayanishanth (7200116278) | 6 |
-| **SH** | Science and Humanities | https://pragya2k26.online/landing/sh/admin/ | Dr. K. Saranya (9789158113) | Mr. Shaher (7418119675) | 4 |
+| **S&H** | Science and Humanities | https://pragya2k26.online/landing/sh/admin/ | Dr. K. Saranya (9789158113) | Mr. Shaher (7418119675) | 4 |
 
 **Total: 8 departments, 44 events.** Contacts are from the poster; change them in
 **Departments & events** (section 11).
@@ -317,7 +317,7 @@ downloaded when they were created.
 | CYBER | `cys-hod` | `cys-admin` | `cys-desk1`, `cys-desk2`, `cys-desk3`, `cys-desk4` |
 | EEE | `eee-hod` | `eee-admin` | `eee-desk1`, `eee-desk2`, `eee-desk3`, `eee-desk4` |
 | MECH | `mech-hod` | `mech-admin` | `mech-desk1`, `mech-desk2`, `mech-desk3`, `mech-desk4` |
-| SH | `sh-hod` | `sh-admin` | `sh-desk1`, `sh-desk2`, `sh-desk3`, `sh-desk4` |
+| S&H | `sh-hod` | `sh-admin` | `sh-desk1`, `sh-desk2`, `sh-desk3`, `sh-desk4` |
 
 Event coordinators: two per event, `<dept>-<event>-1` and `<dept>-<event>-2`, listed with each event
 in section 5. The overall coordinator and the web assist team's accounts are made by hand (2.6); pick
@@ -432,7 +432,9 @@ Department page: https://pragya2k26.online/landing/mech/admin/
 | 5 | Quiz – Brain Bolt | `mech-brain-bolt` | https://pragya2k26.online/landing/mech/admin/?event=mech-brain-bolt | `mech-brain-bolt-1`, `mech-brain-bolt-2` |
 | 6 | Aqua Rocket | `mech-aqua-rocket` | https://pragya2k26.online/landing/mech/admin/?event=mech-aqua-rocket | `mech-aqua-rocket-1`, `mech-aqua-rocket-2` |
 
-#### SH · Science and Humanities (4 events)
+#### S&H · Science and Humanities (4 events)
+
+(S&H's addresses, usernames and event IDs use `sh`.)
 
 Department page: https://pragya2k26.online/landing/sh/admin/
 
