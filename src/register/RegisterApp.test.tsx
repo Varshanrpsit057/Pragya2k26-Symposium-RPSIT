@@ -77,7 +77,7 @@ describe('a student on their phone', () => {
 
   it('finds an earlier registration with its ID and mobile number', async () => {
     const h = setup({ at: TIMES.eventDay });
-    await h.call('POST', '/api/fest/register', { submissionId: 'self-test-0000001', participant: { name: 'Divya R', phone: '9840011111', college: 'Sona' }, events: [], txn: '412345678901' }, { ip: '10.0.0.8' });
+    await h.call('POST', '/api/fest/register', { submissionId: 'self-test-key-0000000000001', participant: { name: 'Divya R', phone: '9840011111', college: 'Sona' }, events: [], txn: '412345678901' }, { ip: '10.0.0.8' });
     backend(h);
     render(<RegisterApp />);
     fireEvent.click(await screen.findByRole('button', { name: 'Already registered? See your registration' }));
@@ -89,5 +89,8 @@ describe('a student on their phone', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Show my registration' }));
     await waitFor(() => expect(screen.getByText('Divya R')).toBeInTheDocument());
     expect(screen.getByText('20001')).toBeInTheDocument();
+    // Opened with only the ID and mobile number: it shows, but changes are made on the phone that registered.
+    expect(screen.getByText(/To add events here, use the phone you registered with/)).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Add events' })).toBeNull();
   });
 });

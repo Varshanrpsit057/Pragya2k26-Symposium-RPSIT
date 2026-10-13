@@ -298,7 +298,8 @@ async function selfStudent(allEvents, endAt) {
   for (const wait of [60_000, 120_000]) {
     if (stopping || Date.now() + wait > endAt) return;
     await sleep(wait);
-    await call('student status', 'POST', '/api/fest/me', { id, phone: body.participant.phone });
+    // As the phone that registered does: with its private key (the submission id).
+    await call('student status', 'POST', '/api/fest/me', { id, key: body.submissionId });
   }
 }
 

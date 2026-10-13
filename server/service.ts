@@ -151,6 +151,8 @@ const LOOKUP_LIMIT = { max: 120, windowMs: 10 * 60_000 };
 const SELF_REGISTER_LIMIT = { max: 600, windowMs: 10 * 60_000 };
 const STUDENT_LIMIT = { max: 3000, windowMs: 10 * 60_000 };
 const STUDENT_BUSY = 'Too many requests from your network. Please wait a few minutes and try again.';
+/** Looking a registration up by ID and mobile number (no private key): few per ID, so IDs cannot be tried one by one. */
+const STUDENT_ID_LIMIT = { max: 10, windowMs: 10 * 60_000 };
 /** Registration IDs tried when an on-site number is already taken (a counter reset). */
 const MAX_ID_ATTEMPTS = 5;
 /** Google syncs run together by the scheduled job, so the sheet writes go in batches. */
@@ -456,6 +458,12 @@ export class Service {
       return this.fest.selfRegister(body);
     }
     await this.limit(`student:${ip}`, STUDENT_LIMIT, STUDENT_BUSY);
+    const keyed = typeof body === 'object' && body !== null && typeof (body as { key?: unknown }).key === 'string' && (body as { key: string }).key.length > 0;
+    if (!keyed) {
+      const rawId = typeof body === 'object' && body !== null ? String((body as { id?: unknown }).id ?? '') : '';
+      await this.limit(`student-lookup:${ip}`, LOOKUP_LIMIT, STUDENT_BUSY);
+      await this.limit(`student-id:${sha256(rawId.replace(/\s/g, '').toUpperCase()).slice(0, 24)}`, STUDENT_ID_LIMIT, 'Too many tries for this ID. Please wait 10 minutes, or ask at a registration desk.');
+    }
     if (action === 'view') return this.fest.studentView(body);
     if (action === 'events') return this.fest.studentEvents(body);
     return this.fest.studentPayment(body);

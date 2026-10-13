@@ -6,16 +6,14 @@
 import { useCallback, useEffect, useMemo, useState, type FormEvent, type ReactNode } from 'react';
 import { COLLEGES, OTHER_COLLEGE } from '../content/colleges';
 import { DEFAULT_UPI, TXN, YEARS, participantProblems, readParticipant, type StudentView } from '../lib/fest';
-import { NO_CONNECTION, StudentApiError, changeMyEvents, fetchInfo, fetchMe, registerSelf, sendMyPayment, type PublicEvent, type PublicInfo } from './registerApi';
+import { NO_CONNECTION, StudentApiError, changeMyEvents, fetchInfo, fetchMe, registerSelf, sendMyPayment, type PublicEvent, type PublicInfo, type StudentPass } from './registerApi';
 
 const SAVED = 'techfest-student';
 const DRAFT = 'techfest-draft';
 const STAFF = '/landing/admin/';
 
-interface Saved {
-  id: string;
-  phone: string;
-}
+/** The ID, the mobile number and (on the phone that registered) the page's private key. */
+type Saved = StudentPass;
 
 interface Draft {
   submissionId: string;
@@ -46,7 +44,13 @@ const write = (key: string, value: unknown) => {
     // Private mode or storage blocked: works for this visit only.
   }
 };
-const newId = () => (typeof crypto !== 'undefined' && 'randomUUID' in crypto ? crypto.randomUUID() : `s-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 12)}`);
+/** A random submission id (122 bits or more): it is also the private key of the student's page. */
+const newId = () => {
+  const random: Crypto = globalThis.crypto;
+  if (typeof random.randomUUID === 'function') return random.randomUUID();
+  const bytes = random.getRandomValues(new Uint8Array(16));
+  return `s-${Array.from(bytes, (byte: number) => byte.toString(16).padStart(2, '0')).join('')}`;
+};
 const emptyDraft = (): Draft => ({ submissionId: newId(), name: '', phone: '', email: '', college: '', branch: '', year: '', team: '', events: [], txn: '' });
 const rupees = (amount: number) => `₹${amount.toLocaleString('en-IN')}`;
 const upiLink = (info: PublicInfo) =>
@@ -110,7 +114,7 @@ export function RegisterApp() {
             </button>
           </Panel>
         ) : (
-          <RegisterForm info={info} onRegistered={(view, phone) => remember({ id: view.id, phone })} onSignIn={() => setSigningIn(true)} />
+          <RegisterForm info={info} onRegistered={(view, phone, key) => remember({ id: view.id, phone, key })} onSignIn={() => setSigningIn(true)} />
         )}
       </main>
       <footer className="reg-foot">
@@ -132,7 +136,7 @@ function Panel({ title, children }: { title: string; children: ReactNode }) {
 
 // ------------------------------------------------------------------------------------------ the form
 
-function RegisterForm({ info, onRegistered, onSignIn }: { info: PublicInfo; onRegistered: (view: StudentView, phone: string) => void; onSignIn: () => void }) {
+function RegisterForm({ info, onRegistered, onSignIn }: { info: PublicInfo; onRegistered: (view: StudentView, phone: string, key: string) => void; onSignIn: () => void }) {
   const [draft, setDraft] = useState<Draft>(() => ({ ...emptyDraft(), ...read<Draft>(DRAFT) }));
   const [tried, setTried] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -167,7 +171,7 @@ function RegisterForm({ info, onRegistered, onSignIn }: { info: PublicInfo; onRe
     try {
       const view = await registerSelf({ submissionId: draft.submissionId, participant, events: draft.events, txn });
       write(DRAFT, null);
-      onRegistered(view, participant.phone);
+      onRegistered(view, participant.phone, draft.submissionId);
     } catch (failure) {
       setError(messageOf(failure));
       if (failure instanceof StudentApiError) setServerFields(failure.fields);
@@ -325,7 +329,7 @@ function SignIn({ onDone, onBack }: { onDone: (saved: Saved) => void; onBack: ()
     setBusy(true);
     setError('');
     try {
-      const found = await fetchMe(id.trim(), phone.trim());
+      const found = await fetchMe({ id: id.trim(), phone: phone.trim() });
       onDone({ id: found.id, phone: readParticipant({ phone }).phone });
     } catch (failure) {
       setError(messageOf(failure));
@@ -374,7 +378,7 @@ function MyRegistration({ saved, info, onForget }: { saved: Saved; info: PublicI
   const [busy, setBusy] = useState(false);
 
   const refresh = useCallback(() => {
-    fetchMe(saved.id, saved.phone)
+    fetchMe(saved)
       .then((next) => {
         setView(next);
         setError('');
@@ -430,18 +434,24 @@ function MyRegistration({ saved, info, onForget }: { saved: Saved; info: PublicI
           <p>
             The desk could not find your payment{view.reason ? `: ${view.reason}` : ''}. Check the transaction ID (UTR) in your UPI app and send it again, or go to a desk.
           </p>
-          <Field label="Correct transaction ID (UTR)">
-            <input value={txn} autoCapitalize="characters" spellCheck={false} onChange={(event) => setTxn(event.target.value)} />
-          </Field>
-          <button className="reg-button" type="button" disabled={busy || !TXN.test(txn.replace(/\s/g, ''))} onClick={() => void act(() => sendMyPayment(saved.id, saved.phone, txn.replace(/\s/g, '')))}>
-            Send the transaction ID
-          </button>
+          {view.canChange && (
+            <Field label="Correct transaction ID (UTR)">
+              <input value={txn} autoCapitalize="characters" spellCheck={false} onChange={(event) => setTxn(event.target.value)} />
+            </Field>
+          )}
+          {view.canChange ? (
+            <button className="reg-button" type="button" disabled={busy || !TXN.test(txn.replace(/\s/g, ''))} onClick={() => void act(() => sendMyPayment(saved, txn.replace(/\s/g, '')))}>
+              Send the transaction ID
+            </button>
+          ) : (
+            <p>Send it from the phone you registered with, or show your payment at a registration desk.</p>
+          )}
         </div>
       )}
 
-      {view?.txn && view.status !== 'rejected' && (
+      {view?.txnEnd && view.status !== 'rejected' && (
         <p className="reg-muted">
-          Entry fee {rupees(view.entryFee)} · transaction ID {view.txn}
+          Entry fee {rupees(view.entryFee)} · transaction ID ending {view.txnEnd}
         </p>
       )}
 
@@ -464,11 +474,12 @@ function MyRegistration({ saved, info, onForget }: { saved: Saved; info: PublicI
               })}
             </ul>
           )}
-          {info && view.status !== 'cancelled' && (adding ? (
+          {!view.canChange && <p className="reg-muted">To add events here, use the phone you registered with. You can always register for an event at its venue.</p>}
+          {info && view.canChange && view.status !== 'cancelled' && (adding ? (
             <>
               <EventPicker info={info} chosen={adding} exclude={view.events.map((item) => item.eventId)} onChange={setAdding} />
               <div className="reg-row">
-                <button className="reg-button" type="button" disabled={busy || !adding.length} onClick={() => void act(() => changeMyEvents(saved.id, saved.phone, adding))}>
+                <button className="reg-button" type="button" disabled={busy || !adding.length} onClick={() => void act(() => changeMyEvents(saved, adding))}>
                   Add {adding.length || ''} event{adding.length === 1 ? '' : 's'}
                 </button>
                 <button className="reg-link" type="button" onClick={() => setAdding(null)}>
