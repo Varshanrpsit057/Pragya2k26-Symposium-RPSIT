@@ -55,7 +55,7 @@ wrong department's page is told which page is theirs.
 | **AI&DS** | Artificial Intelligence and Data Science | https://pragya2k26.online/landing/aids/admin/ | Mrs. S. Priyanka (9025593180) | Mr. Balajimanikandhaan S S (7358213736) | 5 |
 | **IT** | Information Technology | https://pragya2k26.online/landing/it/admin/ | Mrs. A. Santhi (8667845282) | Ms. G. Akshaya (6381761876) | 6 |
 | **ECE** | Electronics and Communication Engineering | https://pragya2k26.online/landing/ece/admin/ | Mrs. S. Apshanaparvin (9943044232) | Mr. N. S. Shamraj (9894183263) | 6 |
-| **CYS** | Computer Science and Engineering (Cyber Security) | https://pragya2k26.online/landing/cys/admin/ | Mr. C. Mahavishu (9629039155) | Ms. R. Kavisri (6374794582) | 6 |
+| **CYBER** | Computer Science and Engineering (Cyber Security) | https://pragya2k26.online/landing/cys/admin/ | Mr. C. Mahavishu (9629039155) | Ms. R. Kavisri (6374794582) | 6 |
 | **EEE** | Electrical and Electronics Engineering | https://pragya2k26.online/landing/eee/admin/ | Mr. M. Dineshkumar (9626132311) | Mr. G. Santhosh (8667685436) | 5 |
 | **MECH** | Mechanical Engineering | https://pragya2k26.online/landing/mech/admin/ | Mr. S. Vijayakumar (9629723720) | Mr. N. Jayanishanth (7200116278) | 6 |
 | **SH** | Science and Humanities | https://pragya2k26.online/landing/sh/admin/ | Dr. K. Saranya (9789158113) | Mr. Shaher (7418119675) | 4 |
@@ -66,8 +66,8 @@ wrong department's page is told which page is theirs.
 ### The home page, the students' page and the events website
 
 pragya2k26.online's home page (`src/landing/Landing.tsx`) is the fest's front door on the PRAGYA sky
-background: the fest's name and date, **Register now** and **My registration ID** (both to
-`/register/`), **Staff sign in** (to `/landing/admin/`), the department staff pages, the three steps
+background: the fest's name and date, **Register now** (to `/register/`) and **My registration ID** (to `/register/?my`: the
+student's registration, by ID and mobile number), **Staff sign in** (to `/landing/admin/`), the department staff pages, the three steps
 for students, the **Notice on the website**, then the PRAGYA footer (Contact Us, Developed by,
 Follow Us, Location) and "Overall coordinated by the Department of Artificial Intelligence and Data
 Science".
@@ -82,14 +82,15 @@ an **Events and route map** button.
 
 1. **The student**, on their own phone, opens https://pragya2k26.online/register/ (or **Register now**
    on the home page): name, mobile number, college (with a searchable list), course, year, email and
-   team name (optional), events (optional: they can register for events at each venue), then pays the
+   team name (optional), then pays the
    **₹100 entry fee by UPI** (a "Pay with a UPI app" button, the UPI ID to copy, and the QR) and types
    the payment's **transaction ID (UTR)**. No staff sign-in, no screenshot.
 2. **They get their ID at once**, large on the screen: **20001, 20002…** (five digits, one series for
    the whole fest, not tied to a department), with: *"Verify your payment at a payment verification
    desk (show this ID), and you can register for events at each event's venue."* The ID stays on the
    phone (it is there whenever they open the page again) and they can see it on any phone with
-   **Already registered?** (ID + mobile number). If the connection drops while registering, what they
+   **My registration ID** / **Already registered?** (ID + mobile number; there it only shows: changes
+   are made on the phone that registered). If the connection drops while registering, what they
    typed is kept; sending again never registers them twice.
 3. **Any desk of any department** opens **Registration desk → Verify payments (n)**: every
    self-registered student waiting, oldest first, with the transaction ID they typed. The desk finds
@@ -311,7 +312,7 @@ downloaded when they were created.
 | AI&DS | `aids-hod` | `aids-admin` | `aids-desk1`, `aids-desk2`, `aids-desk3`, `aids-desk4` |
 | IT | `it-hod` | `it-admin` | `it-desk1`, `it-desk2`, `it-desk3`, `it-desk4` |
 | ECE | `ece-hod` | `ece-admin` | `ece-desk1`, `ece-desk2`, `ece-desk3`, `ece-desk4` |
-| CYS | `cys-hod` | `cys-admin` | `cys-desk1`, `cys-desk2`, `cys-desk3`, `cys-desk4` |
+| CYBER | `cys-hod` | `cys-admin` | `cys-desk1`, `cys-desk2`, `cys-desk3`, `cys-desk4` |
 | EEE | `eee-hod` | `eee-admin` | `eee-desk1`, `eee-desk2`, `eee-desk3`, `eee-desk4` |
 | MECH | `mech-hod` | `mech-admin` | `mech-desk1`, `mech-desk2`, `mech-desk3`, `mech-desk4` |
 | SH | `sh-hod` | `sh-admin` | `sh-desk1`, `sh-desk2`, `sh-desk3`, `sh-desk4` |
@@ -387,7 +388,9 @@ Department page: https://pragya2k26.online/landing/ece/admin/
 | 5 | Tech Escape Room | `ece-tech-escape-room` | https://pragya2k26.online/landing/ece/admin/?event=ece-tech-escape-room | `ece-tech-escape-room-1`, `ece-tech-escape-room-2` |
 | 6 | ECE Hackathon | `ece-ece-hackathon` | https://pragya2k26.online/landing/ece/admin/?event=ece-ece-hackathon | `ece-ece-hackathon-1`, `ece-ece-hackathon-2` |
 
-#### CYS · Computer Science and Engineering (Cyber Security) (6 events)
+#### CYBER · Computer Science and Engineering (Cyber Security) (6 events)
+
+(CYBER's addresses, usernames and event IDs use `cys`.)
 
 Department page: https://pragya2k26.online/landing/cys/admin/
 

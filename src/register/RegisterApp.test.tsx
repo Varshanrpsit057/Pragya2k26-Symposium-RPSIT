@@ -36,6 +36,29 @@ async function fill() {
 }
 
 describe('a student on their phone', () => {
+  it('registers without choosing events (they register for events at each venue)', async () => {
+    const h = setup({ at: TIMES.eventDay });
+    backend(h);
+    render(<RegisterApp />);
+    await screen.findByLabelText('Name with initial');
+    expect(screen.queryByText('Events (optional)')).toBeNull();
+    expect(screen.queryByRole('checkbox')).toBeNull();
+  });
+
+  it('opens straight on "Your registration" from the home page’s My registration ID (/register/?my)', async () => {
+    const h = setup({ at: TIMES.eventDay });
+    backend(h);
+    window.history.pushState({}, '', '/register/?my');
+    try {
+      render(<RegisterApp />);
+      expect(await screen.findByRole('heading', { name: 'Your registration' })).toBeInTheDocument();
+      expect(screen.getByLabelText('Registration ID')).toBeInTheDocument();
+      expect(screen.queryByLabelText('Name with initial')).toBeNull();
+    } finally {
+      window.history.pushState({}, '', '/');
+    }
+  });
+
   it('registers, sees the ID and what to do next at once, and still sees it when the page is opened again', async () => {
     const h = setup({ at: TIMES.eventDay });
     backend(h);
@@ -89,8 +112,7 @@ describe('a student on their phone', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Show my registration' }));
     await waitFor(() => expect(screen.getByText('Divya R')).toBeInTheDocument());
     expect(screen.getByText('20001')).toBeInTheDocument();
-    // Opened with only the ID and mobile number: it shows, but changes are made on the phone that registered.
-    expect(screen.getByText(/To add events here, use the phone you registered with/)).toBeInTheDocument();
+    // Events are registered at each venue: none to choose here.
     expect(screen.queryByRole('button', { name: 'Add events' })).toBeNull();
   });
 });

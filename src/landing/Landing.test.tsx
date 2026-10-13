@@ -8,7 +8,7 @@ describe('the front door (pragya2k26.online)', () => {
     expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent(/Infinite\s*Techfest’26/);
     expect(screen.getByText('17 October 2026', { selector: '.landing-date' })).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Register now' })).toHaveAttribute('href', '/register/');
-    expect(screen.getAllByRole('link', { name: 'My registration ID' })[0]).toHaveAttribute('href', '/register/');
+    for (const link of screen.getAllByRole('link', { name: 'My registration ID' })) expect(link).toHaveAttribute('href', '/register/?my');
     expect(screen.getAllByRole('link', { name: 'Staff sign in' })[0]).toHaveAttribute('href', '/landing/admin/');
   });
 

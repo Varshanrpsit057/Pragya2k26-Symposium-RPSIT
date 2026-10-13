@@ -9,10 +9,12 @@ import './Landing.css';
 export const STAFF_SIGN_IN = '/landing/admin/';
 /** The students' page: register on their phone, then their ID and payment status. */
 export const REGISTER = '/register/';
+/** "My registration ID": the students' page opened on their registration (ID and mobile number). */
+export const MY_ID = '/register/?my';
 
 const FOOTER_LINKS: readonly FooterLink[] = [
   { id: 'register', label: 'Register', href: REGISTER },
-  { id: 'my-id', label: 'My registration ID', href: REGISTER },
+  { id: 'my-id', label: 'My registration ID', href: MY_ID },
   { id: 'staff', label: 'Staff sign in', href: STAFF_SIGN_IN },
 ];
 
@@ -29,6 +31,8 @@ const festDay = site.dates ?? 'the event day';
 // The loop: a lemniscate of Bernoulli across a 600 × 240 box, one station per department.
 const LOOP_W = 600;
 const LOOP_H = 240;
+/** Space above and below the loop for the names at the top and bottom dots. */
+const LOOP_PAD = 38;
 const loopPoint = (t: number) => {
   const a = 270;
   const d = 1 + Math.sin(t) ** 2;
@@ -40,15 +44,45 @@ const LOOP_PATH =
     const { x, y } = loopPoint((index / 120) * Math.PI * 2);
     return `${index ? 'L' : 'M'}${round(x)} ${round(y)}`;
   }).join(' ') + ' Z';
-/** Stations at odd eighths of the loop, so none sits on the crossing in the middle. */
-const STATIONS = departments.slice(0, 8).map((dept, index) => {
-  const { x, y } = loopPoint(((2 * index + 1) * Math.PI) / 8);
-  return { code: deptShort(dept.code), x: round(x), y: round(y), above: y < LOOP_H / 2 };
+/** The coordinating department (AI&DS) sits at the loop's crossing; the others around it. */
+const HUB = 'AIDS';
+/** Where each department sits on the loop (its angle on the curve): three on the left, four on the right. */
+const PLACES: Record<string, number> = {
+  ECE: 0.75 * Math.PI,
+  IT: Math.PI,
+  CYS: 1.25 * Math.PI,
+  MECH: -Math.PI / 3,
+  SH: -Math.PI / 9,
+  CSE: Math.PI / 9,
+  EEE: Math.PI / 3,
+};
+const ringDepartments = departments.filter((dept) => dept.code !== HUB);
+// A department added later (no place set) spreads the whole ring evenly instead.
+const placed = ringDepartments.every((dept) => dept.code in PLACES);
+
+/** The loop's colour at a point (cyan on the left, violet in the middle, orange on the right), lightened for text. */
+const INK = [
+  [69, 227, 255],
+  [140, 108, 255],
+  [255, 138, 76],
+];
+const inkAt = (x: number) => {
+  const f = Math.min(Math.max((x - 30) / 540, 0), 1);
+  const [from, to, k] = f < 0.5 ? [INK[0], INK[1], f * 2] : [INK[1], INK[2], (f - 0.5) * 2];
+  const channel = (i: number) => Math.round((from[i] + (to[i] - from[i]) * k) * 0.55 + 255 * 0.45);
+  return `rgb(${channel(0)} ${channel(1)} ${channel(2)})`;
+};
+
+const STATIONS = ringDepartments.map((dept, index) => {
+  const t = placed ? PLACES[dept.code] : ((2 * index + 1) * Math.PI) / ringDepartments.length;
+  const { x, y } = loopPoint(t);
+  return { code: deptShort(dept.code), x: round(x), y: round(y), above: y <= LOOP_H / 2, ink: inkAt(x) };
 });
+const hub = departments.find((dept) => dept.code === HUB);
 
 function Loop() {
   return (
-    <svg className="landing-loop" viewBox={`0 0 ${LOOP_W} ${LOOP_H}`} aria-hidden="true" focusable="false">
+    <svg className="landing-loop" viewBox={`0 ${-LOOP_PAD} ${LOOP_W} ${LOOP_H + 2 * LOOP_PAD}`} aria-hidden="true" focusable="false">
       <defs>
         <linearGradient id="landing-loop-ink" x1="0" y1="0" x2="1" y2="0">
           <stop offset="0" stopColor="#45e3ff" />
@@ -61,11 +95,21 @@ function Loop() {
       {STATIONS.map((station, index) => (
         <g key={station.code} className="landing-loop__station" style={{ animationDelay: `${1.1 + index * 0.08}s` }}>
           <circle cx={station.x} cy={station.y} r="6" />
-          <text x={station.x} y={station.above ? station.y - 16 : station.y + 28} textAnchor="middle">
+          <text x={station.x} y={station.above ? station.y - 16 : station.y + 33} textAnchor="middle" style={{ fill: station.ink }}>
             {station.code}
           </text>
         </g>
       ))}
+      {hub && (
+        // AI&DS, coordinating the fest, at the crossing in the middle.
+        <g className="landing-loop__station landing-loop__hub" style={{ animationDelay: `${1.1 + STATIONS.length * 0.08}s` }}>
+          <circle className="landing-loop__hub-ring" cx={LOOP_W / 2} cy={LOOP_H / 2} r="17" />
+          <circle cx={LOOP_W / 2} cy={LOOP_H / 2} r="9" />
+          <text x={LOOP_W / 2} y={LOOP_H / 2 + 45} textAnchor="middle">
+            {deptShort(hub.code)}
+          </text>
+        </g>
+      )}
     </svg>
   );
 }
@@ -107,7 +151,7 @@ export function Landing() {
             <a className="landing-button" href={REGISTER}>
               Register now
             </a>
-            <a className="landing-button landing-button--ghost" href={REGISTER}>
+            <a className="landing-button landing-button--ghost" href={MY_ID}>
               My registration ID
             </a>
             {EVENTS_SITE_URL && (

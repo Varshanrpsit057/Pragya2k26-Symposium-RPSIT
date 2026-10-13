@@ -70,5 +70,8 @@ describe('AI&DS', () => {
     expect(showId('CSE-0007')).toBe('CSE-0007');
     expect(showId('20017')).toBe('20017');
     for (const typed of ['AI&DS-7', 'ai&ds 0007', 'AI & DS-7', 'AIDS-0007', 'aids 7']) expect(normaliseFestId(typed)).toBe('AIDS-0007');
+    expect(deptShort('CYS')).toBe('CYBER');
+    expect(showId('CYS-0012')).toBe('CYBER-0012');
+    for (const typed of ['CYBER-12', 'cyber 0012', 'CYS-12']) expect(normaliseFestId(typed)).toBe('CYS-0012');
   });
 });
