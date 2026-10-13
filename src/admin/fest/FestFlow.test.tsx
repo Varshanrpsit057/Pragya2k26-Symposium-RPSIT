@@ -313,3 +313,44 @@ describe('Website controls', () => {
     expect((await h.call('GET', '/api/fest/payment')).body.qr).toBeNull();
   });
 });
+
+describe('the event window and the department rule', () => {
+  it('finds only the event’s department students, or every department’s once Website controls opens events to everyone', async () => {
+    const h = setup({ at: TIMES.eventDay });
+    const student = (dept: string, n: number) => ({ submissionId: `rule-student-key-0000000${n}`, dept, participant: { name: `Student ${'AB'[n]}`, phone: `977710000${n}`, college: 'Sona', branch: 'B.E. CSE', year: '2nd Year', email: `r${n}@example.com` }, events: [] });
+    await h.call('POST', '/api/fest/register', student('AIDS', 0), { ip: '10.0.0.8' });
+    await h.call('POST', '/api/fest/register', student('CSE', 1), { ip: '10.0.0.8' });
+    const coordinator = await h.staff('COORDINATOR', ['cse-hackathon'], 'cse-hackathon', { department: 'CSE' });
+    backend(h);
+    signIn(coordinator.token);
+    const first = render(<AdminApp />);
+    fireEvent.change(await screen.findByLabelText('Find a student'), { target: { value: 'student' } });
+    expect(await screen.findByRole('heading', { name: 'CSE students not in this event yet' })).toBeInTheDocument();
+    expect(screen.getByText('CSE-2001')).toBeInTheDocument();
+    expect(screen.queryByText('AI&DS-2001')).toBeNull();
+    first.unmount();
+
+    await h.asOwner('POST', '/api/admin/portal', { portal: { ownDepartmentEvents: false } });
+    render(<AdminApp />);
+    fireEvent.change(await screen.findByLabelText('Find a student'), { target: { value: 'student' } });
+    expect(await screen.findByRole('heading', { name: 'Students not in this event yet (any department)' }, { timeout: 5000 })).toBeInTheDocument();
+    expect(await screen.findByText('AI&DS-2001')).toBeInTheDocument();
+  });
+});
+
+describe('the load test button', () => {
+  it('adds up to 1,000 mock participants, and adds nothing more once there are 1,000', async () => {
+    const h = setup({ at: TIMES.eventDay });
+    const token = await h.login();
+    backend(h);
+    signIn(token);
+    render(<AdminApp />);
+    fireEvent.click(within(await screen.findByRole('navigation', { name: 'Sections' })).getByRole('button', { name: 'Testing' }));
+    const card = await screen.findByRole('region', { name: 'Load test' });
+    fireEvent.click(within(card).getByRole('button', { name: 'Add 1,000 mock participants' }));
+    expect(await within(card).findByText(/Added 1000\. 1000 test participants now/, undefined, { timeout: 30_000 })).toBeInTheDocument();
+    fireEvent.click(within(card).getByRole('button', { name: 'Add 1,000 mock participants' }));
+    expect(await within(card).findByText(/Nothing added: 1000 test participants now/, undefined, { timeout: 10_000 })).toBeInTheDocument();
+    expect((await h.asOwner('POST', '/api/admin/fest/sync', {})).body.registrations).toHaveLength(1000);
+  });
+});

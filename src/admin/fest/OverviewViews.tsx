@@ -9,7 +9,7 @@
  * - Colleges: students per college and the 1st, 2nd and 3rd places each college won
  */
 import { useMemo, useState } from 'react';
-import { canJoin, collegeSummary, deptShort, eventLabel, eventOf, feePaid, isActive, participantProblems, readParticipant, rupees, showId, totalsOf, type CollegeRow, type FestCatalog, type FestEvent, type FestParticipant, type FestRegistration } from '../../lib/fest';
+import { collegeSummary, deptShort, eventLabel, eventOf, feePaid, isActive, participantProblems, readParticipant, rupees, showId, totalsOf, type CollegeRow, type FestCatalog, type FestEvent, type FestParticipant, type FestRegistration } from '../../lib/fest';
 import { hasPermission } from '../../lib/staff';
 import { Badge, when } from '../ui';
 import { filterNote, saveTable, today } from './excel';
@@ -117,7 +117,7 @@ export function FestOverview() {
             </thead>
             <tbody>
               {events.map((event) => {
-                const part = totalsOf(all.filter((item) => canJoin(item, event)), event.id);
+                const part = totalsOf(all, event.id);
                 const result = results.get(event.id);
                 return (
                   <tr key={event.id} className="fest-row-link" onClick={() => setFilters({ ...filters, dept: event.dept, eventId: event.id })}>
@@ -660,7 +660,7 @@ export function FestResults() {
         empty="No events match these filters."
         render={(event) => {
           const result = results.get(event.id);
-          const part = totalsOf([...registrations.values()].filter((item) => canJoin(item, event)), event.id);
+          const part = totalsOf(registrations.values(), event.id);
           return (
             <section key={event.id} className="adm-card adm-pad fest-result">
               <header className="adm-toolbar">

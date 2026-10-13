@@ -50,6 +50,8 @@ export function EventWindow() {
 
 function EventPanel({ event }: { event: FestEvent }) {
   const { registrations, results, session, change, switches } = useFest();
+  // Students of the event's department only, unless Website controls opened events to every department.
+  const ownOnly = switches.ownDepartmentEvents;
   const [query, setQuery] = useState('');
   const [paying, setPaying] = useState<string | null>(null);
   const [payment, setPayment] = useState<PaymentDraft>(NO_PAYMENT);
@@ -58,7 +60,7 @@ function EventPanel({ event }: { event: FestEvent }) {
   const entryOff = !switches.eventEntry && session.role !== 'ADMIN';
   const locked = Boolean(result?.submitted) || entryOff;
   // The department's own students, and anyone who registered themselves (they may join any event).
-  const inDept = useMemo(() => [...registrations.values()].filter((item) => canJoin(item, event) && isActive(item)), [registrations, event]);
+  const inDept = useMemo(() => [...registrations.values()].filter((item) => canJoin(item, event, ownOnly) && isActive(item)), [registrations, event, ownOnly]);
   const registered = useMemo(() => inDept.filter((item) => entryOf(item, event.id)).sort((a, b) => a.id.localeCompare(b.id)), [inDept, event.id]);
   const totals = totalsOf(registered, event.id);
   const q = query.trim();
@@ -153,7 +155,7 @@ function EventPanel({ event }: { event: FestEvent }) {
         />
         {others.length > 0 && !locked && (
           <>
-            <h3 className="adm-h3">In the department but not in this event</h3>
+            <h3 className="adm-h3">{ownOnly ? `${deptShort(event.dept)} students not in this event yet` : 'Students not in this event yet (any department)'}</h3>
             <ShortList
               items={others}
               empty=""
@@ -167,7 +169,13 @@ function EventPanel({ event }: { event: FestEvent }) {
             />
           </>
         )}
-        {q.length >= 2 && !shown.length && !others.length && <p className="adm-muted">Not registered in {deptShort(event.dept)}: send them to a registration desk first.</p>}
+        {q.length >= 2 && !shown.length && !others.length && (
+          <p className="adm-muted">
+            {ownOnly
+              ? `Not registered under ${deptShort(event.dept)}: only ${deptShort(event.dept)} students take part in its events. Students of another department register at that department’s events.`
+              : 'Not registered yet: send them to a registration desk first.'}
+          </p>
+        )}
       </section>
 
       <Winners event={event} registered={registered} />
