@@ -3,11 +3,13 @@ import { describe, expect, it } from 'vitest';
 import { Landing } from './Landing';
 
 describe('the front door (pragya2k26.online)', () => {
-  it('names the fest and its day, and takes staff to sign in', () => {
+  it('names the fest and its day, sends students to register and staff to sign in', () => {
     render(<Landing />);
     expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent(/Infinite\s*Techfest’26/);
     expect(screen.getByText('17 October 2026', { selector: '.landing-date' })).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: 'Staff sign in' })).toHaveAttribute('href', '/landing/admin/');
+    expect(screen.getByRole('link', { name: 'Register now' })).toHaveAttribute('href', '/register/');
+    expect(screen.getAllByRole('link', { name: 'My registration ID' })[0]).toHaveAttribute('href', '/register/');
+    expect(screen.getAllByRole('link', { name: 'Staff sign in' })[0]).toHaveAttribute('href', '/landing/admin/');
   });
 
   it('lists every department’s staff page', () => {
@@ -18,9 +20,21 @@ describe('the front door (pragya2k26.online)', () => {
     expect(within(list).getByRole('link', { name: /MECH\s*Mechanical Engineering/ })).toBeInTheDocument();
   });
 
-  it('tells students where to register, and has no events button until the events website is set', () => {
+  it('tells students the three steps: register on the phone, verify at a desk, events at the venue', () => {
     render(<Landing />);
-    expect(screen.getByRole('region', { name: 'Taking part?' })).toHaveTextContent('Register at your department’s desk on campus on 17 October 2026.');
+    const steps = screen.getByRole('region', { name: 'Taking part?' });
+    expect(steps).toHaveTextContent('Register on your phone');
+    expect(steps).toHaveTextContent('Verify your payment at any registration desk');
+    expect(steps).toHaveTextContent('Register for events at each event’s venue, in any department');
     expect(screen.queryByRole('link', { name: 'Events and route map' })).toBeNull();
+  });
+
+  it('ends with PRAGYA’s contact, location and Dev Crew, coordinated by the AI&DS department', () => {
+    render(<Landing />);
+    expect(screen.getByRole('heading', { name: 'Developed by' })).toBeInTheDocument();
+    for (const name of ['Mohan Prabu K', 'Varshan C', 'Barath S', 'Sivakasi N']) expect(screen.getByText(name)).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Location' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Follow Us' })).toBeInTheDocument();
+    expect(screen.getByText(/Overall coordinated by the/)).toHaveTextContent('Overall coordinated by the Department of Artificial Intelligence and Data Science');
   });
 });

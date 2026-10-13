@@ -9,7 +9,7 @@ import { EventWindow, linkedEvent } from './fest/EventWindow';
 import { FestProvider, useFest } from './fest/FestData';
 import { SyncBar } from './fest/festUi';
 import { ImportView } from './fest/ImportView';
-import { FestOverview, FestRegistrations, FestResults } from './fest/OverviewViews';
+import { FestColleges, FestOverview, FestRegistrations, FestResults } from './fest/OverviewViews';
 import { HelpDialog, repliesSeenAt, type HelpContext } from './HelpDialog';
 import { HelpPanel } from './HelpPanel';
 import { RegistrationWindowPanel } from './RegistrationWindowPanel';
@@ -19,7 +19,7 @@ import { SystemPanel } from './SystemPanel';
 import { TestingPanel } from './TestingPanel';
 import { Badge, ErrorNote, HELP_EVENT, messageOf, useLiveData, when } from './ui';
 
-type TabId = 'overview' | 'registrations' | 'results' | 'desk' | 'event' | 'import' | 'catalog' | 'window' | 'help' | 'system' | 'staff' | 'testing' | 'roles';
+type TabId = 'overview' | 'registrations' | 'results' | 'colleges' | 'desk' | 'event' | 'import' | 'catalog' | 'window' | 'help' | 'system' | 'staff' | 'testing' | 'roles';
 
 /** Roles that watch (every department, or their own) rather than work at a desk or an event. */
 const watches = (session: SessionInfo) => can(session, 'fest.viewAll') || session.role === 'HOD' || session.role === 'DEPT_ADMIN';
@@ -29,6 +29,7 @@ const TABS: { id: TabId; label: (session: SessionInfo) => string; show: (session
   { id: 'overview', label: () => 'Overview', show: watches },
   { id: 'registrations', label: () => 'Registrations', show: watches },
   { id: 'results', label: () => 'Results', show: watches },
+  { id: 'colleges', label: () => 'Colleges', show: watches },
   { id: 'desk', label: (session) => (session.role === 'DESK' ? 'Registration desk' : 'Register'), show: (session) => can(session, 'fest.register') },
   { id: 'event', label: (session) => (session.role === 'COORDINATOR' ? 'My events' : 'Event windows'), show: (session) => can(session, 'fest.event') },
   { id: 'import', label: () => 'Online & paper', show: (session) => can(session, 'fest.import') },
@@ -338,6 +339,7 @@ function ShellBody({ token, session, onSession, onSignOut, onSignedOut }: ShellP
       {current === 'overview' && <FestOverview />}
       {current === 'registrations' && <FestRegistrations />}
       {current === 'results' && <FestResults />}
+      {current === 'colleges' && <FestColleges />}
       {current === 'desk' && <DeskView />}
       {current === 'event' && <EventWindow />}
       {current === 'import' && <ImportView token={token} onSignedOut={onSignedOut} />}

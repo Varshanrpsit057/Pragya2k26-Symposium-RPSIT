@@ -1,6 +1,6 @@
-import { act, fireEvent, render, renderHook, screen, waitFor, within } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { useRegistrationPhase } from '../hooks/useRegistrationPhase';
+import { registrationPhase } from '../lib/schedule';
 import { currentSchedule, liveScheduleForTests, refreshSchedule } from '../lib/liveSchedule';
 import { ROLE_PERMISSIONS, type SessionInfo, type StaffRole } from '../lib/staff';
 import { CLEAR_PHRASE, type TestingState } from '../lib/testTools';
@@ -132,14 +132,13 @@ describe('the website follows the timeline the API gives', () => {
     const now = Date.parse('2026-10-12T04:00:00.000Z');
     vi.spyOn(Date, 'now').mockReturnValue(now);
     const answer = (schedule: object) => vi.fn(async () => new Response(JSON.stringify({ success: true, schedule }), { headers: { 'Content-Type': 'application/json' } }));
-    const { result } = renderHook(() => useRegistrationPhase());
-    await waitFor(() => expect(result.current).toBe('online'));
+    const phase = () => registrationPhase(currentSchedule(), now);
     await act(() => refreshSchedule(answer({ onlineClosesAt: '2026-10-12T09:00:00', onsiteOpensAt: '2026-10-12T09:01:00', onsiteClosesAt: '2026-10-12T18:00:00' })));
     expect(currentSchedule().onsiteOpensAt).toBe('2026-10-12T09:01:00');
-    await waitFor(() => expect(result.current).toBe('onsite'));
+    expect(phase()).toBe('onsite');
     // Back to the real schedule.
     await act(() => refreshSchedule(answer({ onlineClosesAt: '2026-10-16T23:59:00', onsiteOpensAt: '2026-10-17T00:00:00', onsiteClosesAt: '2026-10-18T00:00:00' })));
-    await waitFor(() => expect(result.current).toBe('online'));
+    expect(phase()).toBe('online');
     // A broken answer changes nothing.
     await act(() => refreshSchedule(answer({ onlineClosesAt: 42 })));
     expect(currentSchedule().onsiteOpensAt).toBe('2026-10-17T00:00:00');

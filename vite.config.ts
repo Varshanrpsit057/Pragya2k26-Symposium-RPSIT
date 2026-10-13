@@ -27,7 +27,7 @@ const devProxy = process.env.DEV_API_PROXY ? { '/api': { target: process.env.DEV
  * preview, as Amplify Hosting does for a folder. The site links to the student page with the
  * slash already; it never mentions the admin path.
  */
-const FOLDERS = ['/landing/admin', '/landing/student'];
+const FOLDERS = ['/landing/admin', '/landing/student', '/register'];
 const adminFolderRedirect = (): Plugin => {
   const redirect: Connect.NextHandleFunction = (request, response, next) => {
     const [path, query] = (request.url ?? '').split('?');
@@ -60,6 +60,8 @@ export default defineConfig({
         main: resolve(import.meta.dirname, 'index.html'),
         admin: resolve(import.meta.dirname, 'landing/admin/index.html'),
         student: resolve(import.meta.dirname, 'landing/student/index.html'),
+        // The students' fest page: register on their phone, then their ID and payment status.
+        register: resolve(import.meta.dirname, 'register/index.html'),
         // Each department's own address (the same dashboard): /landing/cse/admin/ and so on.
         ...Object.fromEntries(FEST_PAGES.map((code) => [`admin-${code}`, resolve(import.meta.dirname, `landing/${code}/admin/index.html`)])),
       },

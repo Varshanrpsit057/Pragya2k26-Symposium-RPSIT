@@ -162,6 +162,13 @@ const ROUTES: { method: HttpMethod; path: string; rate: number; burst: number }[
   { method: HttpMethod.POST, path: '/api/student/pass', rate: 15, burst: 45 },
   { method: HttpMethod.POST, path: '/api/student/upload', rate: 15, burst: 45 },
   { method: HttpMethod.POST, path: '/api/student/proof', rate: 15, burst: 45 },
+  // The fest's students registering on their own phones (no sign-in): the page's details, the
+  // registration (a morning rush of hundreds), and their own page (status, events, transaction ID).
+  { method: HttpMethod.GET, path: '/api/fest/info', rate: 60, burst: 200 },
+  { method: HttpMethod.POST, path: '/api/fest/register', rate: 40, burst: 120 },
+  { method: HttpMethod.POST, path: '/api/fest/me', rate: 40, burst: 120 },
+  { method: HttpMethod.POST, path: '/api/fest/me/events', rate: 20, burst: 60 },
+  { method: HttpMethod.POST, path: '/api/fest/me/payment', rate: 10, burst: 30 },
   // Contact admin (works signed out too) and a staff member's own requests with the answers.
   { method: HttpMethod.POST, path: '/api/help', rate: 5, burst: 15 },
   { method: HttpMethod.GET, path: '/api/help/mine', rate: 10, burst: 30 },

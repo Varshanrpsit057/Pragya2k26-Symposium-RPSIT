@@ -1,11 +1,14 @@
 /**
- * A registration desk on a phone: register walk-ins (works with no signal), find and check in
+ * A registration desk on a phone: verify the students who registered themselves (their UPI
+ * transaction ID checked by hand), register walk-ins (works with no signal), find and check in
  * students who registered online, and the desk's own totals for handing over the money.
  */
 import { useMemo, useState, type FormEvent } from 'react';
 import { NEARBY_COLLEGES, OTHER_COLLEGES } from '../../content/colleges';
 import {
+  OPEN_DEPT,
   YEARS,
+  awaitingCheck,
   eventLabel,
   eventsOf,
   isActive,
@@ -21,7 +24,7 @@ import {
   type FestRegistration,
 } from '../../lib/fest';
 import { hasPermission } from '../../lib/staff';
-import { Badge } from '../ui';
+import { Badge, when } from '../ui';
 import { useFest } from './FestData';
 import { NO_PAYMENT, PaymentChoice, RegistrationCard, ShortList, Stat, matches, paymentBody, paymentReady, stampNow, type PaymentDraft } from './festUi';
 
@@ -55,7 +58,9 @@ export function DeptPicker({ value, onChange, label = 'Department' }: { value: s
 export function DeskView() {
   const { session } = useFest();
   const [dept, setDept, canPick] = useWorkDept();
-  const [tab, setTab] = useState<'register' | 'find' | 'totals'>('register');
+  const { registrations } = useFest();
+  const [tab, setTab] = useState<'verify' | 'register' | 'find' | 'totals'>('verify');
+  const waiting = useMemo(() => [...registrations.values()].filter(awaitingCheck).length, [registrations]);
   return (
     <main className="adm-page fest-desk">
       {canPick && <DeptPicker value={dept} onChange={setDept} />}
@@ -66,6 +71,7 @@ export function DeskView() {
           <nav className="fest-tabs" aria-label="Desk">
             {(
               [
+                ['verify', waiting ? `Verify payments (${waiting})` : 'Verify payments'],
                 ['register', 'Register'],
                 ['find', 'Find & check in'],
                 ['totals', session.deskNumber ? `Desk ${session.deskNumber} totals` : 'My totals'],
@@ -76,6 +82,7 @@ export function DeskView() {
               </button>
             ))}
           </nav>
+          {tab === 'verify' && <VerifyPayments />}
           {tab === 'register' && <RegisterForm dept={dept} />}
           {tab === 'find' && <FindAndCheckIn dept={dept} />}
           {tab === 'totals' && <DeskTotals dept={dept} />}
@@ -99,7 +106,7 @@ export function RegisterForm({ dept, paper = false }: { dept: string; paper?: bo
   const participant = readParticipant(form);
   const problems = participantProblems(participant);
   const phone = tidyPhone(form.phone);
-  const already = phone.length === 10 ? [...registrations.values()].find((item) => item.dept === dept && item.phone === phone && !item.deleted) : undefined;
+  const already = phone.length === 10 ? [...registrations.values()].find((item) => (item.dept === dept || item.dept === OPEN_DEPT) && item.phone === phone && !item.deleted) : undefined;
   const teamAllowed = events.some((id) => (deptEvents.find((event) => event.id === id)?.teamMax ?? 1) > 1);
   const left = paper ? 1 : idsLeft(dept);
   const slip = normaliseFestId(slipId);
@@ -252,7 +259,10 @@ function FindAndCheckIn({ dept }: { dept: string }) {
   const [adding, setAdding] = useState<string | null>(null);
   const canEdit = hasPermission(session.role, 'fest.edit');
   const found = useMemo(
-    () => (query.trim().length < 2 ? [] : [...registrations.values()].filter((item) => item.dept === dept && !item.deleted && matches(item, query)).sort((a, b) => a.id.localeCompare(b.id))),
+    () =>
+      query.trim().length < 2
+        ? []
+        : [...registrations.values()].filter((item) => (item.dept === dept || item.dept === OPEN_DEPT) && !item.deleted && matches(item, query)).sort((a, b) => a.id.localeCompare(b.id)),
     [registrations, dept, query],
   );
   if (!catalog) return null;
@@ -289,12 +299,13 @@ function FindAndCheckIn({ dept }: { dept: string }) {
           empty="Nobody matches. Check the spelling, or register them in Register."
           render={(registration) => (
             <RegistrationCard key={registration.id} registration={registration}>
+              {isActive(registration) && registration.entry.claim && registration.entry.status === 'DUE' && <VerifyBox registration={registration} />}
               {isActive(registration) && registration.source === 'ONLINE' && !registration.checkedIn && registration.entry.status === 'PAID' && (
                 <button className="adm-button adm-button--approve" type="button" onClick={() => checkIn(registration, false)}>
                   Check in (paid online)
                 </button>
               )}
-              {isActive(registration) && registration.entry.status === 'DUE' && paying !== registration.id && (
+              {isActive(registration) && registration.entry.status === 'DUE' && !registration.entry.claim && paying !== registration.id && (
                 <button className="adm-button adm-button--primary" type="button" onClick={() => setPaying(registration.id)}>
                   Collect {rupees(catalog.entryFee)} and check in
                 </button>
@@ -312,7 +323,7 @@ function FindAndCheckIn({ dept }: { dept: string }) {
                   </span>
                 </div>
               )}
-              {canEdit && isActive(registration) && (adding === registration.id ? (
+              {canEdit && isActive(registration) && registration.dept !== OPEN_DEPT && (adding === registration.id ? (
                 <span className="adm-inline adm-inline--wrap">
                   {deptEvents
                     .filter((event) => !registration.events.some((entry) => entry.eventId === event.id))
@@ -349,17 +360,108 @@ function FindAndCheckIn({ dept }: { dept: string }) {
   );
 }
 
+/**
+ * Students who registered themselves and typed their UPI transaction ID: the desk finds each
+ * payment in the receiving account by that ID and amount, then verifies it (or says it was not found).
+ */
+function VerifyPayments() {
+  const { registrations } = useFest();
+  const [query, setQuery] = useState('');
+  const waiting = useMemo(() => [...registrations.values()].filter(awaitingCheck).sort((a, b) => a.created.at.localeCompare(b.created.at)), [registrations]);
+  const shown = query.trim() ? waiting.filter((item) => matches(item, query)) : waiting;
+  return (
+    <section className="adm-card adm-pad">
+      <h2 className="adm-h2">Payments to check ({waiting.length})</h2>
+      <p className="adm-muted">
+        Students who registered on their phone. Find each payment in the account receiving the money by its transaction ID and amount, then verify it. Oldest first.
+      </p>
+      <label className="adm-field">
+        <span>Find</span>
+        <input type="search" value={query} placeholder="ID (20001…), name, phone or transaction ID" onChange={(event) => setQuery(event.target.value)} />
+      </label>
+      <ShortList items={shown} empty={waiting.length ? 'Nobody matches.' : 'No payments waiting. New ones appear here by themselves.'} render={(registration) => (
+        <RegistrationCard key={registration.id} registration={registration}>
+          <VerifyBox registration={registration} />
+        </RegistrationCard>
+      )} />
+    </section>
+  );
+}
+
+/** The transaction ID the student typed, with Verify (the money is there) and Not found. */
+function VerifyBox({ registration }: { registration: FestRegistration }) {
+  const { session, change } = useFest();
+  const claim = registration.entry.claim!;
+  const [txn, setTxn] = useState(claim.txn);
+  const [seen, setSeen] = useState(false);
+  const [rejecting, setRejecting] = useState(false);
+  const [reason, setReason] = useState('Not received');
+  const path = `/api/admin/fest/registrations/${registration.id}` as const;
+  const verify = () => {
+    const stamp = stampNow(session.username);
+    const desk = session.deskNumber ?? undefined;
+    change(registration.id, path, { action: 'verify', txn: txn.replace(/\s/g, ''), confirmed: true }, `Verify ${registration.id}`, (current) => ({
+      ...current,
+      entry: { status: 'PAID', claim: current.entry.claim, payment: { method: 'UPI', amount: claim.amount, txn: txn.replace(/\s/g, ''), ...stamp, ...(desk && { desk }) } },
+      checkedIn: current.checkedIn ?? { ...stamp, ...(desk && { desk }) },
+    }));
+  };
+  const reject = () => {
+    const stamp = stampNow(session.username);
+    change(registration.id, path, { action: 'reject', reason: reason.trim() }, `Payment not found · ${registration.id}`, (current) => ({ ...current, entry: { ...current.entry, rejected: { ...stamp, reason: reason.trim() } } }));
+    setRejecting(false);
+  };
+  return (
+    <div className="fest-verify">
+      <p className="fest-verify__claim">
+        {rupees(claim.amount)} by UPI · transaction ID <strong className="fest-verify__txn">{claim.txn}</strong> · {when(claim.at)}
+      </p>
+      {registration.entry.rejected && <p className="adm-field__error">Marked not found: {registration.entry.rejected.reason}. They may have sent a new ID.</p>}
+      <label className="adm-field">
+        <span>Transaction ID as it appears in the payment (correct a typo here)</span>
+        <input value={txn} inputMode="text" autoCapitalize="characters" onChange={(event) => setTxn(event.target.value)} />
+      </label>
+      <label className="adm-check">
+        <input type="checkbox" checked={seen} onChange={(event) => setSeen(event.target.checked)} />
+        <span>I have seen {rupees(claim.amount)} received with this transaction ID.</span>
+      </label>
+      {rejecting ? (
+        <span className="adm-inline adm-inline--wrap">
+          <input className="fest-verify__reason" value={reason} aria-label="What is wrong" onChange={(event) => setReason(event.target.value)} />
+          <button className="adm-button adm-button--small adm-button--danger-outline" type="button" disabled={reason.trim().length < 3} onClick={reject}>
+            Mark not found
+          </button>
+          <button className="adm-button adm-button--small" type="button" onClick={() => setRejecting(false)}>
+            Cancel
+          </button>
+        </span>
+      ) : (
+        <span className="adm-inline adm-inline--wrap">
+          <button className="adm-button adm-button--approve" type="button" disabled={!seen || txn.replace(/\s/g, '').length < 6} onClick={verify}>
+            Verify {registration.id}
+          </button>
+          <button className="adm-button adm-button--small" type="button" onClick={() => setRejecting(true)}>
+            Not found…
+          </button>
+        </span>
+      )}
+    </div>
+  );
+}
+
 function DeskTotals({ dept }: { dept: string }) {
   const { registrations, session, catalog } = useFest();
-  const mine = useMemo(() => [...registrations.values()].filter((item) => item.dept === dept && isActive(item)), [registrations, dept]);
+  const mine = useMemo(() => [...registrations.values()].filter((item) => (item.dept === dept || item.dept === OPEN_DEPT) && isActive(item)), [registrations, dept]);
   const me = session.username;
   let cash = 0;
   let upi = 0;
   let made = 0;
   let checkIns = 0;
+  let verified = 0;
   for (const registration of mine) {
     if (registration.created.by === me && registration.source !== 'ONLINE') made += 1;
-    if (registration.checkedIn?.by === me) checkIns += 1;
+    if (registration.checkedIn?.by === me && registration.source === 'ONLINE') checkIns += 1;
+    if (registration.source === 'SELF' && registration.entry.payment?.by === me) verified += 1;
     const payment = registration.entry.payment;
     if (payment && payment.by === me && !payment.voided) {
       if (payment.method === 'CASH') cash += payment.amount;
@@ -371,6 +473,7 @@ function DeskTotals({ dept }: { dept: string }) {
     <section className="adm-card adm-pad">
       <div className="fest-stats">
         <Stat label="Registered by you" value={made} />
+        <Stat label="Payments you verified" value={verified} />
         <Stat label="Online students checked in" value={checkIns} />
         <Stat label="Cash collected" value={rupees(cash)} />
         <Stat label="UPI collected" value={rupees(upi)} />
@@ -380,7 +483,7 @@ function DeskTotals({ dept }: { dept: string }) {
         {upi ? (
           <>
             {' '}
-            and check <strong>{rupees(upi)}</strong> of UPI payments with the department admin
+            (<strong>{rupees(upi)}</strong> came by UPI: already in the account)
           </>
         ) : null}
         .

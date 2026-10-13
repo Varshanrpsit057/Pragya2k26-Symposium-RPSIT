@@ -6,9 +6,13 @@
  * - Overview: totals, then by department, by event (with venue and time) and by desk
  * - Registrations: the filtered list, each with its details and the corrections a role may make
  * - Results: every event's winners as submitted, reopened only by the overall coordinator
+ * - Colleges: students per college and the 1st, 2nd and 3rd places each college won
  */
 import { useMemo, useState } from 'react';
 import {
+  OPEN_DEPT,
+  canJoin,
+  collegeSummary,
   eventLabel,
   eventOf,
   feePaid,
@@ -18,6 +22,7 @@ import {
   rupees,
   toCsv,
   totalsOf,
+  type CollegeRow,
   type FestCatalog,
   type FestEvent,
   type FestParticipant,
@@ -29,7 +34,7 @@ import { ordinal } from './EventWindow';
 import { useFest } from './FestData';
 import { FilterBar, NO_PAYMENT, PaymentChoice, ShortList, Stat, applyFilters, deptName, paymentBody, paymentReady, stampNow, type PaymentDraft } from './festUi';
 
-const sourceLabel = { DESK: 'Desk', ONLINE: 'Online', PAPER: 'Paper' } as const;
+const sourceLabel = { DESK: 'Desk', ONLINE: 'Online', PAPER: 'Paper', SELF: 'Own phone' } as const;
 const today = () => new Date().toISOString().slice(0, 10);
 
 function useFiltered() {
@@ -57,7 +62,8 @@ export function FestOverview() {
       <section className="adm-card adm-pad">
         <FilterBar showDept={viewAll} />
         <div className="fest-stats">
-          <Stat label="Registered" value={totals.registered} sub={`${totals.desk} desk · ${totals.online} online${totals.paper ? ` · ${totals.paper} paper` : ''}`} />
+          <Stat label="Registered" value={totals.registered} sub={`${totals.self} own phone · ${totals.desk} desk · ${totals.online} online${totals.paper ? ` · ${totals.paper} paper` : ''}`} />
+          {totals.awaiting > 0 && <Stat label="Payments to check" value={totals.awaiting} sub="Self-registered, waiting for a desk" />}
           <Stat label="On campus" value={totals.checkedIn} sub={totals.online ? `${totals.online - (totals.checkedIn - totals.desk - totals.paper)} online not arrived` : undefined} />
           <Stat label="Entry fees" value={rupees(totals.entryCash + totals.entryUpi + totals.entryOnline)} sub={`${rupees(totals.entryCash)} cash · ${rupees(totals.entryUpi)} UPI · ${rupees(totals.entryOnline)} online`} />
           <Stat label="Event fees" value={rupees(totals.feeCash + totals.feeUpi)} sub={`${totals.feesPaid} paid of ${totals.eventEntries} entries`} />
@@ -82,8 +88,9 @@ export function FestOverview() {
                 </tr>
               </thead>
               <tbody>
-                {catalog.departments.map((dept) => {
-                  const part = totalsOf(applyFilters(all, { ...filters, dept: dept.code }, catalog));
+                {[...catalog.departments, { code: OPEN_DEPT, name: 'Self-registered (any department)' }].map((dept) => {
+                  // Each department's own registrations (self-registered students have their own row).
+                  const part = totalsOf(applyFilters(all.filter((item) => item.dept === dept.code), { ...filters, dept: '' }, catalog));
                   const deptEvents = catalog.events.filter((event) => event.dept === dept.code && event.active);
                   const submitted = deptEvents.filter((event) => results.get(event.id)?.submitted).length;
                   return (
@@ -127,7 +134,7 @@ export function FestOverview() {
             </thead>
             <tbody>
               {events.map((event) => {
-                const part = totalsOf(all.filter((item) => item.dept === event.dept), event.id);
+                const part = totalsOf(all.filter((item) => canJoin(item, event)), event.id);
                 const result = results.get(event.id);
                 return (
                   <tr key={event.id} className="fest-row-link" onClick={() => setFilters({ ...filters, dept: event.dept, eventId: event.id })}>
@@ -532,6 +539,92 @@ function RegistrationDetail({ id, onClose }: { id: string; onClose: () => void }
   );
 }
 
+// ------------------------------------------------------------------------------------------ Colleges
+
+const COLLEGE_COLUMNS: { key: keyof CollegeRow; label: string }[] = [
+  { key: 'name', label: 'College' },
+  { key: 'students', label: 'Students' },
+  { key: 'first', label: '1st' },
+  { key: 'second', label: '2nd' },
+  { key: 'third', label: '3rd' },
+  { key: 'places', label: 'Places won' },
+];
+
+/** College-wise: how many students each college sent, and how many 1st, 2nd and 3rd places they won. */
+export function FestColleges() {
+  const { catalog, results, filters, setFilters } = useFest();
+  const { list, viewAll } = useFiltered();
+  const [sort, setSort] = useState<{ key: keyof CollegeRow; down: boolean }>({ key: 'places', down: true });
+  const rows = useMemo(() => {
+    // Places count for the events the filters show (all events when none is chosen).
+    const shown = catalog ? new Set(catalog.events.filter((event) => (!filters.dept || filters.dept === OPEN_DEPT || event.dept === filters.dept) && (!filters.eventId || event.id === filters.eventId)).map((event) => event.id)) : new Set<string>();
+    const summary = collegeSummary(list, [...results.values()].filter((result) => shown.has(result.eventId)));
+    const { key, down } = sort;
+    return [...summary].sort((a, b) => {
+      const order = typeof a[key] === 'number' ? (a[key] as number) - (b[key] as number) : String(a[key]).localeCompare(String(b[key]));
+      return (down ? -order : order) || a.name.localeCompare(b.name);
+    });
+  }, [catalog, list, results, filters, sort]);
+  if (!catalog) return <p className="adm-loading">Loading the live data…</p>;
+  const totals = rows.reduce((sum, row) => ({ students: sum.students + row.students, first: sum.first + row.first, second: sum.second + row.second, third: sum.third + row.third }), { students: 0, first: 0, second: 0, third: 0 });
+  const download = () => {
+    const csv: (string | number)[][] = [['College', 'Students', '1st places', '2nd places', '3rd places', 'Places won'], ...rows.map((row) => [row.name, row.students, row.first, row.second, row.third, row.places])];
+    saveFile(`techfest-colleges-${filters.dept || 'all'}-${today()}.csv`, toCsv(csv), 'text/csv;charset=utf-8');
+  };
+  return (
+    <main className="adm-page">
+      <section className="adm-card adm-pad">
+        <FilterBar showDept={viewAll} />
+        <div className="fest-stats">
+          <Stat label="Colleges" value={rows.length} />
+          <Stat label="Students" value={totals.students} />
+          <Stat label="1st places" value={totals.first} />
+          <Stat label="2nd places" value={totals.second} />
+          <Stat label="3rd places" value={totals.third} />
+        </div>
+      </section>
+      <section className="adm-card adm-pad">
+        <div className="adm-toolbar">
+          <h3 className="adm-h3">By college</h3>
+          <button className="adm-button adm-button--small" type="button" disabled={!rows.length} onClick={download}>
+            Download (CSV for Excel)
+          </button>
+        </div>
+        <p className="adm-muted">Places from submitted results only; a team counts once for its college. Tap a heading to sort, a college to see its students.</p>
+        <div className="adm-table-wrap">
+          <table className="adm-table adm-table--static fest-table">
+            <thead>
+              <tr>
+                {COLLEGE_COLUMNS.map((column) => (
+                  <th key={column.key} scope="col" aria-sort={sort.key === column.key ? (sort.down ? 'descending' : 'ascending') : undefined}>
+                    <button className="fest-sort" type="button" onClick={() => setSort((current) => ({ key: column.key, down: current.key === column.key ? !current.down : column.key !== 'name' }))}>
+                      {column.label}
+                      {sort.key === column.key ? (sort.down ? ' ↓' : ' ↑') : ''}
+                    </button>
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((row) => (
+                <tr key={row.key} className="fest-row-link" onClick={() => setFilters({ ...filters, college: row.key })}>
+                  <th scope="row">{row.name}</th>
+                  <td>{row.students}</td>
+                  <td>{row.first}</td>
+                  <td>{row.second}</td>
+                  <td>{row.third}</td>
+                  <td>{row.places}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+        {!rows.length && <p className="adm-muted">No students match these filters.</p>}
+      </section>
+    </main>
+  );
+}
+
 // ------------------------------------------------------------------------------------------ Results
 
 export function FestResults() {
@@ -576,7 +669,7 @@ export function FestResults() {
         empty="No events match these filters."
         render={(event) => {
           const result = results.get(event.id);
-          const part = totalsOf([...registrations.values()].filter((item) => item.dept === event.dept), event.id);
+          const part = totalsOf([...registrations.values()].filter((item) => canJoin(item, event)), event.id);
           return (
             <section key={event.id} className="adm-card adm-pad fest-result">
               <header className="adm-toolbar">

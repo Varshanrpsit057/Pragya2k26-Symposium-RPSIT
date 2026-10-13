@@ -1,6 +1,10 @@
 /** Pieces every fest screen uses: the live status, the filters, payments and registration cards. */
-import { useState, type ReactNode } from 'react';
+import { useMemo, useState, type ReactNode } from 'react';
 import {
+  OPEN_DEPT,
+  awaitingCheck,
+  collegeKey,
+  collegeSummary,
   entryOf,
   eventLabel,
   eventOf,
@@ -58,7 +62,8 @@ export function SyncBar() {
   );
 }
 
-export const deptName = (catalog: FestCatalog | null, code: string) => catalog?.departments.find((dept) => dept.code === code)?.name ?? code;
+export const deptName = (catalog: FestCatalog | null, code: string) =>
+  code === OPEN_DEPT ? 'Self-registered (any department)' : (catalog?.departments.find((dept) => dept.code === code)?.name ?? code);
 
 /** What a registration shows in searches: its ID, name, phone and college. */
 export const matches = (registration: FestRegistration, query: string) => {
@@ -69,20 +74,25 @@ export const matches = (registration: FestRegistration, query: string) => {
     registration.id.toLowerCase().replace('-', '').includes(compact) ||
     registration.name.toLowerCase().includes(q) ||
     registration.phone.includes(compact) ||
-    registration.college.toLowerCase().includes(q)
+    registration.college.toLowerCase().includes(q) ||
+    // The desk may search by the transaction ID it sees in the payment.
+    (compact.length >= 4 && [registration.entry.claim?.txn, registration.entry.payment?.txn].some((txn) => txn?.toLowerCase().includes(compact)))
   );
 };
 
 export function applyFilters(registrations: Iterable<FestRegistration>, filters: FestFilters, catalog: FestCatalog | null): FestRegistration[] {
   const venueEvents = filters.venue && catalog ? new Set(catalog.events.filter((event) => event.venue === filters.venue).map((event) => event.id)) : null;
+  // A department's view also holds the self-registered students who joined one of its events.
+  const deptEvents = filters.dept && filters.dept !== OPEN_DEPT && catalog ? new Set(catalog.events.filter((event) => event.dept === filters.dept).map((event) => event.id)) : null;
   const list: FestRegistration[] = [];
   for (const registration of registrations) {
-    if (filters.dept && registration.dept !== filters.dept) continue;
+    if (filters.dept && registration.dept !== filters.dept && !(registration.dept === OPEN_DEPT && deptEvents && registration.events.some((entry) => deptEvents.has(entry.eventId)))) continue;
+    if (filters.college && collegeKey(registration.college) !== filters.college) continue;
     if (filters.eventId && !entryOf(registration, filters.eventId)) continue;
     if (venueEvents && !registration.events.some((entry) => venueEvents.has(entry.eventId))) continue;
     if (filters.source && registration.source !== filters.source) continue;
-    if (filters.desk && String(registration.desk ?? '') !== filters.desk) continue;
-    if (filters.entry && registration.entry.status !== filters.entry) continue;
+    if (filters.desk && String(registration.desk ?? registration.entry.payment?.desk ?? '') !== filters.desk) continue;
+    if (filters.entry === 'WAITING' ? !awaitingCheck(registration) : filters.entry && registration.entry.status !== filters.entry) continue;
     if (filters.status === 'active' && !isActive(registration)) continue;
     if (filters.status === 'cancelled' && !(registration.cancelled && !registration.deleted)) continue;
     if (filters.status === 'deleted' && !registration.deleted) continue;
@@ -94,7 +104,9 @@ export function applyFilters(registrations: Iterable<FestRegistration>, filters:
 
 /** The UMIS-style filter row: department, event, venue, how they registered, desk, entry fee, status, search. */
 export function FilterBar({ showDept }: { showDept: boolean }) {
-  const { catalog, filters, setFilters } = useFest();
+  const { catalog, filters, setFilters, registrations, results } = useFest();
+  const colleges = useMemo(() => collegeSummary(registrations.values(), []).sort((a, b) => a.name.localeCompare(b.name)), [registrations]);
+  void results;
   if (!catalog) return null;
   const set = (change: Partial<FestFilters>) => setFilters({ ...filters, ...change });
   const events = catalog.events.filter((event) => !filters.dept || event.dept === filters.dept);
@@ -112,6 +124,7 @@ export function FilterBar({ showDept }: { showDept: boolean }) {
                 {dept.code} · {dept.name}
               </option>
             ))}
+            <option value={OPEN_DEPT}>Self-registered (IDs 20001…)</option>
           </select>
         </label>
       )}
@@ -139,7 +152,8 @@ export function FilterBar({ showDept }: { showDept: boolean }) {
       <label className="adm-field">
         <span>Registered</span>
         <select value={filters.source} onChange={(event) => set({ source: event.target.value as FestFilters['source'] })}>
-          <option value="">Desk, online and paper</option>
+          <option value="">Every way</option>
+          <option value="SELF">On their own phone</option>
           <option value="DESK">At a desk</option>
           <option value="ONLINE">Online</option>
           <option value="PAPER">Paper slip</option>
@@ -161,7 +175,19 @@ export function FilterBar({ showDept }: { showDept: boolean }) {
         <select value={filters.entry} onChange={(event) => set({ entry: event.target.value as FestFilters['entry'] })}>
           <option value="">Paid and due</option>
           <option value="PAID">Paid</option>
+          <option value="WAITING">Waiting for a desk to check</option>
           <option value="DUE">Due</option>
+        </select>
+      </label>
+      <label className="adm-field">
+        <span>College</span>
+        <select value={filters.college} onChange={(event) => set({ college: event.target.value })}>
+          <option value="">All colleges</option>
+          {colleges.map((college) => (
+            <option key={college.key} value={college.key}>
+              {college.name} ({college.students})
+            </option>
+          ))}
         </select>
       </label>
       <label className="adm-field">
@@ -244,13 +270,16 @@ export function RegistrationCard({ registration, children, showDept = false, eve
         {pending.has(registration.id) && <Badge tone="warn">Waiting to send</Badge>}
         {registration.source === 'ONLINE' && <Badge tone={registration.checkedIn ? 'good' : 'plain'}>{registration.checkedIn ? 'Online · arrived' : 'Online · not arrived'}</Badge>}
         {registration.source === 'PAPER' && <Badge tone="plain">Paper slip</Badge>}
-        {registration.entry.status === 'DUE' && <Badge tone="bad">Entry fee due</Badge>}
+        {registration.source === 'SELF' && registration.entry.status === 'PAID' && <Badge tone="good">Verified</Badge>}
+        {awaitingCheck(registration) && <Badge tone="warn">Payment to check</Badge>}
+        {registration.entry.rejected && registration.entry.status === 'DUE' && <Badge tone="bad">Payment not found</Badge>}
+        {registration.entry.status === 'DUE' && !registration.entry.claim && <Badge tone="bad">Entry fee due</Badge>}
         {registration.cancelled && <Badge tone="bad">Cancelled</Badge>}
         {registration.deleted && <Badge tone="bad">Deleted</Badge>}
         {registration.test && <Badge tone="warn">TEST</Badge>}
       </header>
       <p className="fest-card__meta">
-        {showDept && <>{registration.dept} · </>}
+        {(showDept || registration.dept === OPEN_DEPT) && <>{registration.dept === OPEN_DEPT ? 'Self-registered' : registration.dept} · </>}
         {registration.phone} · {registration.college}
         {registration.team && <> · Team {registration.team}</>}
       </p>

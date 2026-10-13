@@ -44,12 +44,15 @@ export interface FestFilters {
   venue: string;
   source: '' | FestSource;
   desk: string;
-  entry: '' | 'PAID' | 'DUE';
+  /** WAITING: registered themselves, the transaction ID not checked by a desk yet. */
+  entry: '' | 'PAID' | 'DUE' | 'WAITING';
   status: '' | 'active' | 'cancelled' | 'deleted';
+  /** A college (its collegeKey). */
+  college: string;
   q: string;
 }
 
-export const NO_FILTERS: FestFilters = { dept: '', eventId: '', venue: '', source: '', desk: '', entry: '', status: 'active', q: '' };
+export const NO_FILTERS: FestFilters = { dept: '', eventId: '', venue: '', source: '', desk: '', entry: '', status: 'active', college: '', q: '' };
 
 interface Cache {
   catalog: FestCatalog | null;

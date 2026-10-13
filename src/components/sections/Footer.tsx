@@ -3,12 +3,18 @@ import { site } from '../../content/site';
 import { HelpDeskLine } from '../help/HelpDeskLine';
 import { ContactIcon } from '../icons/ContactIcon';
 import { SocialIcon } from '../icons/SocialIcon';
-import type { NavItem } from '../nav/PillNav';
 import { crewLinkLabel } from './DevCrew';
 import './Footer.css';
 
+/** A link under Explore: another page, or a section (#id) of this page. */
+export interface FooterLink {
+  id: string;
+  label: string;
+  href?: string;
+}
+
 interface FooterProps {
-  links: readonly NavItem[];
+  links: readonly FooterLink[];
 }
 
 export const CONTACT_PENDING_MESSAGE = 'Symposium coordinators will be announced soon.';
@@ -182,7 +188,7 @@ export function Footer({ links }: FooterProps) {
               <ul>
                 {links.map((link) => (
                   <li key={link.id}>
-                    <a href={`#${link.id}`}>{link.label}</a>
+                    <a href={link.href ?? `#${link.id}`}>{link.label}</a>
                   </li>
                 ))}
               </ul>
