@@ -14,7 +14,7 @@ let count = 0;
 const form = (extra: Record<string, unknown> = {}) => {
   count += 1;
   return {
-    submissionId: `self-${String(count).padStart(8, '0')}`,
+    submissionId: `self-key-${String(count).padStart(16, '0')}`,
     participant: { name: 'Divya R', phone: `98${String(40000000 + count).padStart(8, '0')}`, email: '', college: 'Sona College of Technology', branch: 'B.E. ECE', year: '3rd Year', team: '' },
     events: ['cse-hackathon', 'it-web-architects'],
     txn: '412345678901',
@@ -34,7 +34,8 @@ describe('a student registering on their phone', () => {
 
     const first = await selfRegister(h, form());
     expect(first.status).toBe(200);
-    expect(view(first)).toMatchObject({ id: '20001', status: 'waiting', txn: '412345678901', entryFee: 100, phoneEnd: expect.any(String) });
+    expect(view(first)).toMatchObject({ id: '20001', status: 'waiting', txnEnd: '8901', canChange: true, entryFee: 100, phoneEnd: expect.any(String) });
+    expect(JSON.stringify(first.body)).not.toContain('412345678901'); // the page never shows the whole transaction ID
     expect(view(first).events.map((item) => item.eventId)).toEqual(['cse-hackathon', 'it-web-architects']);
     expect(view(await selfRegister(h, form({ txn: '412345678902' })))).toMatchObject({ id: '20002' });
 
@@ -59,17 +60,35 @@ describe('a student registering on their phone', () => {
     expect((await h.call('GET', '/api/fest/info')).body.open).toBe(false);
   });
 
-  it('sees their own registration only with the mobile number it was made with', async () => {
+  it('changes their events only from the phone that registered (its private key); the ID and mobile number only show', async () => {
     const h = setup({ at: TIMES.eventDay });
     const body = form();
     await selfRegister(h, body);
-    expect(view(await me(h, '20001', body.participant.phone))).toMatchObject({ id: '20001', name: 'Divya R' });
+    expect(view(await me(h, '20001', body.participant.phone))).toMatchObject({ id: '20001', name: 'Divya R', canChange: false });
     expect((await me(h, '20001', '9999999999')).status).toBe(404);
     expect((await me(h, ' 20001 ', `+91 ${body.participant.phone}`)).status).toBe(200);
 
-    // Adds an event of a third department, and drops one.
-    const changed = await h.call('POST', '/api/fest/me/events', { id: '20001', phone: body.participant.phone, add: ['mech-aqua-rocket'], remove: ['cse-hackathon'] }, { ip: '10.1.1.2' });
+    // With only the ID and mobile number: no changes.
+    const refused = await h.call('POST', '/api/fest/me/events', { id: '20001', phone: body.participant.phone, add: ['mech-aqua-rocket'] }, { ip: '10.1.1.2' });
+    expect(refused.body.code).toBe('KEY_NEEDED');
+    expect((await h.call('POST', '/api/fest/me', { id: '20001', key: 'self-key-0000000000009999' }, { ip: '10.1.1.2' })).status).toBe(404);
+
+    // From the phone that registered: adds an event of a third department, and drops one.
+    const changed = await h.call('POST', '/api/fest/me/events', { id: '20001', key: body.submissionId, add: ['mech-aqua-rocket'], remove: ['cse-hackathon'] }, { ip: '10.1.1.2' });
+    expect(view(changed)).toMatchObject({ canChange: true });
     expect(view(changed).events.map((item) => item.eventId)).toEqual(['it-web-architects', 'mech-aqua-rocket']);
+  });
+
+  it('cannot be found by trying IDs one by one with a known mobile number', async () => {
+    const h = setup({ at: TIMES.eventDay });
+    const body = form();
+    await selfRegister(h, body);
+    for (let n = 0; n < 10; n += 1) expect((await h.call('POST', '/api/fest/me', { id: '20001', phone: '9999999999' }, { ip: `10.2.0.${n}` })).status).toBe(404);
+    // The 11th try for that ID within 10 minutes is refused, whatever the address and even with the right number.
+    const blocked = await h.call('POST', '/api/fest/me', { id: '20001', phone: body.participant.phone }, { ip: '10.2.1.1' });
+    expect(blocked.status).toBe(429);
+    // The phone that registered (its key) is not affected.
+    expect((await h.call('POST', '/api/fest/me', { id: '20001', key: body.submissionId }, { ip: '10.2.1.1' })).status).toBe(200);
   });
 });
 
@@ -106,8 +125,8 @@ describe('any department’s desk', () => {
     await h.call('POST', '/api/admin/fest/registrations/20001', { action: 'reject', reason: 'Not received' }, { token: desk.token });
     expect(view(await me(h, '20001', body.participant.phone))).toMatchObject({ status: 'rejected', reason: 'Not received' });
 
-    const resent = await h.call('POST', '/api/fest/me/payment', { id: '20001', phone: body.participant.phone, txn: '512345678901' }, { ip: '10.1.1.2' });
-    expect(view(resent)).toMatchObject({ status: 'waiting', txn: '512345678901', reason: '' });
+    const resent = await h.call('POST', '/api/fest/me/payment', { id: '20001', key: body.submissionId, txn: '512345678901' }, { ip: '10.1.1.2' });
+    expect(view(resent)).toMatchObject({ status: 'waiting', txnEnd: '8901', reason: '' });
     const verified = await h.call('POST', '/api/admin/fest/registrations/20001', { action: 'verify', confirmed: true }, { token: desk.token });
     expect(verified.body.registration.entry).toMatchObject({ status: 'PAID', payment: { txn: '512345678901' } });
   });

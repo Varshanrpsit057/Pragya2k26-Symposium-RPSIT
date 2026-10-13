@@ -45,6 +45,7 @@ import {
   type FestSource,
   type FestStamp,
 } from '../src/lib/fest';
+import { timingSafeEqual } from 'node:crypto';
 import { formatIst, parseEventStart } from '../src/lib/countdown';
 import { registrationPhase, type RegistrationSchedule } from '../src/lib/schedule';
 import { DEPARTMENT_ROLES, hasPermission, type Permission } from '../src/lib/staff';
@@ -69,6 +70,8 @@ const CATALOG_TTL_MS = 10_000;
 export const SYNC_OVERLAP_MS = 20_000;
 const MAX_IMPORT_ROWS = 200;
 const SUBMISSION = /^[A-Za-z0-9-]{8,80}$/;
+/** A student's own submission id: random and long, as it is also the private key of their page. */
+const STUDENT_KEY = /^[A-Za-z0-9-]{20,80}$/;
 const MAX_PLACES = 3;
 
 export interface FestDeps {
@@ -82,6 +85,13 @@ export interface FestDeps {
   now: () => number;
   log: (message: string, details?: Record<string, unknown>) => void;
 }
+
+/** Compares two secrets in constant time. */
+const sameSecret = (a: string, b: string) => {
+  const left = Buffer.from(a);
+  const right = Buffer.from(b);
+  return left.length === right.length && timingSafeEqual(left, right);
+};
 
 const isObject = (value: unknown): value is Record<string, unknown> => typeof value === 'object' && value !== null && !Array.isArray(value);
 const text = (value: unknown, max = 200) => (typeof value === 'string' ? value.replace(/\s+/g, ' ').trim().slice(0, max) : '');
@@ -541,10 +551,11 @@ export class FestService {
   async selfRegister(body: unknown) {
     if (!isObject(body)) throw new ApiError(400, 'INVALID', 'The registration could not be read.');
     if (registrationPhase(this.deps.schedule, this.deps.now()) === 'closed') throw new ApiError(403, 'ONSITE_CLOSED', this.closedMessage());
+    // The phone's submission id is also the private key of the student's page (only that phone has it).
     const submissionId = text(body.submissionId, 80);
-    if (!SUBMISSION.test(submissionId)) throw new ApiError(400, 'INVALID', 'The registration could not be read. Please try again.');
+    if (!STUDENT_KEY.test(submissionId)) throw new ApiError(400, 'INVALID', 'The registration could not be read. Please try again.');
     const replay = await this.deps.store.findSubmission(OPEN_DEPT, submissionId);
-    if (replay) return { success: true as const, registration: toStudentView(await this.required(OPEN_DEPT, replay)), replayed: true };
+    if (replay) return { success: true as const, registration: toStudentView(await this.required(OPEN_DEPT, replay), true), replayed: true };
 
     const participant = readParticipant(body.participant);
     const problems = participantProblems(participant);
@@ -582,39 +593,51 @@ export class FestService {
       const created = await this.deps.store.createRegistration(registration, submissionId);
       if (created.created) {
         this.deps.log('Fest self-registration', { id: registration.id, events: eventIds.length, ...(registration.test && { test: true }) });
-        return { success: true as const, registration: toStudentView(registration), replayed: false };
+        return { success: true as const, registration: toStudentView(registration, true), replayed: false };
       }
-      if (created.reason === 'submission') return { success: true as const, registration: toStudentView(await this.required(OPEN_DEPT, created.existingId!)), replayed: true };
+      if (created.reason === 'submission') return { success: true as const, registration: toStudentView(await this.required(OPEN_DEPT, created.existingId!), true), replayed: true };
       if (created.reason === 'phone') throw new ApiError(409, 'DUPLICATE_PHONE', ALREADY_SELF);
       // 'id': that number is taken (e.g. after test data was cleared): take the next one.
     }
     throw new ApiError(409, 'BUSY', 'Registration is busy. Please try again.');
   }
 
-  /** The student's own registration, found by ID and the mobile number it was made with. */
-  private async ownRegistration(body: unknown): Promise<FestRegistration> {
+  /**
+   * The student's own registration. With the private key (the phone that registered keeps it) it
+   * may be changed; with only the ID and the mobile number it is shown, never changed.
+   */
+  private async ownRegistration(body: unknown, change: boolean): Promise<{ registration: FestRegistration; keyed: boolean }> {
     const id = normaliseFestId(text(isObject(body) ? body.id : '', 20));
-    const phone = readParticipant({ phone: isObject(body) ? body.phone : '' }).phone;
+    const key = text(isObject(body) ? body.key : '', 80);
     const parsed = parseFestId(id);
     const registration = parsed ? await this.deps.store.getRegistration(parsed.dept, id) : null;
+    if (key) {
+      if (!registration || registration.deleted || registration.source !== 'SELF' || !registration.sid || !sameSecret(registration.sid, key)) {
+        throw new ApiError(404, 'NOT_FOUND', 'This registration could not be found on this phone. Open "Already registered?" with your ID and mobile number.');
+      }
+      return { registration, keyed: true };
+    }
+    const phone = readParticipant({ phone: isObject(body) ? body.phone : '' }).phone;
     if (!registration || registration.deleted || registration.phone !== phone) throw new ApiError(404, 'NOT_FOUND', 'No registration has that ID with that mobile number.');
-    return registration;
+    if (change) throw new ApiError(403, 'KEY_NEEDED', 'Change your events or transaction ID on the phone you registered with, or ask at a registration desk.');
+    return { registration, keyed: false };
   }
 
   async studentView(body: unknown) {
-    return { success: true as const, registration: toStudentView(await this.ownRegistration(body)) };
+    const { registration, keyed } = await this.ownRegistration(body, false);
+    return { success: true as const, registration: toStudentView(registration, keyed) };
   }
 
-  /** The student adds or removes their events (any department's if they registered themselves). */
+  /** The student adds or removes their events (any department's), from the phone that registered. */
   async studentEvents(body: unknown) {
-    const registration = await this.ownRegistration(body);
+    const { registration } = await this.ownRegistration(body, true);
     const result = await this.changeEvents(await this.catalog(), registration.dept, registration.id, body as Record<string, unknown>, { at: this.iso(), by: STUDENT });
-    return { success: true as const, registration: toStudentView(result.registration) };
+    return { success: true as const, registration: toStudentView(result.registration, true) };
   }
 
-  /** The student sends the right transaction ID after a desk did not find the payment. */
+  /** The student sends the right transaction ID after a desk did not find the payment (from the phone that registered). */
   async studentPayment(body: unknown) {
-    const found = await this.ownRegistration(body);
+    const { registration: found } = await this.ownRegistration(body, true);
     const txn = text(isObject(body) ? body.txn : '', 40).replace(/\s/g, '');
     if (!TXN.test(txn)) throw new ApiError(400, 'INVALID', 'Type the UPI transaction ID (UTR) from your payment.');
     const catalog = await this.catalog();
@@ -623,7 +646,7 @@ export class FestService {
       if (registration.entry.status === 'PAID') return null;
       return { next: { entry: { status: 'DUE', claim: { txn, amount: catalog.entryFee, at: this.iso() } } } };
     });
-    return { success: true as const, registration: toStudentView(result.registration) };
+    return { success: true as const, registration: toStudentView(result.registration, true) };
   }
 
   private eventAccess(actor: Actor, event: FestEvent) {

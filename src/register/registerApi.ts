@@ -66,7 +66,15 @@ async function call<T>(path: `/api/${string}`, body?: unknown): Promise<T> {
 
 export const fetchInfo = () => call<PublicInfo>('/api/fest/info');
 export const registerSelf = (body: SelfRegistration) => call<{ registration: StudentView }>('/api/fest/register', body).then((data) => data.registration);
-export const fetchMe = (id: string, phone: string) => call<{ registration: StudentView }>('/api/fest/me', { id, phone }).then((data) => data.registration);
-export const changeMyEvents = (id: string, phone: string, add: string[], remove: string[] = []) =>
-  call<{ registration: StudentView }>('/api/fest/me/events', { id, phone, add, remove }).then((data) => data.registration);
-export const sendMyPayment = (id: string, phone: string, txn: string) => call<{ registration: StudentView }>('/api/fest/me/payment', { id, phone, txn }).then((data) => data.registration);
+/** Who is asking: the private key from the phone that registered, or (to look only) the ID and mobile number. */
+export interface StudentPass {
+  id: string;
+  phone: string;
+  key?: string;
+}
+
+const pass = ({ id, phone, key }: StudentPass) => (key ? { id, key } : { id, phone });
+export const fetchMe = (who: StudentPass) => call<{ registration: StudentView }>('/api/fest/me', pass(who)).then((data) => data.registration);
+export const changeMyEvents = (who: StudentPass, add: string[], remove: string[] = []) =>
+  call<{ registration: StudentView }>('/api/fest/me/events', { ...pass(who), add, remove }).then((data) => data.registration);
+export const sendMyPayment = (who: StudentPass, txn: string) => call<{ registration: StudentView }>('/api/fest/me/payment', { ...pass(who), txn }).then((data) => data.registration);

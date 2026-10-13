@@ -401,14 +401,17 @@ export interface StudentView {
   phoneEnd: string;
   /** waiting: the desk has not checked the transaction ID yet; rejected: the desk did not find the payment. */
   status: 'verified' | 'waiting' | 'rejected' | 'due' | 'cancelled';
-  txn: string;
+  /** The last 4 characters of the transaction ID (the desks see it whole). */
+  txnEnd: string;
+  /** False when opened with only the ID and mobile number: events and the transaction ID are changed from the phone that registered. */
+  canChange: boolean;
   reason: string;
   entryFee: number;
   events: { eventId: string; feePaid: boolean; present: boolean }[];
   createdAt: string;
 }
 
-export function toStudentView(registration: FestRegistration): StudentView {
+export function toStudentView(registration: FestRegistration, canChange = false): StudentView {
   const { entry } = registration;
   return {
     id: registration.id,
@@ -420,7 +423,8 @@ export function toStudentView(registration: FestRegistration): StudentView {
     team: registration.team,
     phoneEnd: registration.phone.slice(-4),
     status: !isActive(registration) ? 'cancelled' : entry.status === 'PAID' ? 'verified' : entry.rejected ? 'rejected' : entry.claim ? 'waiting' : 'due',
-    txn: entry.claim?.txn ?? entry.payment?.txn ?? '',
+    txnEnd: (entry.claim?.txn ?? entry.payment?.txn ?? '').slice(-4),
+    canChange,
     reason: entry.rejected?.reason ?? '',
     entryFee: entry.claim?.amount ?? entry.payment?.amount ?? 0,
     events: registration.events.map((item) => ({ eventId: item.eventId, feePaid: feePaid(item), present: Boolean(item.present) })),
