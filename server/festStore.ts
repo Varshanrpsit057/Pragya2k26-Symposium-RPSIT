@@ -7,7 +7,8 @@
  *   P#9876543210      one phone, one registration per department
  *   X#<submission>    one desk submission, one registration (a retry never makes two)
  *   T#<txn>           one UPI transaction ID, one verified registration (self-registered students)
- *   C#DESK|ONLINE|PAPER|SELF  the department's ID counters (SELF: the 20001… series, in D#OPEN)
+ *   C#DESK|ONLINE|PAPER|SELF  the department's ID counters
+ * and, under pk 'D#TXN', T#<txn>: one UPI transaction ID, one verified registration (any department).
  * The "byDept" index (dept, u) gives everything changed since a moment: each screen asks only
  * for what changed since it last asked.
  *
@@ -54,6 +55,9 @@ export interface FestStore {
   /** Starts a counter again at its first number (only when the department has no registrations of that source). */
   resetCounter(dept: string, source: FestSource): Promise<void>;
 }
+
+/** Where UPI transaction IDs are claimed: one place for every department (a payment is used once). */
+export const TXN_SCOPE = 'TXN';
 
 const copy = <T>(value: T): T => structuredClone(value);
 const tick = () => new Promise<void>((resolve) => setImmediate(resolve));
@@ -154,7 +158,7 @@ export class MemoryFestStore implements FestStore {
   async purgeRegistration(registration: FestRegistration) {
     const { dept, id } = registration;
     this.registrations.delete(this.key(dept, id));
-    for (const [key, holder] of this.claims) if (holder === id && key.split('#')[1] === dept) this.claims.delete(key);
+    for (const [key, holder] of this.claims) if (holder === id && (key.split('#')[1] === dept || key.startsWith(`T#${TXN_SCOPE}#`))) this.claims.delete(key);
   }
 
   async purgeResult(dept: string, eventId: string) {

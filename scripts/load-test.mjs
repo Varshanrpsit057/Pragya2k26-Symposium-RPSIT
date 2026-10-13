@@ -5,8 +5,9 @@
  *
  *   - every phone signs in, loads the catalog, asks for changes every 15 seconds, and checks its
  *     session and help replies every 60 seconds;
- *   - students register themselves on their phones (no sign-in: IDs 20001…, the entry fee's
- *     transaction ID), then look at their page twice; desk phones verify those payments;
+ *   - students register themselves on their phones for a department (no sign-in: IDs CSE-2001…,
+ *     the entry fee's transaction ID), then look at their page twice; that department's desk phones
+ *     verify those payments;
  *   - desk phones (2 per desk) take blocks of IDs and register a student every 30-60 seconds;
  *   - coordinator phones take event fees and mark attendance every 20-40 seconds;
  *   - HODs, department admins and the overall coordinator watch.
@@ -259,7 +260,7 @@ async function phone(device, password, endAt) {
     if (now >= nextAction) {
       if (device.kind === 'desk') {
         // Half the time a desk checks a self-registered student's payment (when one is waiting).
-        if (Math.random() < 0.5 && (await verifyOne(token))) {
+        if (Math.random() < 0.5 && (await verifyOne(token, device.dept))) {
           // verified one
         } else await register(device, token, ids, refill);
       }
@@ -271,8 +272,8 @@ async function phone(device, password, endAt) {
 }
 
 /** A desk verifies one self-registered student waiting for a payment check; false when none waits. */
-async function verifyOne(token) {
-  const waiting = [...(seen.get('OPEN')?.values() ?? [])].find((item) => item.entry?.status === 'DUE' && item.entry.claim && !item.entry.rejected && !verifying.has(item.id));
+async function verifyOne(token, dept) {
+  const waiting = [...(seen.get(dept)?.values() ?? [])].find((item) => item.entry?.status === 'DUE' && item.entry.claim && !item.entry.rejected && !verifying.has(item.id));
   if (!waiting) return false;
   verifying.add(waiting.id);
   const answer = await call('verify payment', 'POST', `/api/admin/fest/registrations/${waiting.id}`, { action: 'verify', confirmed: true }, token);
@@ -283,12 +284,13 @@ async function verifyOne(token) {
   return true;
 }
 
-/** A student on their phone: registers (no sign-in), then looks at their page after 1 and 3 minutes. */
-async function selfStudent(allEvents, endAt) {
+/** A student on their phone: chooses a department and registers (no sign-in), then looks at their page after 1 and 3 minutes. */
+async function selfStudent(departments, endAt) {
   const body = {
     submissionId: `lt-self-${randomUUID()}`,
+    dept: pick(departments),
     participant: { ...student(), phone: `8${runSeed}${String(++phoneCounter).padStart(6, '0')}` },
-    events: allEvents.length ? [...new Set([pick(allEvents), pick(allEvents)])].slice(0, Math.floor(Math.random() * 3)) : [],
+    events: [],
     txn: nextTxn(),
   };
   const answer = await call('student register', 'POST', '/api/fest/register', body);
@@ -473,11 +475,11 @@ async function main() {
     }
   });
   // Students arrive through the run (most in its first half), each on their own phone.
-  const allEvents = catalog.events.filter((event) => event.active !== false).map((event) => event.id);
+  const studentDepartments = catalog.departments.filter((dept) => dept.active !== false).map((dept) => dept.code);
   const span = (RAMP_S + MINUTES * 60 * 0.6) * 1000;
   const students = Array.from({ length: STUDENTS }, async () => {
     await sleep(Math.random() * span);
-    if (!stopping) await selfStudent(allEvents, endAt);
+    if (!stopping) await selfStudent(studentDepartments, endAt);
   });
   await Promise.all([...runs, ...students]);
   clearInterval(ticker);

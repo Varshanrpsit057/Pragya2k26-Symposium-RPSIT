@@ -6,7 +6,7 @@ import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import { DeleteCommand, DynamoDBDocumentClient, GetCommand, PutCommand, QueryCommand, TransactWriteCommand, UpdateCommand } from '@aws-sdk/lib-dynamodb';
 import type { FestRegistration, FestResult, FestSource } from '../src/lib/fest';
 import { ID_RANGES } from '../src/lib/fest';
-import type { FestChanges, FestCreate, FestStore } from './festStore';
+import { TXN_SCOPE, type FestChanges, type FestCreate, type FestStore } from './festStore';
 
 export const FEST_INDEX = 'byDept';
 
@@ -207,7 +207,7 @@ export class DynamoFestStore implements FestStore {
     if (registration.sid && submissionOwner === id) keys.push(`X#${registration.sid}`);
     await Promise.all(keys.map((sk) => this.db.send(new DeleteCommand({ TableName: this.table, Key: { pk: pk(dept), sk } }))));
     const txn = registration.entry.payment?.txn;
-    if (txn) await this.releaseTxn(dept, txn, id);
+    if (txn) await this.releaseTxn(TXN_SCOPE, txn, id);
   }
 
   async purgeResult(dept: string, eventId: string) {

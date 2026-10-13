@@ -1,6 +1,6 @@
 /** Pieces every fest screen uses: the live status, the filters, payments and registration cards. */
 import { useMemo, useState, type ReactNode } from 'react';
-import { awaitingCheck, collegeKey, collegeSummary, deptShort, entryOf, eventLabel, eventOf, feePaid, isActive, OPEN_DEPT, rupees, showId, type FestCatalog, type FestEvent, type FestRegistration } from '../../lib/fest';
+import { awaitingCheck, collegeKey, collegeSummary, deptShort, entryOf, eventLabel, eventOf, feePaid, isActive, rupees, showId, type FestCatalog, type FestEvent, type FestRegistration } from '../../lib/fest';
 import { Badge, clockTime, when } from '../ui';
 import { NO_FILTERS, useFest, type FestFilters } from './FestData';
 
@@ -48,8 +48,7 @@ export function SyncBar() {
   );
 }
 
-export const deptName = (catalog: FestCatalog | null, code: string) =>
-  code === OPEN_DEPT ? 'Self-registered (any department)' : (catalog?.departments.find((dept) => dept.code === code)?.name ?? code);
+export const deptName = (catalog: FestCatalog | null, code: string) => catalog?.departments.find((dept) => dept.code === code)?.name ?? code;
 
 /** What a registration shows in searches: its ID, name, phone and college. */
 export const matches = (registration: FestRegistration, query: string) => {
@@ -72,11 +71,9 @@ export const matches = (registration: FestRegistration, query: string) => {
 
 export function applyFilters(registrations: Iterable<FestRegistration>, filters: FestFilters, catalog: FestCatalog | null): FestRegistration[] {
   const venueEvents = filters.venue && catalog ? new Set(catalog.events.filter((event) => event.venue === filters.venue).map((event) => event.id)) : null;
-  // A department's view also holds the self-registered students who joined one of its events.
-  const deptEvents = filters.dept && filters.dept !== OPEN_DEPT && catalog ? new Set(catalog.events.filter((event) => event.dept === filters.dept).map((event) => event.id)) : null;
   const list: FestRegistration[] = [];
   for (const registration of registrations) {
-    if (filters.dept && registration.dept !== filters.dept && !(registration.dept === OPEN_DEPT && deptEvents && registration.events.some((entry) => deptEvents.has(entry.eventId)))) continue;
+    if (filters.dept && registration.dept !== filters.dept) continue;
     if (filters.college && collegeKey(registration.college) !== filters.college) continue;
     if (filters.eventId && !entryOf(registration, filters.eventId)) continue;
     if (venueEvents && !registration.events.some((entry) => venueEvents.has(entry.eventId))) continue;
@@ -114,7 +111,6 @@ export function FilterBar({ showDept }: { showDept: boolean }) {
                 {deptShort(dept.code)} · {dept.name}
               </option>
             ))}
-            <option value={OPEN_DEPT}>Self-registered (IDs 20001…)</option>
           </select>
         </label>
       )}
@@ -269,7 +265,8 @@ export function RegistrationCard({ registration, children, showDept = false, eve
         {registration.test && <Badge tone="warn">TEST</Badge>}
       </header>
       <p className="fest-card__meta">
-        {(showDept || registration.dept === OPEN_DEPT) && <>{registration.dept === OPEN_DEPT ? 'Self-registered' : deptShort(registration.dept)} · </>}
+        {showDept && <>{deptShort(registration.dept)} · </>}
+        {registration.source === 'SELF' && <>Registered on their phone · </>}
         {registration.phone} · {registration.college}
         {registration.team && <> · Team {registration.team}</>}
       </p>

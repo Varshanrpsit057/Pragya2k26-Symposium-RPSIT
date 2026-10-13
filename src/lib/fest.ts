@@ -225,7 +225,6 @@ export function catalogProblem(catalog: FestCatalog): string | null {
   for (const dept of catalog.departments) {
     if (!DEPT_CODE.test(dept.code)) return `Department code "${dept.code}" must be 2–6 capital letters.`;
     if (codes.has(dept.code)) return `Two departments use the code ${dept.code}.`;
-    if (dept.code === OPEN_DEPT) return `${OPEN_DEPT} is kept for students who register themselves: choose another code.`;
     codes.add(dept.code);
     if (!dept.name.trim()) return `Department ${dept.code} needs a name.`;
     if (!Number.isInteger(dept.desks) || dept.desks < 1 || dept.desks > 20) return `Department ${dept.code}: desks must be 1–20.`;
@@ -250,11 +249,6 @@ export function catalogProblem(catalog: FestCatalog): string | null {
 
 export type FestSource = 'DESK' | 'ONLINE' | 'PAPER' | 'SELF';
 
-/**
- * Students who register themselves on their phone: one fest-wide series of IDs (20001, 20002…),
- * kept as their own "department", and free to join any department's events.
- */
-export const OPEN_DEPT = 'OPEN';
 export type FestMethod = 'CASH' | 'UPI' | 'ONLINE';
 
 /** Who recorded what, and when. */
@@ -342,14 +336,14 @@ export interface FestResult {
 }
 
 /**
- * The numbers each source uses within a department: CSE-0001… at the desks, CSE-5001… online,
- * CSE-9001… on paper; and 20001… for students who register themselves (fest-wide, no prefix).
+ * The numbers each source uses within a department: CSE-0001… at the desks, CSE-2001… for students
+ * who registered on their own phone, CSE-5001… online, CSE-9001… on paper.
  */
 export const ID_RANGES: Record<FestSource, { first: number; last: number }> = {
-  DESK: { first: 1, last: 4999 },
+  DESK: { first: 1, last: 1999 },
+  SELF: { first: 2001, last: 4999 },
   ONLINE: { first: 5001, last: 8999 },
   PAPER: { first: 9001, last: 9999 },
-  SELF: { first: 20001, last: 99999 },
 };
 
 /** How many IDs a desk phone takes at a time, and when it asks for more. */
@@ -373,23 +367,16 @@ const typedCode = (input: string) =>
   Object.entries(SHOWN_CODES).reduce((text, [code, shown]) => text.replace(new RegExp(shown.replace(/[&]/g, '\\s*&\\s*'), 'i'), code), input);
 
 export const FEST_ID = /^([A-Z]{2,6})-(\d{4})$/;
-const SELF_ID = /^\d{5}$/;
-export const formatFestId = (dept: string, number: number) => (dept === OPEN_DEPT ? String(number) : `${dept}-${String(number).padStart(4, '0')}`);
+export const formatFestId = (dept: string, number: number) => `${dept}-${String(number).padStart(4, '0')}`;
 export const parseFestId = (id: string) => {
-  if (SELF_ID.test(id)) {
-    const number = Number(id);
-    return number >= ID_RANGES.SELF.first ? { dept: OPEN_DEPT, number } : null;
-  }
   const match = FEST_ID.exec(id);
   return match ? { dept: match[1], number: Number(match[2]) } : null;
 };
 export const sourceOfNumber = (number: number): FestSource | null =>
   (Object.entries(ID_RANGES) as [FestSource, { first: number; last: number }][]).find(([, range]) => number >= range.first && number <= range.last)?.[0] ?? null;
 
-/** 'cse 147', 'cse0147', 'CSE-147' → 'CSE-0147'; ' 20017 ' → '20017'; '' when it does not look like an ID. */
+/** 'cse 147', 'cse0147', 'CSE-147' → 'CSE-0147'; '' when it does not look like an ID. */
 export function normaliseFestId(input: string): string {
-  const self = /^\s*(\d{5})\s*$/.exec(input);
-  if (self) return Number(self[1]) >= ID_RANGES.SELF.first ? self[1] : '';
   const match = /^\s*([a-z]{2,6})\s*-?\s*(\d{1,4})\s*$/i.exec(typedCode(input));
   return match ? formatFestId(match[1].toUpperCase(), Number(match[2])) : '';
 }
@@ -454,12 +441,12 @@ export const UPI_ID = /^[A-Za-z0-9._-]{2,64}@[A-Za-z0-9.-]{2,40}$/;
 /** A UPI transaction ID (UTR) or bank reference: letters and digits. */
 export const TXN = /^[A-Za-z0-9]{6,35}$/;
 
-/** A student may take part in an event of their own department, or of any department if they registered themselves. */
-export const canJoin = (registration: Pick<FestRegistration, 'dept'>, event: Pick<FestEvent, 'dept'>) => registration.dept === event.dept || registration.dept === OPEN_DEPT;
+/** A student takes part in their own department's events. */
+export const canJoin = (registration: Pick<FestRegistration, 'dept'>, event: Pick<FestEvent, 'dept'>) => registration.dept === event.dept;
 /** A self-registered student whose transaction ID waits for a desk. */
 export const awaitingCheck = (registration: FestRegistration) => registration.entry.status === 'DUE' && Boolean(registration.entry.claim) && !registration.entry.rejected;
 /** The department's name, or what a self-registered student's "department" is called. */
-export const deptLabel = (catalog: FestCatalog | null, code: string) => (code === OPEN_DEPT ? 'Self-registered (any department)' : (catalog && departmentOf(catalog, code)?.name) || deptShort(code));
+export const deptLabel = (catalog: FestCatalog | null, code: string) => (catalog && departmentOf(catalog, code)?.name) || deptShort(code);
 
 /** Neither cancelled nor deleted: counts everywhere. */
 export const isActive = (registration: Pick<FestRegistration, 'cancelled' | 'deleted'>) => !registration.cancelled && !registration.deleted;

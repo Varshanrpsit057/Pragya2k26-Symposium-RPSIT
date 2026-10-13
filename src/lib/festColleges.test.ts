@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { collegeKey, collegeSummary, deptShort, normaliseFestId, parseFestId, showId, type FestRegistration, type FestResult } from './fest';
+import { collegeKey, collegeSummary, deptShort, normaliseFestId, parseFestId, showId, sourceOfNumber, type FestRegistration, type FestResult } from './fest';
 
 const person = (id: string, college: string, extra: Partial<FestRegistration> = {}): FestRegistration => ({
   id,
@@ -34,7 +34,7 @@ describe('the college-wise view', () => {
     const people = [
       person('CSE-0001', 'Sona College of Technology, Salem'),
       person('CSE-0002', 'sona college of technology salem.'),
-      person('20001', 'Sona College of Technology, Salem'),
+      person('IT-2001', 'Sona College of Technology, Salem'),
       person('CSE-0003', 'Kongu Engineering College'),
       person('CSE-0004', 'Kongu Engineering College', { cancelled: { at: '', by: '', reason: 'duplicate' } }),
     ];
@@ -43,7 +43,7 @@ describe('the college-wise view', () => {
         { place: 1, ids: ['CSE-0001', 'CSE-0002'] },
         { place: 2, ids: ['CSE-0003'] },
       ]),
-      result('it-web-architects', [{ place: 1, ids: ['20001'] }]),
+      result('it-web-architects', [{ place: 1, ids: ['IT-2001'] }]),
       result('cse-cyber-hunt', [{ place: 3, ids: ['CSE-0003'] }], false), // not submitted: does not count
     ]);
     expect(rows).toEqual([
@@ -53,12 +53,14 @@ describe('the college-wise view', () => {
   });
 });
 
-describe('IDs of students who registered themselves', () => {
-  it('are five digits from 20001, read however they are typed', () => {
-    expect(normaliseFestId(' 20017 ')).toBe('20017');
-    expect(parseFestId('20017')).toEqual({ dept: 'OPEN', number: 20017 });
-    expect(normaliseFestId('12345')).toBe('');
-    expect(normaliseFestId('cse 12')).toBe('CSE-0012');
+describe('IDs of students who registered on their phones', () => {
+  it('are their department’s, from 2001 (desks 0001–1999, online 5001…, paper 9001…)', () => {
+    expect(normaliseFestId(' cse 2017 ')).toBe('CSE-2017');
+    expect(parseFestId('CSE-2017')).toEqual({ dept: 'CSE', number: 2017 });
+    expect(sourceOfNumber(2017)).toBe('SELF');
+    expect(sourceOfNumber(1999)).toBe('DESK');
+    expect(sourceOfNumber(5001)).toBe('ONLINE');
+    expect(normaliseFestId('20017')).toBe('');
   });
 });
 
@@ -68,7 +70,7 @@ describe('AI&DS', () => {
     expect(deptShort('CSE')).toBe('CSE');
     expect(showId('AIDS-0007')).toBe('AI&DS-0007');
     expect(showId('CSE-0007')).toBe('CSE-0007');
-    expect(showId('20017')).toBe('20017');
+    expect(showId('AIDS-2001')).toBe('AI&DS-2001');
     for (const typed of ['AI&DS-7', 'ai&ds 0007', 'AI & DS-7', 'AIDS-0007', 'aids 7']) expect(normaliseFestId(typed)).toBe('AIDS-0007');
     expect(deptShort('CYS')).toBe('CYBER');
     expect(showId('CYS-0012')).toBe('CYBER-0012');

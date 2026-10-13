@@ -1,3 +1,4 @@
+import { useEffect, useRef, useState, type MouseEvent } from 'react';
 import { SkyBackdrop } from '../components/background/SkyBackdrop';
 import { SiteNotice } from '../components/help/SiteNotice';
 import { Footer, type FooterLink } from '../components/sections/Footer';
@@ -114,11 +115,56 @@ function Loop() {
   );
 }
 
+/** The pop-up of Register now: the 8 departments; each opens the students' page for it. */
+function ChooseDepartment({ onClose }: { onClose: () => void }) {
+  const first = useRef<HTMLAnchorElement>(null);
+  useEffect(() => {
+    first.current?.focus();
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') onClose();
+    };
+    window.addEventListener('keydown', onKey);
+    const overflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => {
+      window.removeEventListener('keydown', onKey);
+      document.body.style.overflow = overflow;
+    };
+  }, [onClose]);
+  return (
+    <div className="landing-modal" onClick={onClose}>
+      <div className="landing-modal__panel" role="dialog" aria-modal="true" aria-labelledby="landing-choose" onClick={(event) => event.stopPropagation()}>
+        <h2 id="landing-choose">Choose your department</h2>
+        <p>You register for one department and take part in its events.</p>
+        <ul className="landing-modal__list">
+          {departments.map((dept, index) => (
+            <li key={dept.code}>
+              <a ref={index === 0 ? first : undefined} href={`${REGISTER}?dept=${dept.code}`}>
+                <span className="landing-modal__code">{deptShort(dept.code)}</span>
+                <span className="landing-modal__name">{dept.name}</span>
+              </a>
+            </li>
+          ))}
+        </ul>
+        <button className="landing-modal__close" type="button" onClick={onClose}>
+          Close
+        </button>
+      </div>
+    </div>
+  );
+}
+
 /**
  * pragya2k26.online: the fest's front door. Staff sign in from here; students are told where
  * to register and, once it is set, sent to the events and route map website.
  */
 export function Landing() {
+  const [choosing, setChoosing] = useState(false);
+  // Register now opens the departments (without JavaScript the link still goes to the students' page).
+  const openChooser = (event: MouseEvent) => {
+    event.preventDefault();
+    setChoosing(true);
+  };
   return (
     <>
       {/* The PRAGYA sky: a still gradient at once, the slow light streaks on capable devices only */}
@@ -148,7 +194,7 @@ export function Landing() {
             PRAGYA 2K26, the college-wide technical fest of {site.institution}: {eventCount} events across {departments.length} departments.
           </p>
           <div className="landing-actions">
-            <a className="landing-button" href={REGISTER}>
+            <a className="landing-button" href={REGISTER} aria-haspopup="dialog" onClick={openChooser}>
               Register now
             </a>
             <a className="landing-button landing-button--ghost" href={MY_ID}>
@@ -169,7 +215,10 @@ export function Landing() {
           <h2 id="landing-students">Taking part?</h2>
           <ol className="landing-steps">
             <li>
-              <a href={REGISTER}>Register on your phone</a>: your details, the ₹{DEFAULT_CATALOG.entryFee} entry fee by UPI and its transaction ID. You get your registration ID at once.
+              <a href={REGISTER} aria-haspopup="dialog" onClick={openChooser}>
+                Register on your phone
+              </a>
+              : choose your department, your details, the ₹{DEFAULT_CATALOG.entryFee} entry fee by UPI and its transaction ID. You get your registration ID at once.
             </li>
             <li>Verify your payment at any registration desk: show your ID.</li>
             <li>Register for events at each event’s venue, in any department, on {festDay}.</li>
@@ -200,6 +249,7 @@ export function Landing() {
 
     </div>
       <Footer links={FOOTER_LINKS} />
+      {choosing && <ChooseDepartment onClose={() => setChoosing(false)} />}
       <p className="landing-coordinated">
         Overall coordinated by the <strong>Department of Artificial Intelligence and Data Science</strong>
       </p>
