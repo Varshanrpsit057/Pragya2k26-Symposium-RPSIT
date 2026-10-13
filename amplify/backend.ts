@@ -2,7 +2,7 @@
  * The PRAGYA 2026 backend on AWS (Amplify Gen 2), deployed by Amplify Hosting with each push:
  *
  *   HTTP API (API Gateway)  /api/*  →  Lambda "pragya-api"  →  DynamoDB, S3, Google APIs
- *   EventBridge schedule (every 30 min)  →  the same Lambda: backups, retries
+ *   EventBridge schedule (every 10 min)  →  the same Lambda: backups (bucket + Google Sheet), retries
  *   DynamoDB "Registrations" + "Control"  the approval workflow (authoritative state)
  *   S3 (private)            payment screenshots and participant passes
  *

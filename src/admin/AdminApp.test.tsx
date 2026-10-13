@@ -86,6 +86,20 @@ describe('dashboard of the student coordinators', () => {
     expect(screen.getByRole('link', { name: 'the CSE page' })).toHaveAttribute('href', '/landing/cse/admin/');
   });
 
+  it('lists every department’s staff page under the overall sign-in, not on a department’s own', () => {
+    window.history.replaceState(null, '', '/landing/admin/');
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response('{}'));
+    const { unmount } = render(<AdminApp />);
+    const list = screen.getByRole('navigation', { name: 'Department staff pages' });
+    const links = within(list).getAllByRole('link');
+    expect(links.map((link) => link.getAttribute('href'))).toEqual(['cse', 'aids', 'it', 'ece', 'cys', 'eee', 'mech', 'sh'].map((code) => `/landing/${code}/admin/`));
+    expect(within(list).getByRole('link', { name: /MECH\s*Mechanical Engineering/ })).toBeInTheDocument();
+    unmount();
+    window.history.replaceState(null, '', '/landing/cse/admin/');
+    render(<AdminApp />);
+    expect(screen.queryByRole('navigation', { name: 'Department staff pages' })).toBeNull();
+  });
+
   it('documents what every role may do, marking the signed-in role', async () => {
     signedInAs(session('COORDINATOR', { department: 'CSE', eventIds: ['cse-hackathon'] }));
     render(<AdminApp />);

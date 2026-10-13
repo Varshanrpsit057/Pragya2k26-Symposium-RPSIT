@@ -30,35 +30,12 @@
   padding-block: 1.1rem;
 }
 
+/* The RPSIT lockup (components/CollegeLockup), linking to the college's website */
 .landing-college {
   display: flex;
-  gap: 0.7rem;
-  align-items: center;
   min-width: 0;
   color: inherit;
   text-decoration: none;
-}
-
-.landing-college img {
-  flex: none;
-  border-radius: 50%;
-}
-
-.landing-college span {
-  display: flex;
-  flex-direction: column;
-  min-width: 0;
-  line-height: 1.25;
-}
-
-.landing-college strong {
-  font-size: 0.95rem;
-  font-weight: 650;
-}
-
-.landing-college span span {
-  color: var(--l-muted);
-  font-size: 0.85rem;
 }
 
 /* Buttons: solid for signing in, outlined for the events website */
@@ -267,42 +244,6 @@
   color: var(--l-ink);
 }
 
-/* The departments: each row is its staff page */
-.landing-depts {
-  display: grid;
-  margin: 1rem 0 0;
-  padding: 0;
-  list-style: none;
-}
-
-.landing-depts li + li {
-  border-top: 1px solid var(--l-line);
-}
-
-.landing-depts a {
-  display: grid;
-  grid-template-columns: 4.25rem 1fr;
-  gap: 0.75rem;
-  align-items: baseline;
-  padding: 0.85rem 0.25rem;
-  color: inherit;
-  text-decoration: none;
-}
-
-.landing-depts a:hover .landing-depts__name {
-  color: var(--l-ink);
-}
-
-.landing-depts__code {
-  font-weight: 800;
-  font-stretch: 125%;
-}
-
-.landing-depts__name {
-  color: var(--l-muted);
-  transition: color 0.15s ease;
-}
-
 .landing-foot {
   padding-block: 1.5rem 2.5rem;
   border-top: 1px solid var(--l-line);
@@ -323,38 +264,11 @@
   font-size: 0.85rem;
 }
 
-@media (min-width: 52rem) {
-  .landing-depts {
-    grid-template-columns: 1fr 1fr;
-    column-gap: 2.5rem;
-  }
-
-  /* Two columns: a rule above every row but the first of each column */
-  .landing-depts li:nth-child(2) {
-    border-top: 0;
-  }
-
-  .landing-block:has(.landing-depts) {
-    max-width: none;
-  }
-}
-
 @media (prefers-reduced-motion: reduce) {
   .landing-loop__line,
   .landing-loop__station {
     animation: none;
   }
-}
-
-.landing-staff {
-  display: inline-block;
-  margin-top: 1rem;
-  color: var(--l-muted);
-  font-weight: 600;
-}
-
-.landing-staff:hover {
-  color: var(--l-ink);
 }
 
 .landing-steps {
@@ -462,15 +376,32 @@
   line-height: 1.35;
 }
 
+/* The title, with the × to close in the corner */
+.landing-modal__head {
+  display: flex;
+  gap: 0.75rem;
+  align-items: flex-start;
+  justify-content: space-between;
+}
+
 .landing-modal__close {
-  width: 100%;
-  min-height: 2.8rem;
-  margin-top: 0.9rem;
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 2.5rem;
+  height: 2.5rem;
+  margin: -0.45rem -0.4rem 0 0;
+  padding: 0;
   border: 1px solid rgb(160 170 255 / 0.3);
-  border-radius: 0.8rem;
+  border-radius: 50%;
   color: #edefff;
-  font: inherit;
-  font-weight: 600;
-  background: transparent;
+  background: rgb(255 255 255 / 0.04);
   cursor: pointer;
+}
+
+.landing-modal__close:hover,
+.landing-modal__close:focus-visible {
+  border-color: #8c6cff;
+  background: rgb(140 108 255 / 0.16);
+  outline: none;
 }

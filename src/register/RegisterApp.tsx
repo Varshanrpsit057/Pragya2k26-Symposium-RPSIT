@@ -1,16 +1,16 @@
 /**
  * The students' page (pragya2k26.online/register/), on their own phones and mobile data:
- * register for the fest (details, the ₹100 entry fee by UPI and its transaction ID), then see
- * their ID and whether a desk has verified the payment. The ID stays on the phone.
+ * register for the fest (their details; the ₹100 entry fee is paid by UPI at their department's
+ * desk, which verifies it), then see their ID and whether the desk has taken the fee. The ID
+ * stays on the phone.
  */
 import { useCallback, useEffect, useState, type FormEvent, type ReactNode } from 'react';
 import { COLLEGES, OTHER_COLLEGE } from '../content/colleges';
-import { DEFAULT_UPI, deptShort, participantProblems, readParticipant, showId, TXN, YEARS, type StudentView } from '../lib/fest';
+import { deptShort, readParticipant, selfRegistrationProblems, showId, TXN, YEARS, type StudentView } from '../lib/fest';
 import { NO_CONNECTION, StudentApiError, fetchInfo, fetchMe, registerSelf, sendMyPayment, type PublicEvent, type PublicInfo, type StudentPass } from './registerApi';
 
 const SAVED = 'techfest-student';
 const DRAFT = 'techfest-draft';
-const STAFF = '/landing/admin/';
 
 /** The ID, the mobile number and (on the phone that registered) the page's private key. */
 type Saved = StudentPass;
@@ -24,7 +24,6 @@ interface Draft {
   branch: string;
   year: string;
   team: string;
-  txn: string;
 }
 
 const read = <T,>(key: string): T | null => {
@@ -50,10 +49,8 @@ const newId = () => {
   const bytes = random.getRandomValues(new Uint8Array(16));
   return `s-${Array.from(bytes, (byte: number) => byte.toString(16).padStart(2, '0')).join('')}`;
 };
-const emptyDraft = (): Draft => ({ submissionId: newId(), name: '', phone: '', email: '', college: '', branch: '', year: '', team: '', txn: '' });
+const emptyDraft = (): Draft => ({ submissionId: newId(), name: '', phone: '', email: '', college: '', branch: '', year: '', team: '' });
 const rupees = (amount: number) => `₹${amount.toLocaleString('en-IN')}`;
-const upiLink = (info: PublicInfo) =>
-  `upi://pay?pa=${encodeURIComponent(info.upiId)}&pn=${encodeURIComponent(info.upiPayee)}&am=${info.entryFee}&cu=INR&tn=${encodeURIComponent("INFINITE TECHFEST'26 entry")}`;
 const messageOf = (error: unknown) => (error instanceof Error ? error.message : NO_CONNECTION);
 
 export function RegisterApp() {
@@ -138,7 +135,6 @@ export function RegisterApp() {
       </main>
       <footer className="reg-foot">
         <a href="/">Home</a>
-        <a href={STAFF}>Staff sign in</a>
       </footer>
     </div>
   );
@@ -197,8 +193,7 @@ function RegisterForm({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [serverFields, setServerFields] = useState<Record<string, string>>({});
-  const [copied, setCopied] = useState(false);
-  const set = (change: Partial<Draft>) => {
+  const set =(change: Partial<Draft>) => {
     setDraft((current) => {
       const next = { ...current, ...change };
       write(DRAFT, next);
@@ -208,10 +203,8 @@ function RegisterForm({
   };
 
   const participant = readParticipant(draft);
-  const problems: Record<string, string> = { ...participantProblems(participant) };
+  const problems: Record<string, string> = { ...selfRegistrationProblems(participant) };
   if (draft.college === OTHER_COLLEGE) problems.college = 'Type the name of your college.';
-  const txn = draft.txn.replace(/\s/g, '');
-  if (!TXN.test(txn)) problems.txn = 'Type the transaction ID (UTR) from your UPI app: letters and digits, usually 12 digits.';
   const fieldError = (name: string) => (tried ? (serverFields[name] ?? problems[name]) : serverFields[name]);
 
   const submit = async (event: FormEvent) => {
@@ -224,7 +217,7 @@ function RegisterForm({
     }
     setBusy(true);
     try {
-      const view = await registerSelf({ submissionId: draft.submissionId, dept, participant, events: [], txn });
+      const view = await registerSelf({ submissionId: draft.submissionId, dept, participant, events: [] });
       write(DRAFT, null);
       onRegistered(view, participant.phone, draft.submissionId);
     } catch (failure) {
@@ -245,9 +238,7 @@ function RegisterForm({
           Change
         </button>
       </p>
-      <p className="reg-lead">
-        Fill in your details, pay the {rupees(info.entryFee)} entry fee by UPI, and type its transaction ID. You get your registration ID at once.
-      </p>
+      <p className="reg-lead">Fill in your details and you get your registration ID at once. You pay the {rupees(info.entryFee)} entry fee at the {deptShort(dept)} registration desk.</p>
       <button className="reg-link" type="button" onClick={onSignIn}>
         Already registered? See your registration
       </button>
@@ -268,10 +259,10 @@ function RegisterForm({
             ))}
           </datalist>
         </Field>
-        <Field label="Department / course (optional)">
+        <Field label="Department / course" error={fieldError('branch')}>
           <input value={draft.branch} placeholder="e.g. B.E. CSE" onChange={(event) => set({ branch: event.target.value })} />
         </Field>
-        <Field label="Year (optional)">
+        <Field label="Year" error={fieldError('year')}>
           <select value={draft.year} onChange={(event) => set({ year: event.target.value })}>
             <option value="">Choose…</option>
             {YEARS.map((year) => (
@@ -279,7 +270,7 @@ function RegisterForm({
             ))}
           </select>
         </Field>
-        <Field label="Email (optional)" error={fieldError('email')}>
+        <Field label="Email" error={fieldError('email')}>
           <input value={draft.email} type="email" inputMode="email" autoComplete="email" onChange={(event) => set({ email: event.target.value })} />
         </Field>
         <Field label="Team name (optional)" error={fieldError('team')}>
@@ -287,36 +278,10 @@ function RegisterForm({
         </Field>
       </fieldset>
 
-      <fieldset className="reg-group">
-        <legend>Entry fee: {rupees(info.entryFee)}</legend>
-        <ol className="reg-steps">
-          <li>
-            Pay {rupees(info.entryFee)} to <strong>{info.upiPayee}</strong>.
-            <a className="reg-button reg-button--pay" href={upiLink(info)}>
-              Pay {rupees(info.entryFee)} with a UPI app
-            </a>
-            <span className="reg-upi">
-              UPI ID <strong>{info.upiId}</strong>
-              <button
-                className="reg-chip"
-                type="button"
-                onClick={() => {
-                  void navigator.clipboard?.writeText(info.upiId).then(() => setCopied(true));
-                }}
-              >
-                {copied ? 'Copied' : 'Copy'}
-              </button>
-            </span>
-            {info.upiId === DEFAULT_UPI.upiId && <img className="reg-qr" src="/images/upi-qr.jpg" alt={`UPI QR code for ${info.upiId}`} width="200" height="200" loading="lazy" />}
-          </li>
-          <li>
-            Open the payment in your UPI app and copy its <strong>transaction ID (UTR)</strong>.
-          </li>
-        </ol>
-        <Field label="UPI transaction ID (UTR)" error={fieldError('txn')} hint="A registration desk checks it against the money received.">
-          <input value={draft.txn} inputMode="text" autoCapitalize="characters" autoComplete="off" spellCheck={false} onChange={(event) => set({ txn: event.target.value })} />
-        </Field>
-      </fieldset>
+      {/* No payment here: the department's desk shows its UPI QR code and verifies the payment */}
+      <p className="reg-next">
+        <strong>Entry fee {rupees(info.entryFee)}</strong> Pay it at the {deptShort(dept)} registration desk. The desk shows its UPI QR code and verifies your payment.
+      </p>
 
       {error && (
         <p className="reg-error" role="alert">
@@ -392,7 +357,7 @@ const STATUS: Record<StudentView['status'], { label: string; tone: string }> = {
   waiting: { label: 'Payment not verified yet', tone: 'warn' },
   verified: { label: 'Verified', tone: 'good' },
   rejected: { label: 'Payment not found', tone: 'bad' },
-  due: { label: 'Entry fee to pay at a desk', tone: 'warn' },
+  due: { label: 'Entry fee not paid yet', tone: 'warn' },
   cancelled: { label: 'Cancelled', tone: 'bad' },
 };
 
@@ -411,9 +376,9 @@ function MyRegistration({ saved, info, onForget }: { saved: Saved; info: PublicI
       .catch((failure) => setError(messageOf(failure)));
   }, [saved]);
   useEffect(refresh, [refresh]);
-  // While a desk has not checked the payment yet, look again every 45 seconds (only while the page is open on screen).
+  // While the desk has not taken the fee yet, look again every 45 seconds (only while the page is open on screen).
   useEffect(() => {
-    if (view && view.status !== 'waiting') return;
+    if (view && view.status !== 'waiting' && view.status !== 'due') return;
     const timer = window.setInterval(() => {
       if (document.visibilityState === 'visible') refresh();
     }, 45_000);
@@ -452,7 +417,12 @@ function MyRegistration({ saved, info, onForget }: { saved: Saved; info: PublicI
         </p>
       )}
       {view?.status === 'verified' && <p className="reg-next reg-next--good">You are verified. Go to any event and register at its venue with this ID.</p>}
-      {view?.status === 'due' && <p className="reg-next">Pay the entry fee at a registration desk and show this ID.</p>}
+      {view?.status === 'due' && (
+        <p className="reg-next">
+          <strong>Pay the {info ? `${rupees(info.entryFee)} ` : ''}entry fee at the {deptShort(view.dept)} registration desk.</strong> Show this ID there: the desk shows its UPI QR code and
+          verifies your payment. Then register for events at each event’s venue.
+        </p>
+      )}
       {view?.status === 'cancelled' && <p className="reg-next">This registration was cancelled. Please go to a registration desk.</p>}
       {view?.status === 'rejected' && (
         <div className="reg-next reg-next--bad">

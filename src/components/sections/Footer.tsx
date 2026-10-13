@@ -1,3 +1,4 @@
+import { CollegeLockup } from '../CollegeLockup';
 import { crew } from '../../content/crew';
 import { site } from '../../content/site';
 import { HelpDeskLine } from '../help/HelpDeskLine';
@@ -17,13 +18,8 @@ interface FooterProps {
   links: readonly FooterLink[];
 }
 
-export const CONTACT_PENDING_MESSAGE = 'Symposium coordinators will be announced soon.';
-
 /** '93449 72274' → 'tel:+919344972274' */
 const telHref = (number: string) => `tel:+91${number.replace(/\D/g, '')}`;
-
-/** '+91 73582 13736' → 'tel:+917358213736' */
-const personTel = (phone: string) => `tel:${phone.replace(/[^\d+]/g, '')}`;
 
 /** 'https://www.rpsit.ac.in/' → 'www.rpsit.ac.in' */
 const displayUrl = (url: string) => url.replace(/^https?:\/\//, '').replace(/\/$/, '');
@@ -34,20 +30,19 @@ const displayUrl = (url: string) => url.replace(/^https?:\/\//, '').replace(/\/$
  */
 export function Footer({ links }: FooterProps) {
   const { college } = site;
-  const hasContacts = site.contacts.length > 0 || Boolean(site.email);
   const credited = crew.filter((member) => member.credited);
 
   return (
     <footer id="contact" className="footer" aria-labelledby="contact-title">
       <div className="container footer__grid">
         <div className="footer__brand">
-          {/* The college crest, as in the header; the institution is named just below */}
-          <img className="footer__logo" src="/images/rpsit-crest.webp" alt="" width="153" height="240" loading="lazy" />
+          {/* The college's lockup, as in the header */}
+          <CollegeLockup className="footer__college" loading="lazy" />
+          {/* The fest's name, as in the hero (site.name, PRAGYA, stays on the passes, emails and reports) */}
           <p className="footer__wordmark">
-            {site.name} <span className="footer__year">{site.year}</span>
+            Infinite Techfest<span className="footer__year">’26</span>
           </p>
           <p className="footer__tagline">{site.tagline}</p>
-          <p className="footer__institution">{site.institution}</p>
 
           <ul className="footer__credentials" aria-label="Accreditation">
             {college.credentials.map((credential) => (
@@ -101,29 +96,6 @@ export function Footer({ links }: FooterProps) {
             <h3 className="footer__subheading">Help desk</h3>
             <HelpDeskLine lead="Call for any help" />
           </div>
-
-          {hasContacts ? (
-            <div className="footer__coordinators">
-              <h3 className="footer__subheading">Coordinator contact</h3>
-              <ul className="footer__people">
-                {site.contacts.map((person) => (
-                  <li key={`${person.name}-${person.phone ?? person.email ?? ''}`}>
-                    <span className="footer__person">{person.name}</span>
-                    {person.role && <span className="footer__role">{person.role}</span>}
-                    {person.phone && (
-                      <a className="footer__person-phone" href={personTel(person.phone)}>
-                        <ContactIcon name="phone" size={15} />
-                        {person.phone}
-                      </a>
-                    )}
-                    {person.email && <a href={`mailto:${person.email}`}>{person.email}</a>}
-                  </li>
-                ))}
-              </ul>
-            </div>
-          ) : (
-            <p className="footer__pending">{CONTACT_PENDING_MESSAGE}</p>
-          )}
         </div>
 
         <div className="footer__more">
@@ -222,7 +194,7 @@ export function Footer({ links }: FooterProps) {
 
       <div className="container footer__base">
         <p>
-          © {site.year} {site.name}, {site.institution}
+          © {site.year} Infinite Techfest, {site.institution}
         </p>
         <a href="#home" className="footer__top">
           Back to top
@@ -230,7 +202,7 @@ export function Footer({ links }: FooterProps) {
       </div>
 
       <p className="footer__echo" aria-hidden="true">
-        {site.name}
+        Infinite
       </p>
     </footer>
   );

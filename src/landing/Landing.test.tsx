@@ -3,28 +3,27 @@ import { describe, expect, it } from 'vitest';
 import { Landing } from './Landing';
 
 describe('the front door (pragya2k26.online)', () => {
-  it('names the fest and its day, sends students to register and staff to sign in', () => {
+  it('names the fest and its day, and sends students to register', () => {
     render(<Landing />);
     expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent(/Infinite\s*Techfest’26/);
     expect(screen.getByText('17 October 2026', { selector: '.landing-date' })).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Register now' })).toHaveAttribute('href', '/register/');
     for (const link of screen.getAllByRole('link', { name: 'My registration ID' })) expect(link).toHaveAttribute('href', '/register/?my');
-    expect(screen.getAllByRole('link', { name: 'Staff sign in' })[0]).toHaveAttribute('href', '/landing/admin/');
   });
 
-  it('lists every department’s staff page', () => {
-    render(<Landing />);
-    const list = screen.getByRole('region', { name: 'Department staff pages' });
-    const links = within(list).getAllByRole('link');
-    expect(links.map((link) => link.getAttribute('href'))).toEqual(['cse', 'aids', 'it', 'ece', 'cys', 'eee', 'mech', 'sh'].map((code) => `/landing/${code}/admin/`));
-    expect(within(list).getByRole('link', { name: /MECH\s*Mechanical Engineering/ })).toBeInTheDocument();
+  it('links to no staff page: staff open /landing/admin/ by its address', () => {
+    const { container } = render(<Landing />);
+    expect(screen.queryByRole('link', { name: 'Staff sign in' })).toBeNull();
+    expect(screen.queryByRole('region', { name: 'Department staff pages' })).toBeNull();
+    expect(container.querySelector('a[href*="/admin"]')).toBeNull();
   });
 
-  it('tells students the three steps: register on the phone, verify at a desk, events at the venue', () => {
+  it('tells students the three steps: register on the phone, pay at their department’s desk, events at the venue', () => {
     render(<Landing />);
     const steps = screen.getByRole('region', { name: 'Taking part?' });
     expect(steps).toHaveTextContent('Register on your phone');
-    expect(steps).toHaveTextContent('Verify your payment at any registration desk');
+    expect(steps).not.toHaveTextContent('transaction ID');
+    expect(steps).toHaveTextContent('Pay the ₹100 entry fee by UPI at your department’s registration desk');
     expect(steps).toHaveTextContent('Register for events at each event’s venue, in any department');
     expect(screen.queryByRole('link', { name: 'Events and route map' })).toBeNull();
   });
@@ -48,6 +47,14 @@ describe('the front door (pragya2k26.online)', () => {
     expect(within(dialog).getByRole('link', { name: /^CYBER/ })).toBeInTheDocument();
     expect(within(dialog).getByRole('link', { name: /^S&H/ })).toBeInTheDocument();
     fireEvent.keyDown(window, { key: 'Escape' });
+    expect(screen.queryByRole('dialog')).toBeNull();
+  });
+
+  it('closes the pop-up from the × in its corner', () => {
+    render(<Landing />);
+    fireEvent.click(screen.getByRole('link', { name: 'Register now' }));
+    const dialog = screen.getByRole('dialog', { name: 'Choose your department' });
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Close' }));
     expect(screen.queryByRole('dialog')).toBeNull();
   });
 });

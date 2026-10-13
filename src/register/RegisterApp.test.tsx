@@ -37,9 +37,25 @@ async function fill() {
   fireEvent.change(await screen.findByLabelText('Name with initial'), { target: { value: 'Meena K' } });
   fireEvent.change(screen.getByLabelText(/^Mobile number/), { target: { value: '97900 11122' } });
   fireEvent.change(screen.getByLabelText('College'), { target: { value: 'Sona College of Technology' } });
+  fireEvent.change(screen.getByLabelText('Department / course'), { target: { value: 'B.E. CSE' } });
+  fireEvent.change(screen.getByLabelText('Year'), { target: { value: '3rd Year' } });
+  fireEvent.change(screen.getByLabelText('Email'), { target: { value: 'meena.k@example.com' } });
 }
 
 describe('a student on their phone', () => {
+  it('must give the department / course, the year and the email (none of them is optional)', async () => {
+    const h = setup({ at: TIMES.eventDay });
+    backend(h);
+    render(<RegisterApp />);
+    fireEvent.click(await screen.findByRole('button', { name: /^AI&DS/ }));
+    expect(await screen.findByLabelText('Department / course')).toBeInTheDocument();
+    expect(screen.queryByText(/\(optional\)/, { selector: '.reg-field__label' })).toHaveTextContent('Team name (optional)');
+    fireEvent.click(screen.getByRole('button', { name: 'Register' }));
+    expect(await screen.findByText('Enter your department or course.')).toBeInTheDocument();
+    expect(screen.getByText('Choose your year.')).toBeInTheDocument();
+    expect(screen.getByText('Enter your email address.')).toBeInTheDocument();
+  });
+
   it('chooses the department first (all 8), then registers without choosing events (they register at each venue)', async () => {
     const h = setup({ at: TIMES.eventDay });
     backend(h);
@@ -85,21 +101,22 @@ describe('a student on their phone', () => {
     backend(h);
     const first = render(<RegisterApp />);
     await fill();
-    fireEvent.click(screen.getByRole('button', { name: 'Register' }));
-    // The transaction ID is needed.
-    expect(await screen.findByText(/Type the transaction ID \(UTR\)/)).toBeInTheDocument();
-    fireEvent.change(screen.getByLabelText(/^UPI transaction ID/), { target: { value: '7123 4567 8901' } });
+    // No payment on the phone: the department's desk shows its UPI QR code and verifies the payment.
+    expect(screen.queryByLabelText(/transaction ID/)).toBeNull();
+    expect(screen.queryByRole('link', { name: /with a UPI app/ })).toBeNull();
+    expect(screen.queryByRole('img', { name: /UPI QR code/ })).toBeNull();
+    expect(screen.getByText(/Pay it at the AI&DS registration desk/)).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Register' }));
 
     expect(await screen.findByText('AI&DS-2001')).toBeInTheDocument();
-    expect(await screen.findByText('Payment not verified yet')).toBeInTheDocument();
-    expect(screen.getByText(/Verify your payment at a payment verification desk/)).toBeInTheDocument();
-    expect(screen.getByText(/you can register for events at each event’s venue/)).toBeInTheDocument();
+    expect(await screen.findByText('Entry fee not paid yet')).toBeInTheDocument();
+    expect(screen.getByText(/Pay the ₹100 entry fee at the AI&DS registration desk/)).toBeInTheDocument();
+    expect(screen.getByText(/Show this ID there: the desk shows its UPI QR code and verifies your payment/)).toBeInTheDocument();
 
-    // Closed and opened again: the ID is still there; a desk has verified it meanwhile.
+    // Closed and opened again: the ID is still there; the desk has taken the fee by UPI meanwhile.
     first.unmount();
     const desk = await h.staff('DESK', [], 'aids-desk1', { department: 'AIDS', deskNumber: 1 });
-    await h.call('POST', '/api/admin/fest/registrations/AIDS-2001', { action: 'verify', confirmed: true }, { token: desk.token });
+    await h.call('POST', '/api/admin/fest/registrations/AIDS-2001', { action: 'checkin', payment: { method: 'UPI', txn: '712345678901', confirmed: true } }, { token: desk.token });
     render(<RegisterApp />);
     expect(await screen.findByText('AI&DS-2001')).toBeInTheDocument();
     expect(await screen.findByText('Verified')).toBeInTheDocument();
@@ -111,17 +128,16 @@ describe('a student on their phone', () => {
     backend(h);
     render(<RegisterApp />);
     await fill();
-    fireEvent.change(screen.getByLabelText(/^UPI transaction ID/), { target: { value: '712345678901' } });
     vi.spyOn(globalThis, 'fetch').mockRejectedValue(new TypeError('Failed to fetch'));
     await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Register' })));
     expect(await screen.findByRole('alert')).toHaveTextContent('No connection');
     expect(screen.getByLabelText('Name with initial')).toHaveValue('Meena K');
-    expect(JSON.parse(localStorage.getItem('techfest-draft')!)).toMatchObject({ name: 'Meena K', txn: '712345678901' });
+    expect(JSON.parse(localStorage.getItem('techfest-draft')!)).toMatchObject({ name: 'Meena K', email: 'meena.k@example.com' });
   });
 
   it('finds an earlier registration with its ID and mobile number', async () => {
     const h = setup({ at: TIMES.eventDay });
-    await h.call('POST', '/api/fest/register', { submissionId: 'self-test-key-0000000000001', dept: 'CSE', participant: { name: 'Divya R', phone: '9840011111', college: 'Sona' }, events: [], txn: '412345678901' }, { ip: '10.0.0.8' });
+    await h.call('POST', '/api/fest/register', { submissionId: 'self-test-key-0000000000001', dept: 'CSE', participant: { name: 'Divya R', phone: '9840011111', college: 'Sona', branch: 'B.E. CSE', year: '2nd Year', email: 'divya.r@example.com' }, events: [] }, { ip: '10.0.0.8' });
     backend(h);
     render(<RegisterApp />);
     fireEvent.click(await screen.findByRole('button', { name: 'Already registered? See your registration' }));

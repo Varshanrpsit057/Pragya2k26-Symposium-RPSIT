@@ -1,0 +1,37 @@
+/* The RPSIT lockup: crest, then the name over "AN AUTONOMOUS INSTITUTION". Set --lockup-crest to size the crest. */
+.college-lockup {
+  display: flex;
+  gap: 0.85rem;
+  align-items: center;
+  min-width: 0;
+}
+
+.college-lockup__crest {
+  flex: none;
+  width: auto;
+  height: var(--lockup-crest, 3.6rem);
+  filter: drop-shadow(0 2px 10px rgb(140 108 255 / 0.4));
+}
+
+.college-lockup__text {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  min-width: 0;
+}
+
+.college-lockup__name {
+  color: var(--c-college);
+  font-size: 1.05rem;
+  font-weight: 700;
+  line-height: 1.2;
+}
+
+.college-lockup__status {
+  color: var(--c-college-sub);
+  font-size: 0.66rem;
+  font-weight: 600;
+  line-height: 1.3;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+}

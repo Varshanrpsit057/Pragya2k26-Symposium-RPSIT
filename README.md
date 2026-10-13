@@ -44,8 +44,9 @@ also has its own link, `/landing/<dept>/admin/?event=<event id>`, which opens on
   closed) are edited by the web assist team in **Departments & events**, for everyone at once.
 - **Accounts**: **Accounts → Create a department’s accounts** makes a department's HOD, admin, desks
   and coordinators in one go; download the logins then (the passwords are not shown again).
-- **Backups**: every 30 minutes the schedule writes every department's data to
-  `backups/fest/all.json` in the private bucket (every earlier version is kept), on top of
+- **Backups**: every 10 minutes the schedule writes every department's data to
+  `backups/fest/all.json` in the private bucket (every earlier version is kept) and, when anything
+  changed, to the Google Sheet's **Fest registrations** and **Fest results** tabs in one request, on top of
   DynamoDB's point-in-time recovery (the `FestRecords` table, deletion protected). Test data is
   saved to `backups/fest-test-data-*.json` before it is deleted.
 
@@ -105,7 +106,7 @@ GitHub ──push──▶ AWS Amplify Hosting (build: amplify.yml)
                    ├─ website: dist/ (React/Vite) on Amplify's CDN
                    └─ backend: amplify/ (Amplify Gen 2, AWS CDK)
                         HTTP API (API Gateway) /api/*  ──▶  Lambda "pragya-api" (Node.js 22)
-                        EventBridge, every 30 min      ──▶  same Lambda: retries
+                        EventBridge, every 10 min      ──▶  same Lambda: backups, retries
                         DynamoDB  Registrations, Control   (workflow state, IDs, sessions,
                                                             staff accounts, event results)
                         S3 (private)  payment screenshots, participant passes
@@ -344,14 +345,14 @@ the build and the secret check.
 | Form says registration "isn't open yet" | The API is missing a setting: CloudWatch logs list them under *not configured*. |
 | Browser console: CORS error | The site's address is not allowed: add it to `ALLOWED_ORIGINS` and redeploy. |
 | `invalid_grant` in the logs | The Google sign-in expired or was revoked: run `npm run google:auth` again, update `GOOGLE_REFRESH_TOKEN`, redeploy. Make sure the consent screen is *In production*. |
-| Sheet shows "Waiting to sync" in the dashboard | Google was unreachable; the schedule retries every 30 minutes, without duplicates. |
+| Sheet shows "Waiting to sync" in the dashboard | Google was unreachable; the schedule retries every 10 minutes, without duplicates. |
 | Email status **FAILED** | Gmail refused it (see the error). Use **Retry failed steps**; it is also retried automatically. |
 | Email status **UNKNOWN** | Gmail did not confirm. Check the sender's Sent folder, then **Resend email** only if it is not there. |
 | "Too many sign-in attempts" | 10 wrong attempts from one address: wait 15 minutes. |
 | "The registration server is very busy" | A route's gateway throttle was reached (CloudWatch access logs show status 429). If it is genuine traffic, raise that route in `ROUTES` in `amplify/backend.ts` and push. |
 | Deploy fails on `ReservedConcurrentExecutions` | The account cannot reserve that much concurrency: lower or remove `API_RESERVED_CONCURRENCY`. |
 | `/landing/admin` shows the main page | Use `/landing/admin/`, or add a rewrite in **Hosting → Rewrites and redirects**: source `/landing/admin`, target `/landing/admin/index.html`, type `200`. |
-| First registration right after the very first deploy says "temporarily unavailable" | The ID counter starts from the sheet's highest ID; the schedule sets it up within 30 minutes of the first deploy, or check the Google settings. |
+| First registration right after the very first deploy says "temporarily unavailable" | The ID counter starts from the sheet's highest ID; the schedule sets it up within 10 minutes of the first deploy, or check the Google settings. |
 | A staff member says "Your role cannot do this" | Their role lacks that permission (dashboard → Roles). An admin changes the role in Staff; it applies at once. |
 | A coordinator says "This event is not assigned to your account" | Admin → Staff → Edit → tick the event. |
 | "Ask an admin to authorise a correction" | The event's results are submitted and locked. An admin opens the event and chooses **Authorise correction** with a reason. |

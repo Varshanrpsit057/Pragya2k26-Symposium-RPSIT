@@ -1,6 +1,7 @@
 /**
  * Students registering themselves on their phones (no sign-in): they choose their department, get an
- * ID of it (IT-2001…), and that department's desks check the entry fee's UPI transaction ID; its event
+ * ID of it (IT-2001…), and pay the entry fee by UPI at that department's desk, which records it (a
+ * transaction ID sent by an older copy of the page is checked by the desk instead); its event
  * coordinators take them in.
  */
 import { describe, expect, it, vi } from 'vitest';
@@ -16,7 +17,7 @@ const form = (extra: Record<string, unknown> = {}) => {
   count += 1;
   return {
     submissionId: `self-key-${String(count).padStart(16, '0')}`,
-    participant: { name: 'Divya R', phone: `98${String(40000000 + count).padStart(8, '0')}`, email: '', college: 'Sona College of Technology', branch: 'B.E. ECE', year: '3rd Year', team: '' },
+    participant: { name: 'Divya R', phone: `98${String(40000000 + count).padStart(8, '0')}`, email: 'divya.r@example.com', college: 'Sona College of Technology', branch: 'B.E. ECE', year: '3rd Year', team: '' },
     dept: 'IT',
     events: [],
     txn: '412345678901',
@@ -28,6 +29,22 @@ const me = (h: Harness, id: string, phone: string) => h.call('POST', '/api/fest/
 const view = (response: { body: { registration: StudentView } }) => response.body.registration;
 
 describe('a student registering on their phone', () => {
+  it('registers with no payment on the phone: the fee is due, and their department’s desk takes it by UPI', async () => {
+    const h = setup({ at: TIMES.eventDay });
+    const withoutTxn = form({ txn: undefined });
+    const registered = await selfRegister(h, withoutTxn);
+    expect(registered.status).toBe(200);
+    expect(view(registered)).toMatchObject({ id: 'IT-2001', status: 'due', txnEnd: '' });
+    // A malformed transaction ID (only an older copy of the page sends one) is still refused.
+    expect((await selfRegister(h, form({ txn: '12' }))).body).toMatchObject({ code: 'INVALID', details: { txn: expect.any(String) } });
+
+    const desk = await h.staff('DESK', [], 'it-desk1', { department: 'IT', deskNumber: 1 });
+    expect((await h.call('POST', '/api/admin/fest/registrations/IT-2001', { action: 'verify', confirmed: true }, { token: desk.token })).body.code).toBe('NO_CLAIM');
+    const paid = await h.call('POST', '/api/admin/fest/registrations/IT-2001', { action: 'checkin', payment: { method: 'UPI', txn: '512345678901', confirmed: true } }, { token: desk.token });
+    expect(paid.status).toBe(200);
+    expect(view(await me(h, 'IT-2001', withoutTxn.participant.phone))).toMatchObject({ status: 'verified', txnEnd: '8901' });
+  });
+
   it('chooses a department and gets the next ID of that department (IT-2001) at once, waiting for that department’s desk to check the payment', async () => {
     const h = setup({ at: TIMES.eventDay });
     const info = await h.call('GET', '/api/fest/info');
@@ -52,7 +69,10 @@ describe('a student registering on their phone', () => {
 
   it('is told plainly when something is missing, the number is already registered, or registration is closed', async () => {
     const h = setup({ at: TIMES.eventDay });
-    expect((await selfRegister(h, form({ txn: '' }))).body).toMatchObject({ code: 'INVALID', details: { txn: expect.any(String) } });
+    // The department / course, the year and the email are needed on the student's own form.
+    const blank = form();
+    const missing = await selfRegister(h, { ...blank, participant: { ...blank.participant, branch: '', year: '', email: '' } });
+    expect(missing.body).toMatchObject({ code: 'INVALID', details: { branch: expect.any(String), year: expect.any(String), email: expect.any(String) } });
     const body = form();
     await selfRegister(h, body);
     const twice = await selfRegister(h, { ...form(), participant: body.participant });

@@ -162,8 +162,10 @@ textarea {
 /* Sign-in */
 .adm-login {
   display: grid;
+  gap: 1rem;
   min-height: 100vh;
   place-items: center;
+  align-content: center;
   padding: 1rem;
 }
 
@@ -176,6 +178,46 @@ textarea {
 
 .adm-login__title {
   font-size: 1.35rem;
+}
+
+/* Under the sign-in on /landing/admin/: every department's own staff page */
+.adm-login__depts {
+  gap: 0.5rem;
+}
+
+.adm-login__depts-title {
+  font-size: 1.05rem;
+}
+
+.adm-login__depts ul {
+  display: grid;
+  margin: 0.25rem 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.adm-login__depts li + li {
+  border-top: 1px solid var(--adm-line);
+}
+
+.adm-login__depts a {
+  display: grid;
+  grid-template-columns: 4rem 1fr;
+  gap: 0.6rem;
+  align-items: baseline;
+  padding: 0.6rem 0.25rem;
+  color: var(--adm-muted);
+  text-decoration: none;
+}
+
+.adm-login__depts a strong {
+  color: var(--adm-text);
+}
+
+.adm-login__depts a:hover span,
+.adm-login__depts a:focus-visible span {
+  color: var(--adm-primary);
+  text-decoration: underline;
 }
 
 .adm-field {

@@ -1,13 +1,12 @@
 import { useEffect, useRef, useState, type MouseEvent } from 'react';
 import { SkyBackdrop } from '../components/background/SkyBackdrop';
+import { CollegeLockup } from '../components/CollegeLockup';
 import { SiteNotice } from '../components/help/SiteNotice';
 import { Footer, type FooterLink } from '../components/sections/Footer';
 import { site } from '../content/site';
 import { DEFAULT_CATALOG, deptShort } from '../lib/fest';
 import './Landing.css';
 
-/** Where staff sign in (every role; department staff may also use their department's page). */
-export const STAFF_SIGN_IN = '/landing/admin/';
 /** The students' page: register on their phone, then their ID and payment status. */
 export const REGISTER = '/register/';
 /** "My registration ID": the students' page opened on their registration (ID and mobile number). */
@@ -16,7 +15,6 @@ export const MY_ID = '/register/?my';
 const FOOTER_LINKS: readonly FooterLink[] = [
   { id: 'register', label: 'Register', href: REGISTER },
   { id: 'my-id', label: 'My registration ID', href: MY_ID },
-  { id: 'staff', label: 'Staff sign in', href: STAFF_SIGN_IN },
 ];
 
 /**
@@ -134,7 +132,14 @@ function ChooseDepartment({ onClose }: { onClose: () => void }) {
   return (
     <div className="landing-modal" onClick={onClose}>
       <div className="landing-modal__panel" role="dialog" aria-modal="true" aria-labelledby="landing-choose" onClick={(event) => event.stopPropagation()}>
-        <h2 id="landing-choose">Choose your department</h2>
+        <div className="landing-modal__head">
+          <h2 id="landing-choose">Choose your department</h2>
+          <button className="landing-modal__close" type="button" aria-label="Close" onClick={onClose}>
+            <svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+              <path d="M6 6l12 12M18 6 6 18" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+            </svg>
+          </button>
+        </div>
         <p>You register for one department and take part in its events.</p>
         <ul className="landing-modal__list">
           {departments.map((dept, index) => (
@@ -146,17 +151,15 @@ function ChooseDepartment({ onClose }: { onClose: () => void }) {
             </li>
           ))}
         </ul>
-        <button className="landing-modal__close" type="button" onClick={onClose}>
-          Close
-        </button>
       </div>
     </div>
   );
 }
 
 /**
- * pragya2k26.online: the fest's front door. Staff sign in from here; students are told where
- * to register and, once it is set, sent to the events and route map website.
+ * pragya2k26.online: the fest's front door, for students: where to register and, once it is
+ * set, the events and route map website. It links to no staff page: staff open /landing/admin/
+ * (it lists every department's staff page) by its address.
  */
 export function Landing() {
   const [choosing, setChoosing] = useState(false);
@@ -172,11 +175,7 @@ export function Landing() {
     <div id="home" className="landing">
       <header className="landing-top">
         <a className="landing-college" href={site.college.website} target="_blank" rel="noopener noreferrer">
-          <img src="/images/rpsit-crest.webp" alt="" width="40" height="40" />
-          <span>
-            <strong>{site.college.name}</strong>
-            <span>Salem</span>
-          </span>
+          <CollegeLockup />
         </a>
       </header>
 
@@ -191,7 +190,7 @@ export function Landing() {
           </h1>
           {site.dates && <p className="landing-date">{site.dates}</p>}
           <p className="landing-lead">
-            PRAGYA 2K26, the college-wide technical fest of {site.institution}: {eventCount} events across {departments.length} departments.
+            Infinite Techfest’26, the college-wide technical fest of {site.institution}: {eventCount} events across {departments.length} departments.
           </p>
           <div className="landing-actions">
             <a className="landing-button" href={REGISTER} aria-haspopup="dialog" onClick={openChooser}>
@@ -206,9 +205,6 @@ export function Landing() {
               </a>
             )}
           </div>
-          <a className="landing-staff" href={STAFF_SIGN_IN}>
-            Staff sign in
-          </a>
         </section>
 
         <section className="landing-block" aria-labelledby="landing-students">
@@ -218,9 +214,9 @@ export function Landing() {
               <a href={REGISTER} aria-haspopup="dialog" onClick={openChooser}>
                 Register on your phone
               </a>
-              : choose your department, your details, the ₹{DEFAULT_CATALOG.entryFee} entry fee by UPI and its transaction ID. You get your registration ID at once.
+              : choose your department and fill in your details. You get your registration ID at once.
             </li>
-            <li>Verify your payment at any registration desk: show your ID.</li>
+            <li>Pay the ₹{DEFAULT_CATALOG.entryFee} entry fee by UPI at your department’s registration desk: show your ID, and the desk verifies your payment.</li>
             <li>Register for events at each event’s venue, in any department, on {festDay}.</li>
           </ol>
           <p>Registered online already? Give the desk the mobile number you registered with.</p>
@@ -229,21 +225,6 @@ export function Landing() {
               Every department’s events, and the way to each venue, are on the <a href={EVENTS_SITE_URL}>events and route map website</a>.
             </p>
           )}
-        </section>
-
-        <section className="landing-block" aria-labelledby="landing-departments">
-          <h2 id="landing-departments">Department staff pages</h2>
-          <p>Desks, event coordinators and HODs sign in on their department’s page.</p>
-          <ul className="landing-depts">
-            {departments.map((dept) => (
-              <li key={dept.code}>
-                <a href={`/landing/${dept.code.toLowerCase()}/admin/`}>
-                  <span className="landing-depts__code">{deptShort(dept.code)}</span>
-                  <span className="landing-depts__name">{dept.name}</span>
-                </a>
-              </li>
-            ))}
-          </ul>
         </section>
       </main>
 

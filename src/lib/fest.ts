@@ -504,6 +504,18 @@ export function participantProblems(participant: FestParticipant): Partial<Recor
   return problems;
 }
 
+/**
+ * The students' own online form also needs the department / course, the year and the email (a
+ * desk, an edit or an import keeps them optional, so walk-ins and older records still go through).
+ */
+export function selfRegistrationProblems(participant: FestParticipant): Partial<Record<keyof FestParticipant, string>> {
+  const problems = participantProblems(participant);
+  if (participant.branch.length < 2) problems.branch = 'Enter your department or course.';
+  if (!(YEARS as readonly string[]).includes(participant.year)) problems.year = 'Choose your year.';
+  if (!participant.email) problems.email = 'Enter your email address.';
+  return problems;
+}
+
 // ------------------------------------------------------------------------------------------
 // CSV (the online form's export, and downloads)
 

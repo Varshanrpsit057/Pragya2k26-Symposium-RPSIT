@@ -191,7 +191,8 @@ const nextPhone = () => `6${runSeed}${String(++phoneCounter).padStart(6, '0')}`;
 const student = () => ({
   name: `${pick(FIRST)} ${String.fromCharCode(65 + Math.floor(Math.random() * 26))}. Loadtest`,
   phone: nextPhone(),
-  email: '',
+  // Required on the students' own form; nothing is ever emailed to it
+  email: 'loadtest@example.com',
   college: 'Load Test College',
   branch: 'B.E. Load Test',
   year: '2nd Year',
@@ -271,12 +272,16 @@ async function phone(device, password, endAt) {
   }
 }
 
-/** A desk verifies one self-registered student waiting for a payment check; false when none waits. */
+/**
+ * A desk takes the entry fee from one self-registered student: by UPI at the desk (its QR code),
+ * or, for a transaction ID sent by an older copy of the page, by checking it; false when none waits.
+ */
 async function verifyOne(token, dept) {
-  const waiting = [...(seen.get(dept)?.values() ?? [])].find((item) => item.entry?.status === 'DUE' && item.entry.claim && !item.entry.rejected && !verifying.has(item.id));
+  const waiting = [...(seen.get(dept)?.values() ?? [])].find((item) => item.entry?.status === 'DUE' && !item.entry.rejected && !item.cancelled && !item.deleted && !verifying.has(item.id));
   if (!waiting) return false;
   verifying.add(waiting.id);
-  const answer = await call('verify payment', 'POST', `/api/admin/fest/registrations/${waiting.id}`, { action: 'verify', confirmed: true }, token);
+  const body = waiting.entry.claim ? { action: 'verify', confirmed: true } : { action: 'checkin', payment: { method: 'UPI', txn: nextTxn(), confirmed: true } };
+  const answer = await call('verify payment', 'POST', `/api/admin/fest/registrations/${waiting.id}`, body, token);
   if (answer.status === 200) {
     verified += 1;
     if (answer.json?.registration) merge([answer.json.registration]);
@@ -291,7 +296,6 @@ async function selfStudent(departments, endAt) {
     dept: pick(departments),
     participant: { ...student(), phone: `8${runSeed}${String(++phoneCounter).padStart(6, '0')}` },
     events: [],
-    txn: nextTxn(),
   };
   const answer = await call('student register', 'POST', '/api/fest/register', body);
   const id = answer.json?.registration?.id;

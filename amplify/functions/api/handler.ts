@@ -3,8 +3,9 @@
  *
  * Invoked two ways:
  *   - by API Gateway (HTTP API) for every /api/* request: see server/http.ts for the routes;
- *   - by an EventBridge schedule every 30 minutes: backs up the fest, retries whatever failed earlier (the
- *     Google Drive / Sheets copy, or the pass and email of an approved registration).
+ *   - by an EventBridge schedule every 10 minutes: backs up the fest (to the private bucket, and to the
+ *     Google Sheet when anything changed), retries whatever failed earlier (the Google Drive / Sheets
+ *     copy, or the pass and email of an approved registration).
  *
  * Secrets arrive in process.env (Amplify resolves them from SSM before this code runs).
  */
@@ -14,6 +15,7 @@ import { encodeResponse } from '../../../server/compress';
 import { DriveStore } from '../../../server/drive';
 import { DynamoStore } from '../../../server/dynamoStore';
 import { DynamoFestStore } from '../../../server/festDynamo';
+import { FestSheetBackup } from '../../../server/festSheet';
 import { S3Files } from '../../../server/files';
 import { sendMail } from '../../../server/gmail';
 import { GoogleClient } from '../../../server/google';
@@ -41,9 +43,11 @@ function getService(): Service | null {
   }
   missingSettings = [];
   const google = new GoogleClient(config.google);
+  const store = new DynamoStore(config.tables);
   service = new Service({
-    store: new DynamoStore(config.tables),
+    store,
     fest: new DynamoFestStore(config.tables.fest),
+    festSheet: new FestSheetBackup(google, config.sheetId, store),
     files: new S3Files(config.bucket),
     sheets: new SheetsStore(google, config.sheetId, config.sheetTab),
     drive: new DriveStore(google),
@@ -87,8 +91,10 @@ export const handler = async (
     return { statusCode: response.status, ...encodeResponse(response, headers['accept-encoding']) };
   }
 
-  // The schedule (every 30 minutes): a backup of every department's fest data to the private
-  // bucket (it keeps each earlier version), then retry what failed earlier.
+  // The schedule (every 10 minutes): a backup of every department's fest data to the private
+  // bucket (it keeps each earlier version) and to the Google Sheet (only when something changed),
+  // then retry what failed earlier with the time left (the function stops at 29 s).
+  const startedAt = Date.now();
   const current = getService();
   if (!current) return;
   try {
@@ -97,5 +103,5 @@ export const handler = async (
   } catch (error) {
     log('Fest backup failed', { error: error instanceof Error ? error.message : String(error) });
   }
-  await current.runScheduled();
+  await current.runScheduled(Math.max(3_000, 22_000 - (Date.now() - startedAt)));
 };

@@ -141,7 +141,6 @@ body {
 .reg-field select:focus-visible,
 .reg-button:focus-visible,
 .reg-link:focus-visible,
-.reg-chip:focus-visible,
 .reg-dept summary:focus-visible {
   outline: 3px solid var(--r-accent);
   outline-offset: 2px;
@@ -190,13 +189,6 @@ body {
   font-size: 1.1rem;
 }
 
-.reg-button--pay {
-  width: 100%;
-  margin-block: 0.6rem;
-  color: #05061a;
-  background: var(--r-good);
-}
-
 .reg-button--ghost {
   border: 1px solid var(--r-line);
   color: var(--r-ink);
@@ -213,42 +205,6 @@ body {
   text-decoration: underline;
   background: none;
   cursor: pointer;
-}
-
-.reg-chip {
-  margin-left: 0.5rem;
-  padding: 0.2rem 0.7rem;
-  border: 1px solid var(--r-line);
-  border-radius: 999px;
-  color: var(--r-ink);
-  font: inherit;
-  font-size: 0.85rem;
-  background: var(--r-surface-2);
-  cursor: pointer;
-}
-
-.reg-steps {
-  display: grid;
-  gap: 0.6rem;
-  margin: 0;
-  padding-left: 1.25rem;
-}
-
-.reg-upi {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 0.25rem;
-  overflow-wrap: anywhere;
-}
-
-.reg-qr {
-  display: block;
-  width: 200px;
-  height: auto;
-  margin-top: 0.6rem;
-  border-radius: 10px;
-  background: #fff;
 }
 
 .reg-events {
