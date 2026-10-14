@@ -82,8 +82,9 @@ describe('Accounts', () => {
     await h.staff('COORDINATOR', ['cse-hackathon'], 'cse-hackathon', { department: 'CSE' });
     await h.call('POST', '/api/admin/login', { username: 'cse-hackathon', password: 'Event-Day-Staff-2025' }, { ip: '10.0.9.4' });
     await openAccounts(h);
+    fireEvent.click(screen.getByRole('button', { name: 'Sign-in problems' }));
 
-    const checker = card('Check a password');
+    const checker = (await screen.findByRole('heading', { name: 'Check a password' })).closest('section') as HTMLElement;
     fireEvent.change(within(checker).getByLabelText('Username'), { target: { value: 'cse-hackathon' } });
     fireEvent.change(within(checker).getByLabelText('Password'), { target: { value: 'Event-Day-Staff-2025' } });
     fireEvent.click(within(checker).getByRole('button', { name: 'Check' }));

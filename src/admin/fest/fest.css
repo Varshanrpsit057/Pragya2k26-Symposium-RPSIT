@@ -347,6 +347,24 @@
   min-height: 2.6rem;
 }
 
+/* One line per student, the action on the right */
+.fest-card--compact {
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  column-gap: 0.75rem;
+  row-gap: 0.15rem;
+}
+
+.fest-card--compact > :not(.fest-card__actions) {
+  grid-column: 1;
+}
+
+.fest-card--compact > .fest-card__actions {
+  grid-column: 2;
+  grid-row: 1 / span 3;
+  margin-top: 0;
+}
+
 .fest-chip {
   padding: 0.1rem 0.55rem;
   border: 1px solid var(--adm-line);
@@ -677,4 +695,10 @@
   gap: 0.4rem;
   margin: 0.5rem 0;
   padding-left: 1.1rem;
+}
+
+/* The search a desk or an event starts with */
+.fest-find input {
+  min-height: 2.9rem;
+  font-size: 1.05rem;
 }

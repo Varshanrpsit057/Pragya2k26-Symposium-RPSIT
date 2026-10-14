@@ -79,9 +79,9 @@ export const PERMISSION_LABELS: Record<Permission, string> = {
   'registration.window': 'Change the registration times: reopen or extend on-site registration, close registration now, or set new times; the website, the desks and the API follow within seconds',
   'site.notice': 'Post a notice on the website and the student page (e.g. a venue or time change); every open page shows it within two minutes',
   'system.testing': 'Test sessions: set the timeline the website follows, mark records made while testing, and delete that test data',
-  'site.switches': 'Website controls: switch each part of the portal off and on (student registration, online payment, lookups, desk registration, event entry, results, downloads, each role’s sign-in) and upload, replace or remove the UPI QR code',
+  'site.switches': 'Switches & payment: switch each part of the portal off and on (student registration, online payment, lookups, desk registration, event entry, results, downloads, each role’s sign-in) and upload, replace or remove the UPI QR code',
   'fest.view': "See the live registrations, events, money and results (department roles: their own department only)",
-  'fest.viewAll': 'See every department, with filters by department, event, venue and desk',
+  'fest.viewAll': 'See every department, with filters by department, payment, college and event',
   'fest.register': 'The registration desk: open a student’s ID, collect the ₹100 entry fee (cash, or UPI with its UTR) or verify the UTR they sent, correct a UTR that clashes (kept in their UTR log), and register a student for them only when they cannot do it on a phone (online)',
   'fest.import': 'Upload the online registrations (the CSV from the online form) before the event day',
   'fest.edit': "Correct a student's details and change their events",
@@ -89,7 +89,7 @@ export const PERMISSION_LABELS: Record<Permission, string> = {
   'fest.delete': 'Delete a registration (it can be restored), and restore it',
   'fest.event': 'Event window: every student of the department, added to the event at its venue; take the event fee, mark attendance, enter and submit winners (coordinators: their own events)',
   'fest.correct': 'Corrections: cancel an event fee recorded by mistake, reopen submitted results',
-  'fest.catalog': 'Edit departments and events: names, venues, times, fees, team sizes, desks',
+  'fest.catalog': 'Edit departments and events: names, venues, times, fees and team sizes (every department has two desks)',
 };
 
 /** The permissions of today's system, as the Roles page lists them (the others belong to retired screens). */
@@ -166,11 +166,11 @@ export const ROLE_INFO: Record<StaffRole, { label: string; summary: string }> = 
   ADMIN: {
     label: 'Web assist team',
     summary:
-      'Full control of the portal: Website controls (switch every part on or off, sign-in for each role, the UPI QR code), accounts (create, change, sign out, delete) and who is signed in, departments and events, registration times, the website notice, registrations (register, correct, cancel, delete, restore), event windows, corrections, test sessions and system status. Every department.',
+      'Full control of the portal, in the web assist console: Home (health, what is switched off, what needs attention, emergency controls), every switch, sign-in for each role and the UPI QR code, registration times and the website notice, departments and events, accounts and who is signed in, students (register, correct, cancel, delete, restore), event windows, results and corrections, help requests, health and backups (back up now, a full Excel copy), and testing. Every department.',
   },
   OVERALL: {
     label: 'Overall coordinator (HOD)',
-    summary: 'Every department and every event live, with filters on every category (department, event, venue, how they registered, desk, entry fee, status, college, search): registrations, money, attendance and winners; the college ranking (medal table: 1st, 2nd, 3rd, then participations), filtered by participations and prizes; all downloaded as Excel; corrections (cancel a fee recorded by mistake, reopen results).',
+    summary: 'Every department live: the overview (students, payments, money by department and by desk, results), the students list (filtered by department, payment, college and event), and results (each event’s winners, and the college ranking by medals, then participations); all downloaded as Excel; corrections (cancel a fee recorded by mistake, reopen results).',
   },
   HOD: {
     label: 'Department HOD (no longer used)',

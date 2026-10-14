@@ -130,6 +130,11 @@ function EventPanel({ event }: { event: FestEvent }) {
       </section>
 
       <section className="adm-card adm-pad">
+        <label className="adm-field fest-find">
+          <span>Find a student</span>
+          <input type="search" value={query} placeholder={`Registration ID (${deptShort(event.dept)}-2001), name, phone or college`} onChange={(change_) => setQuery(change_.target.value)} />
+        </label>
+        <p className="adm-muted">Open the student’s ID, check them, add them to the event, take the fee and mark them present. Only {deptShort(event.dept)} students take part.</p>
         <div className="fest-chips" role="group" aria-label="Show">
           <button type="button" className={`fest-chip-button${scope === 'dept' ? ' is-on' : ''}`} aria-pressed={scope === 'dept'} onClick={() => setScope('dept')}>
             All {deptShort(event.dept)} students ({inDept.length})
@@ -138,14 +143,6 @@ function EventPanel({ event }: { event: FestEvent }) {
             In this event ({registered.length})
           </button>
         </div>
-        <label className="adm-field">
-          <span>Find a student</span>
-          <input type="search" value={query} placeholder={`Registration ID (${deptShort(event.dept)}-2001), name, phone or college`} onChange={(change_) => setQuery(change_.target.value)} />
-        </label>
-        <p className="adm-muted">
-          Every {deptShort(event.dept)} student is here. Open the student’s ID, check their name and college with them, add them to the event, take the fee and mark them present. Only{' '}
-          {deptShort(event.dept)} students take part in {deptShort(event.dept)} events.
-        </p>
         <ShortList
           items={list}
           empty={
@@ -160,10 +157,10 @@ function EventPanel({ event }: { event: FestEvent }) {
             const paid = Boolean(entry) && (feePaid(entry!) || event.fee === 0);
             const entryPaid = registration.entry.status === 'PAID';
             return (
-              <RegistrationCard key={registration.id} registration={registration} eventFocus={event}>
+              <RegistrationCard key={registration.id} registration={registration} eventFocus={event} compact={open !== registration.id}>
                 {open !== registration.id ? (
-                  <button className="adm-button adm-button--small" type="button" onClick={() => setOpen(registration.id)}>
-                    Open {showId(registration.id)}
+                  <button className="adm-button adm-button--primary" type="button" aria-label={`Open ${showId(registration.id)}`} onClick={() => setOpen(registration.id)}>
+                    Open
                   </button>
                 ) : (
                   <div className="fest-inline-form" role="group" aria-label={`${showId(registration.id)} details`}>
@@ -282,7 +279,7 @@ function Winners({ event, registered }: { event: FestEvent; registered: FestRegi
             <div key={row.place} className="fest-form__row">
               <label className="adm-field">
                 <span>{ordinal(row.place)} place</span>
-                <input value={row.ids} placeholder={`${deptShort(event.dept)}-0001`} onChange={(change_) => setRows(rows.map((item, at) => (at === index ? { ...item, ids: change_.target.value } : item)))} />
+                <input value={row.ids} placeholder={`${deptShort(event.dept)}-2001`} onChange={(change_) => setRows(rows.map((item, at) => (at === index ? { ...item, ids: change_.target.value } : item)))} />
               </label>
               {event.teamMax > 1 && (
                 <label className="adm-field">

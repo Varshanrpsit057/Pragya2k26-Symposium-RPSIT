@@ -13,7 +13,7 @@ import { DESKS, awaitingCheck, collegeSummary, deptShort, eventLabel, eventOf, f
 import { hasPermission } from '../../lib/staff';
 import { Badge, when } from '../ui';
 import { filterNote, saveTable, today } from './excel';
-import { exportRows, howRegistered } from './exports';
+import { exportRows, howRegistered, rankingRows, winnerRows } from './exports';
 import { ordinal } from './EventWindow';
 import { NO_FILTERS, useFest, type FestFilters } from './FestData';
 import { FilterBar, NO_PAYMENT, PaymentChoice, ShortList, Stat, applyFilters, deptName, paymentBody, paymentReady, stampNow, type PaymentDraft } from './festUi';
@@ -58,6 +58,53 @@ function deskTotals(registrations: Iterable<FestRegistration>, dept: string, des
   return { count, cash, upi };
 }
 
+/** One department's events: how many joined, paid and came, and whether the results are in. */
+function EventProgress({ dept }: { dept: string }) {
+  const { catalog, registrations, results } = useFest();
+  if (!catalog) return null;
+  const all = [...registrations.values()];
+  return (
+    <section className="adm-card adm-pad">
+      <h3 className="adm-h3">{deptName(catalog, dept)}: events</h3>
+      <div className="adm-table-wrap">
+        <table className="adm-table adm-table--static fest-table">
+          <thead>
+            <tr>
+              <th scope="col">Event</th>
+              <th scope="col">Registered</th>
+              <th scope="col">Fee paid</th>
+              <th scope="col">Present</th>
+              <th scope="col">Results</th>
+            </tr>
+          </thead>
+          <tbody>
+            {catalog.events
+              .filter((event) => event.dept === dept)
+              .map((event) => {
+                const part = totalsOf(all, event.id);
+                const result = results.get(event.id);
+                return (
+                  <tr key={event.id}>
+                    <th scope="row">
+                      {eventLabel(event)}
+                      {!event.active && <Badge tone="plain">Closed</Badge>}
+                    </th>
+                    <td>{part.registered}</td>
+                    <td>
+                      {part.feesPaid} <span className="adm-muted">({rupees(part.feeCash + part.feeUpi)})</span>
+                    </td>
+                    <td>{part.present}</td>
+                    <td>{result?.submitted ? <Badge tone="good">Submitted</Badge> : result?.places.length ? <Badge tone="warn">Saved</Badge> : <span className="adm-muted">—</span>}</td>
+                  </tr>
+                );
+              })}
+          </tbody>
+        </table>
+      </div>
+    </section>
+  );
+}
+
 /** The live numbers: how many came, what was collected, how far the events are, what each desk took. */
 export function FestOverview() {
   const { catalog, registrations, filters, results, setFilters } = useFest();
@@ -89,58 +136,62 @@ export function FestOverview() {
         </div>
       </section>
 
-      <section className="adm-card adm-pad">
-        <h3 className="adm-h3">{viewAll && !filters.dept ? 'By department' : deptName(catalog, depts[0]?.code ?? '')}</h3>
-        <div className="adm-table-wrap">
-          <table className="adm-table adm-table--static fest-table">
-            <thead>
-              <tr>
-                <th scope="col">Department</th>
-                <th scope="col">Students</th>
-                <th scope="col">Paid</th>
-                <th scope="col">Entry fees (cash · UPI)</th>
-                <th scope="col">Event fees</th>
-                <th scope="col">Total collected</th>
-                <th scope="col">Results</th>
-                <th scope="col">Present</th>
-              </tr>
-            </thead>
-            <tbody>
-              {depts.map((dept) => {
-                const part = totalsOf(inScope(dept.code));
-                const deptEvents = catalog.events.filter((event) => event.dept === dept.code && event.active);
-                const done = deptEvents.filter((event) => results.get(event.id)?.submitted).length;
-                const entry = part.entryCash + part.entryUpi + part.entryOnline;
-                const events = part.feeCash + part.feeUpi;
-                return (
-                  <tr key={dept.code} className={viewAll && !filters.dept ? 'fest-row-link' : undefined} onClick={viewAll && !filters.dept ? () => setFilters({ ...filters, dept: dept.code }) : undefined}>
-                    <th scope="row">
-                      {deptShort(dept.code)} <span className="adm-muted">{dept.name}</span>
-                    </th>
-                    <td>{part.registered}</td>
-                    <td>{part.registered - part.entryDue}</td>
-                    <td>
-                      {rupees(entry)}{' '}
-                      <span className="adm-muted">
-                        ({rupees(part.entryCash)} · {rupees(part.entryUpi)})
-                      </span>
-                    </td>
-                    <td>{rupees(events)}</td>
-                    <td>
-                      <strong>{rupees(entry + events)}</strong>
-                    </td>
-                    <td>
-                      {done}/{deptEvents.length}
-                    </td>
-                    <td>{part.present}</td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
-        {viewAll && !filters.dept && <p className="adm-muted">Tap a department to see it alone.</p>}
-      </section>
+      {depts.length > 1 ? (
+        <section className="adm-card adm-pad">
+          <h3 className="adm-h3">By department</h3>
+          <div className="adm-table-wrap">
+            <table className="adm-table adm-table--static fest-table">
+              <thead>
+                <tr>
+                  <th scope="col">Department</th>
+                  <th scope="col">Students</th>
+                  <th scope="col">Paid</th>
+                  <th scope="col">Entry fees (cash · UPI)</th>
+                  <th scope="col">Event fees</th>
+                  <th scope="col">Total collected</th>
+                  <th scope="col">Results</th>
+                  <th scope="col">Present</th>
+                </tr>
+              </thead>
+              <tbody>
+                {depts.map((dept) => {
+                  const part = totalsOf(inScope(dept.code));
+                  const deptEvents = catalog.events.filter((event) => event.dept === dept.code && event.active);
+                  const done = deptEvents.filter((event) => results.get(event.id)?.submitted).length;
+                  const entry = part.entryCash + part.entryUpi + part.entryOnline;
+                  const events = part.feeCash + part.feeUpi;
+                  return (
+                    <tr key={dept.code} className={viewAll ? 'fest-row-link' : undefined} onClick={viewAll ? () => setFilters({ ...filters, dept: dept.code }) : undefined}>
+                      <th scope="row">
+                        {deptShort(dept.code)} <span className="adm-muted">{dept.name}</span>
+                      </th>
+                      <td>{part.registered}</td>
+                      <td>{part.registered - part.entryDue}</td>
+                      <td>
+                        {rupees(entry)}{' '}
+                        <span className="adm-muted">
+                          ({rupees(part.entryCash)} · {rupees(part.entryUpi)})
+                        </span>
+                      </td>
+                      <td>{rupees(events)}</td>
+                      <td>
+                        <strong>{rupees(entry + events)}</strong>
+                      </td>
+                      <td>
+                        {done}/{deptEvents.length}
+                      </td>
+                      <td>{part.present}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+          {viewAll && <p className="adm-muted">Tap a department to see it alone.</p>}
+        </section>
+      ) : (
+        depts[0] && <EventProgress dept={depts[0].code} />
+      )}
 
       <section className="adm-card adm-pad">
         <h3 className="adm-h3">Desk totals</h3>
@@ -551,13 +602,7 @@ export function FestColleges() {
     { students: 0, participations: 0, first: 0, second: 0, third: 0 },
   );
   const limits = [minEvents && `at least ${minEvents} participations`, minPrizes && `at least ${minPrizes} prizes`].filter(Boolean).join(' · ');
-  const download = () => {
-    const table: (string | number)[][] = [
-      ['Rank', 'College', 'College code', 'Students', 'Event participations', 'Event registrations', '1st prizes', '2nd prizes', '3rd prizes', 'Total prizes'],
-      ...rows.map((row, index) => [index + 1, row.name, row.code, row.students, row.participations, row.registrations, row.first, row.second, row.third, row.places]),
-    ];
-    saveTable(`techfest-college-ranking-${filters.dept || 'all'}-${today()}.xlsx`, 'College ranking', `${filterNote(scope, session.displayName)}${limits ? ` · ${limits}` : ''}`, table);
-  };
+  const download = () => saveTable(`techfest-college-ranking-${filters.dept || 'all'}-${today()}.xlsx`, 'College ranking', `${filterNote(scope, session.displayName)}${limits ? ` · ${limits}` : ''}`, rankingRows(rows));
   return (
     <main className="adm-page">
       <section className="adm-card adm-pad">
@@ -670,20 +715,7 @@ function EventWinners() {
   const person = (id: string) => registrations.get(id);
   const canReopen = hasPermission(session.role, 'fest.correct');
 
-  const download = () => {
-    const rows: (string | number)[][] = [['Department', 'Event', 'Venue', 'Place', 'Team', 'Registration ID', 'Name', 'College', 'Phone', 'Email', 'Submitted by', 'Submitted at']];
-    for (const event of events) {
-      const result = results.get(event.id);
-      if (!result?.submitted) continue;
-      for (const place of result.places) {
-        for (const id of place.ids) {
-          const who = person(id);
-          rows.push([deptShort(event.dept), eventLabel(event), event.venue, ordinal(place.place), place.team ?? '', showId(id), who?.name ?? '', who?.college ?? '', who?.phone ?? '', who?.email ?? '', result.submitted.by, when(result.submitted.at)]);
-        }
-      }
-    }
-    saveTable(`techfest-winners-${filters.dept || 'all'}-${today()}.xlsx`, 'Winners', filterNote(filters, session.displayName), rows);
-  };
+  const download = () => saveTable(`techfest-winners-${filters.dept || 'all'}-${today()}.xlsx`, 'Winners', filterNote(filters, session.displayName), winnerRows(catalog, events, results, registrations));
 
   return (
     <main className="adm-page">

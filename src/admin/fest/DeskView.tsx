@@ -175,7 +175,11 @@ function DeskStudents({ dept, onOpen }: { dept: string; onOpen: (id: string) => 
           </button>
         )}
       </div>
-      <p className="adm-muted">Ask the student for their Registration ID, open it, check their details, then collect the ₹ entry fee or verify the UTR they sent.</p>
+      <label className="adm-field fest-find">
+        <span>Find</span>
+        <input type="search" value={query} placeholder={`ID (${deptShort(dept)}-2001), name, phone, college or UTR`} onChange={(event) => setQuery(event.target.value)} />
+      </label>
+      <p className="adm-muted">Type the ID the student shows you, open it, check their details, then collect the {rupees(catalog?.entryFee ?? 0)} entry fee or verify the UTR they sent.</p>
       <div className="fest-chips" role="group" aria-label="Show">
         {DESK_FILTERS.map((item) => (
           <button key={item.id} type="button" className={`fest-chip-button${filter === item.id ? ' is-on' : ''}`} aria-pressed={filter === item.id} onClick={() => setFilter(item.id)}>
@@ -183,18 +187,14 @@ function DeskStudents({ dept, onOpen }: { dept: string; onOpen: (id: string) => 
           </button>
         ))}
       </div>
-      <label className="adm-field">
-        <span>Find</span>
-        <input type="search" value={query} placeholder={`ID (${deptShort(dept)}-2001), name, phone, college or UTR`} onChange={(event) => setQuery(event.target.value)} />
-      </label>
       <UtrLookup />
       <ShortList
         items={shown}
         empty={mine.length ? 'Nobody matches.' : `Nobody has registered under ${deptShort(dept)} yet. New students appear here by themselves.`}
         render={(registration) => (
-          <RegistrationCard key={registration.id} registration={registration}>
-            <button className="adm-button adm-button--primary" type="button" onClick={() => onOpen(registration.id)}>
-              Open {showId(registration.id)}
+          <RegistrationCard key={registration.id} registration={registration} compact>
+            <button className="adm-button adm-button--primary" type="button" aria-label={`Open ${showId(registration.id)}`} onClick={() => onOpen(registration.id)}>
+              Open
             </button>
           </RegistrationCard>
         )}
@@ -891,7 +891,7 @@ function DeskTotals({ dept }: { dept: string }) {
         .
       </p>
       <h3 className="adm-h3">Yours</h3>
-      <ShortList items={recent} empty="None yet." render={(registration) => <RegistrationCard key={registration.id} registration={registration} />} />
+      <ShortList items={recent} empty="None yet." render={(registration) => <RegistrationCard key={registration.id} registration={registration} compact />} />
       {catalog && <p className="adm-muted">Entry fee {rupees(catalog.entryFee)} per student.</p>}
       <Badge tone="plain">{deptShort(dept)}</Badge>
     </section>

@@ -3,44 +3,49 @@ import { formatIst, parseEventStart } from '../lib/countdown';
 import { DEFAULT_CATALOG, DESKS, deptShort } from '../lib/fest';
 import { ROLE_INFO, hasPermission, type Permission, type SessionInfo } from '../lib/staff';
 import { SignedOut, currentAdmin, listHelp, myHelp, savedToken, setDeskNumber, signIn, signOut } from './adminApi';
+import { ConsoleHome } from './ConsoleHome';
 import { CatalogEditor } from './fest/CatalogEditor';
 import { DeskView } from './fest/DeskView';
 import { EventWindow, linkedEvent } from './fest/EventWindow';
 import { FestProvider, useFest } from './fest/FestData';
 import { SyncBar } from './fest/festUi';
 import { ImportView } from './fest/ImportView';
-import { FestColleges, FestOverview, FestRegistrations, FestResults } from './fest/OverviewViews';
+import { FestOverview, FestRegistrations, FestResults } from './fest/OverviewViews';
 import { HelpDialog, repliesSeenAt, type HelpContext } from './HelpDialog';
 import { HelpPanel } from './HelpPanel';
 import { PortalPanel } from './PortalPanel';
 import { RegistrationWindowPanel } from './RegistrationWindowPanel';
-import { RolesPanel } from './RolesPanel';
 import { StaffPanel } from './StaffPanel';
 import { SystemPanel } from './SystemPanel';
 import { TestingPanel } from './TestingPanel';
 import { Badge, ErrorNote, HELP_EVENT, LocalCopyBanner, messageOf, useLiveData, when } from './ui';
 
-type TabId = 'overview' | 'registrations' | 'results' | 'colleges' | 'desk' | 'event' | 'import' | 'catalog' | 'controls' | 'window' | 'help' | 'system' | 'staff' | 'testing' | 'roles';
+type TabId = 'home' | 'overview' | 'registrations' | 'results' | 'desk' | 'event' | 'import' | 'catalog' | 'controls' | 'window' | 'help' | 'system' | 'staff' | 'testing';
 
 /** Roles that watch (every department, or their own) rather than work at a desk or an event. */
 const watches = (session: SessionInfo) => can(session, 'fest.viewAll') || session.role === 'HOD' || session.role === 'DEPT_ADMIN';
+/** The web assist team works in the console: every section, grouped, with a home page. */
+const isConsole = (session: SessionInfo) => session.role === 'ADMIN';
+
+/** The console's groups, in order (sections without one come first). */
+const GROUPS = ['', 'Live', 'Event day', 'Website', 'People', 'System'] as const;
 
 /** The dashboard's sections, each shown only to the roles it is for (the server checks again). */
-const TABS: { id: TabId; label: (session: SessionInfo) => string; show: (session: SessionInfo) => boolean }[] = [
-  { id: 'overview', label: () => 'Overview', show: watches },
-  { id: 'registrations', label: () => 'Students', show: watches },
-  { id: 'results', label: () => 'Results', show: watches },
-  { id: 'desk', label: (session) => (session.role === 'DESK' ? 'Registration desk' : 'Desk'), show: (session) => can(session, 'fest.register') },
-  { id: 'event', label: (session) => (session.role === 'COORDINATOR' ? 'My events' : 'Event windows'), show: (session) => can(session, 'fest.event') },
-  { id: 'import', label: () => 'Online import', show: (session) => can(session, 'fest.import') },
-  { id: 'catalog', label: () => 'Departments & events', show: (session) => can(session, 'fest.catalog') },
-  { id: 'controls', label: () => 'Website controls', show: (session) => can(session, 'site.switches') },
-  { id: 'staff', label: () => 'Accounts', show: (session) => can(session, 'staff.manage') },
-  { id: 'window', label: () => 'Event-day controls', show: (session) => can(session, 'registration.window') || can(session, 'site.notice') },
-  { id: 'help', label: () => 'Help requests', show: (session) => can(session, 'help.manage') },
-  { id: 'system', label: () => 'System status', show: (session) => can(session, 'system.view') },
-  { id: 'testing', label: () => 'Testing', show: (session) => can(session, 'system.testing') },
-  { id: 'roles', label: () => 'Roles', show: () => true },
+const TABS: { id: TabId; label: (session: SessionInfo) => string; show: (session: SessionInfo) => boolean; group: (typeof GROUPS)[number] }[] = [
+  { id: 'home', label: () => 'Home', show: isConsole, group: '' },
+  { id: 'overview', label: () => 'Overview', show: watches, group: 'Live' },
+  { id: 'registrations', label: () => 'Students', show: watches, group: 'Live' },
+  { id: 'results', label: () => 'Results', show: watches, group: 'Live' },
+  { id: 'desk', label: (session) => (session.role === 'DESK' ? 'Registration desk' : 'Desk'), show: (session) => can(session, 'fest.register'), group: 'Event day' },
+  { id: 'event', label: (session) => (session.role === 'COORDINATOR' ? 'My events' : 'Event windows'), show: (session) => can(session, 'fest.event'), group: 'Event day' },
+  { id: 'import', label: () => 'Online import', show: (session) => can(session, 'fest.import'), group: 'Event day' },
+  { id: 'controls', label: () => 'Switches & payment', show: (session) => can(session, 'site.switches'), group: 'Website' },
+  { id: 'window', label: () => 'Times & notice', show: (session) => can(session, 'registration.window') || can(session, 'site.notice'), group: 'Website' },
+  { id: 'catalog', label: () => 'Departments & events', show: (session) => can(session, 'fest.catalog'), group: 'Website' },
+  { id: 'staff', label: () => 'Accounts', show: (session) => can(session, 'staff.manage'), group: 'People' },
+  { id: 'help', label: () => 'Help requests', show: (session) => can(session, 'help.manage'), group: 'People' },
+  { id: 'system', label: () => 'Health & backups', show: (session) => can(session, 'system.view'), group: 'System' },
+  { id: 'testing', label: () => 'Testing', show: (session) => can(session, 'system.testing'), group: 'System' },
 ];
 
 /** '/landing/cse/admin/' → 'CSE' (each department's own address); null on /landing/admin/. */
@@ -271,6 +276,34 @@ function ShellBody({ token, session, onSession, onSignOut, onSignedOut }: ShellP
   const currentLabel = tabs.find((item) => item.id === current)?.label(session) ?? '';
   const panel = { token, session, onSignedOut };
   const [help, setHelp] = useState<HelpContext | null>(null);
+  /** Opens a section this account has (the console's links). */
+  const go = (id: string) => {
+    if (tabs.some((item) => item.id === id)) setTab(id as TabId);
+  };
+  const tabButton = (item: (typeof tabs)[number]) => (
+    <button key={item.id} type="button" className="adm-nav__tab" aria-current={item.id === current ? 'page' : undefined} onClick={() => setTab(item.id)}>
+      {item.label(session)}
+      {item.id === 'help' && <OpenHelpCount token={token} onSignedOut={onSignedOut} />}
+    </button>
+  );
+  const sectionView = (
+    <>
+      {current === 'home' && <ConsoleHome {...panel} onSession={onSession} onGo={go} />}
+      {current === 'overview' && <FestOverview />}
+      {current === 'registrations' && <FestRegistrations />}
+      {current === 'results' && <FestResults />}
+      {current === 'desk' && <DeskView />}
+      {current === 'event' && <EventWindow />}
+      {current === 'import' && <ImportView token={token} onSignedOut={onSignedOut} />}
+      {current === 'catalog' && <CatalogEditor token={token} onSignedOut={onSignedOut} />}
+      {current === 'controls' && <PortalPanel {...panel} />}
+      {current === 'window' && <RegistrationWindowPanel {...panel} onSession={onSession} />}
+      {current === 'help' && <HelpPanel {...panel} />}
+      {current === 'system' && <SystemPanel {...panel} onGo={go} />}
+      {current === 'testing' && <TestingPanel {...panel} onSession={onSession} />}
+      {current === 'staff' && <StaffPanel {...panel} />}
+    </>
+  );
   const { outbox } = useFest();
   const signOutChecked = () => {
     const waiting = outbox.length;
@@ -296,16 +329,21 @@ function ShellBody({ token, session, onSession, onSignOut, onSignedOut }: ShellP
       <LocalCopyBanner />
       <header className="adm-bar">
         <div>
-          <p className="adm-bar__brand">INFINITE TECHFEST’26 · On-site Registration Portal</p>
-          <h1 className="adm-bar__title">{session.department ? deptTitle(session.department) : 'All departments'}</h1>
-          <p className="adm-muted adm-bar__phase">
-            <Badge tone={session.phase === 'closed' ? 'bad' : session.phase === 'between' ? 'warn' : 'good'}>{PHASE_LABEL[session.phase]}</Badge>
-            {session.phase === 'online' && session.schedule.onlineClosesAt && <> until {formatIst(parseEventStart(session.schedule.onlineClosesAt)!)}</>}
-            {session.phase === 'onsite' && session.schedule.onsiteClosesAt && <> until {formatIst(parseEventStart(session.schedule.onsiteClosesAt)!)}</>}
+          <p className="adm-bar__brand">
+            INFINITE TECHFEST’26<span className="adm-bar__brand-rest"> · On-site Registration Portal</span>
           </p>
+          <h1 className="adm-bar__title">{isConsole(session) ? 'Web assist console' : session.department ? deptTitle(session.department) : 'All departments'}</h1>
+          {/* Coordinators work at their events whatever the registration phase */}
+          {session.role !== 'COORDINATOR' && (
+            <p className="adm-muted adm-bar__phase">
+              <Badge tone={session.phase === 'closed' ? 'bad' : session.phase === 'between' ? 'warn' : 'good'}>{PHASE_LABEL[session.phase]}</Badge>
+              {session.phase === 'online' && session.schedule.onlineClosesAt && <> until {formatIst(parseEventStart(session.schedule.onlineClosesAt)!)}</>}
+              {session.phase === 'onsite' && session.schedule.onsiteClosesAt && <> until {formatIst(parseEventStart(session.schedule.onsiteClosesAt)!)}</>}
+            </p>
+          )}
         </div>
         <div className="adm-bar__side">
-          <span className="adm-muted">
+          <span className="adm-muted adm-bar__who">
             {session.displayName} · {ROLE_INFO[session.role].label}
           </span>
           {session.role === 'DESK' &&
@@ -350,30 +388,33 @@ function ShellBody({ token, session, onSession, onSignOut, onSignedOut }: ShellP
       {session.role === 'DESK' && !session.deskNumber && !session.department && <DeskChooser token={token} onSession={onSession} onSignedOut={onSignedOut} />}
       {can(session, 'fest.view') && <SyncBar />}
 
-      <nav className="adm-nav" aria-label="Sections">
-        {tabs.map((item) => (
-          <button key={item.id} type="button" className="adm-nav__tab" aria-current={item.id === current ? 'page' : undefined} onClick={() => setTab(item.id)}>
-            {item.label(session)}
-            {item.id === 'help' && <OpenHelpCount token={token} onSignedOut={onSignedOut} />}
-          </button>
-        ))}
-      </nav>
-
-      {current === 'overview' && <FestOverview />}
-      {current === 'registrations' && <FestRegistrations />}
-      {current === 'results' && <FestResults />}
-      {current === 'colleges' && <FestColleges />}
-      {current === 'desk' && <DeskView />}
-      {current === 'event' && <EventWindow />}
-      {current === 'import' && <ImportView token={token} onSignedOut={onSignedOut} />}
-      {current === 'catalog' && <CatalogEditor token={token} onSignedOut={onSignedOut} />}
-      {current === 'controls' && <PortalPanel {...panel} />}
-      {current === 'window' && <RegistrationWindowPanel {...panel} onSession={onSession} />}
-      {current === 'help' && <HelpPanel {...panel} />}
-      {current === 'system' && <SystemPanel {...panel} />}
-      {current === 'testing' && <TestingPanel {...panel} onSession={onSession} />}
-      {current === 'staff' && <StaffPanel {...panel} />}
-      {current === 'roles' && <RolesPanel session={session} />}
+      {isConsole(session) ? (
+        <div className="adm-console">
+          <nav className="adm-console__nav" aria-label="Sections">
+            {GROUPS.map((group) => {
+              const items = tabs.filter((item) => item.group === group);
+              if (!items.length) return null;
+              return (
+                <div key={group || 'top'} className="adm-console__group">
+                  {group && <p className="adm-console__heading">{group}</p>}
+                  {items.map(tabButton)}
+                </div>
+              );
+            })}
+          </nav>
+          <div className="adm-console__main">{sectionView}</div>
+        </div>
+      ) : (
+        <>
+          {/* One section (a desk, a coordinator): no tabs to choose from */}
+          {tabs.length > 1 && (
+            <nav className="adm-nav" aria-label="Sections">
+              {tabs.map(tabButton)}
+            </nav>
+          )}
+          {sectionView}
+        </>
+      )}
 
       {help && <HelpDialog token={token} signedInAs={session.displayName} username={session.username} context={help} onClose={() => setHelp(null)} />}
     </div>

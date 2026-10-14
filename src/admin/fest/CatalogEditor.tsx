@@ -65,7 +65,7 @@ export function CatalogEditor({ token, onSignedOut }: { token: string; onSignedO
           <span>Entry fee (₹)</span>
           <input type="number" min={0} value={value.entryFee} onChange={(event) => setDraft({ ...value, entryFee: Number(event.target.value) })} />
         </label>
-        <p className="adm-muted">The UPI account and the QR code students pay with are in Website controls.</p>
+        <p className="adm-muted">The UPI account and the QR code students pay with are in Switches &amp; payment.</p>
         {problem && <p className="adm-field__error">{problem}</p>}
         {error && <p className="adm-error">{error}</p>}
         {note && <p className="adm-note">{note}</p>}

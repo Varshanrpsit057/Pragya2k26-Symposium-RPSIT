@@ -11,13 +11,24 @@ import type { FestFilters } from './FestData';
 
 export const PORTAL = 'INFINITE TECHFEST’26 · On-site Registration Portal';
 
-/** Saves the rows (the first one is the header) as an .xlsx file. */
-export function saveTable(fileName: string, heading: string, note: string, rows: readonly (readonly (string | number)[])[]) {
+type Rows = readonly (readonly (string | number)[])[];
+
+/** One table as a sheet: the heading, the note, then the rows (the first one is the header). */
+export function tableSheet(heading: string, note: string, rows: Rows): Sheet {
   const [columns = [], ...body] = rows;
   const sheetRows: Cell[][] = [[{ value: heading, style: 'title' }], [{ value: note, style: 'muted' }], columns.map((value) => ({ value, style: 'header' as const })), ...body.map((row) => [...row])];
   const widths = columns.map((column, index) => Math.min(48, Math.max(String(column).length + 2, ...body.slice(0, 400).map((row) => String(row[index] ?? '').length + 2))));
-  const sheet: Sheet = { name: heading, rows: sheetRows, widths, freezeRows: 3, filter: { headerRow: 3, columns: columns.length, lastRow: sheetRows.length } };
-  saveFile(fileName, buildXlsx([sheet]), XLSX_TYPE);
+  return { name: heading, rows: sheetRows, widths, freezeRows: 3, filter: { headerRow: 3, columns: columns.length, lastRow: sheetRows.length } };
+}
+
+/** Saves the rows (the first one is the header) as an .xlsx file. */
+export function saveTable(fileName: string, heading: string, note: string, rows: Rows) {
+  saveFile(fileName, buildXlsx([tableSheet(heading, note, rows)]), XLSX_TYPE);
+}
+
+/** Saves several tables as one .xlsx file, one sheet each. */
+export function saveWorkbook(fileName: string, sheets: Sheet[]) {
+  saveFile(fileName, buildXlsx(sheets), XLSX_TYPE);
 }
 
 const LABELS: Partial<Record<keyof FestFilters, string>> = { eventId: 'event', venue: 'venue', source: 'registered', desk: 'desk', entry: 'entry fee', status: 'status', college: 'college', q: 'search' };

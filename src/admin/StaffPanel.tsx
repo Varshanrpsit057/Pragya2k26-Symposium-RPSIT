@@ -1,10 +1,17 @@
-/** Staff accounts (admins): create, set roles, assign events, reset passwords, deactivate, delete. */
+/**
+ * Accounts (web assist team), in four views:
+ *   Accounts           create, set roles, assign events, reset passwords, deactivate, delete
+ *   Signed in now      who is signed in, at which desk; sign someone out
+ *   Sign-in problems   recent failed sign-ins, and checking a password someone was given
+ *   Roles              what each role may do (the list the server enforces)
+ */
 import { useCallback, useState, type FormEvent } from 'react';
 import { events as allEvents } from '../content/events';
 import { DESKS, deptShort, eventLabel, type FestCatalog } from '../lib/fest';
 import { CREATABLE_ROLES, DELETE_ALL_STAFF, DEPARTMENT_ROLES, ROLE_INFO, type SessionInfo, type SignInFailure, type StaffAccountView, type StaffRole } from '../lib/staff';
 import { SignedOut, checkStaffPassword, createStaff, deleteAllStaff, deleteStaff, listStaff, signOutStaff, signedInNow, staffSignInFailures, updateStaff, type PasswordCheck, type StaffChange } from './adminApi';
 import { useFestCatalog } from './fest/FestData';
+import { RolesPanel } from './RolesPanel';
 import { Badge, ErrorNote, LiveStatus, useLiveData, when } from './ui';
 
 interface PanelProps {
@@ -78,90 +85,130 @@ export function StaffPanel({ token, session, onSignedOut }: PanelProps) {
     });
 
   const catalog = useFestCatalog();
+  const [view, setView] = useState<'accounts' | 'signed-in' | 'problems' | 'roles'>('accounts');
+  const views: [typeof view, string][] = [
+    ['accounts', `Accounts${live.data ? ` (${live.data.length})` : ''}`],
+    ['signed-in', 'Signed in now'],
+    ['problems', 'Sign-in problems'],
+    ['roles', 'Roles'],
+  ];
+  const chooser = (
+    <div className="adm-page fest-subnav">
+      <div className="fest-chips" role="group" aria-label="Accounts">
+        {views.map(([id, label]) => (
+          <button key={id} type="button" className={`fest-chip-button${view === id ? ' is-on' : ''}`} aria-pressed={view === id} onClick={() => setView(id)}>
+            {label}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+  if (view === 'roles')
+    return (
+      <>
+        {chooser}
+        <RolesPanel session={session} />
+      </>
+    );
+  if (view !== 'accounts')
+    return (
+      <>
+        {chooser}
+        <main className="adm-page">
+          {view === 'signed-in' && <SignedInNow token={token} session={session} onSignedOut={onSignedOut} />}
+          {view === 'problems' && (
+            <>
+              <RecentFailures token={token} onSignedOut={onSignedOut} />
+              <CheckPassword token={token} accounts={live.data ?? []} onSignedOut={onSignedOut} />
+            </>
+          )}
+        </main>
+      </>
+    );
   return (
-    <main className="adm-page">
-      <SignedInNow token={token} session={session} onSignedOut={onSignedOut} />
-      <NewAccount token={token} onCreated={replace} onSignedOut={onSignedOut} />
-      <CheckPassword token={token} accounts={live.data ?? []} onSignedOut={onSignedOut} />
-      <RecentFailures token={token} onSignedOut={onSignedOut} />
-      <section className="adm-card adm-pad">
-        <div className="adm-toolbar">
-          <h2 className="adm-h2">Staff accounts</h2>
-          <LiveStatus updatedAt={live.updatedAt} loading={live.loading} onRefresh={live.refresh} />
-        </div>
-        <p className="adm-muted">
-          The owner account ({session.kind === 'owner' ? 'you' : 'ADMIN_USERNAME'}) is set in the Amplify secrets and is not listed here. Changes apply
-          at once: a deactivated or deleted account, or a reset password, signs that person out.
-        </p>
-        <ErrorNote error={live.error} />
-        <ErrorNote error={deleteError} />
-        {deleted && (
-          <p className="adm-note" role="status">
-            {deleted}
+    <>
+      {chooser}
+      <main className="adm-page">
+        <NewAccount token={token} onCreated={replace} onSignedOut={onSignedOut} />
+        <section className="adm-card adm-pad">
+          <div className="adm-toolbar">
+            <h2 className="adm-h2">Staff accounts</h2>
+            <LiveStatus updatedAt={live.updatedAt} loading={live.loading} onRefresh={live.refresh} />
+          </div>
+          <p className="adm-muted">
+            The owner account ({session.kind === 'owner' ? 'you' : 'ADMIN_USERNAME'}) is set in the Amplify secrets and is not listed here. Changes apply
+            at once: a deactivated or deleted account, or a reset password, signs that person out.
           </p>
-        )}
-        <div className="adm-table-wrap">
-          <table className="adm-table adm-table--static">
-            <thead>
-              <tr>
-                <th scope="col">Username</th>
-                <th scope="col">Name</th>
-                <th scope="col">Role</th>
-                <th scope="col">Department</th>
-                <th scope="col">Events</th>
-                <th scope="col">Status</th>
-                <th scope="col">Last sign-in</th>
-                <th scope="col">Changed</th>
-                <th scope="col" />
-              </tr>
-            </thead>
-            <tbody>
-              {(live.data ?? []).map((account) =>
-                editing === account.username ? (
-                  <EditAccount key={account.username} token={token} account={account} onDone={(updated) => { if (updated) replace(updated); setEditing(null); }} onSignedOut={onSignedOut} />
-                ) : (
-                  <tr key={account.username}>
-                    <td className="adm-mono">{account.username}</td>
-                    <td>{account.displayName}</td>
-                    <td>{ROLE_INFO[account.role]?.label ?? account.role}</td>
-                    <td>
-                      {account.department ?? (DEPARTMENT_ROLES.includes(account.role) ? '—' : 'All')}
-                      {account.deskNumber ? ` · desk ${account.deskNumber}` : ''}
-                    </td>
-                    <td>{account.role === 'COORDINATOR' ? account.eventIds.map((id) => eventName(catalog, id)).join(', ') : 'All'}</td>
-                    <td>{account.active ? <Badge tone="good">Active</Badge> : <Badge tone="bad">Deactivated</Badge>}</td>
-                    <td className="adm-muted">{account.lastSignInAt ? when(account.lastSignInAt) : 'Never'}</td>
-                    <td className="adm-muted">
-                      {when(account.updatedAt)} by {account.updatedBy}
-                    </td>
-                    <td>
-                      <span className="adm-inline">
-                        <button className="adm-button adm-button--small" type="button" onClick={() => setEditing(account.username)}>
-                          Edit
-                        </button>
-                        {!(session.kind === 'staff' && session.username === account.username) && (
-                          <button
-                            className="adm-button adm-button--small adm-button--danger-outline"
-                            type="button"
-                            disabled={deleting !== null}
-                            aria-label={`Delete ${account.username}`}
-                            onClick={() => void remove(account)}
-                          >
-                            {deleting === account.username ? 'Deleting…' : 'Delete'}
+          <ErrorNote error={live.error} />
+          <ErrorNote error={deleteError} />
+          {deleted && (
+            <p className="adm-note" role="status">
+              {deleted}
+            </p>
+          )}
+          <div className="adm-table-wrap">
+            <table className="adm-table adm-table--static">
+              <thead>
+                <tr>
+                  <th scope="col">Username</th>
+                  <th scope="col">Name</th>
+                  <th scope="col">Role</th>
+                  <th scope="col">Department</th>
+                  <th scope="col">Events</th>
+                  <th scope="col">Status</th>
+                  <th scope="col">Last sign-in</th>
+                  <th scope="col">Changed</th>
+                  <th scope="col" />
+                </tr>
+              </thead>
+              <tbody>
+                {(live.data ?? []).map((account) =>
+                  editing === account.username ? (
+                    <EditAccount key={account.username} token={token} account={account} onDone={(updated) => { if (updated) replace(updated); setEditing(null); }} onSignedOut={onSignedOut} />
+                  ) : (
+                    <tr key={account.username}>
+                      <td className="adm-mono">{account.username}</td>
+                      <td>{account.displayName}</td>
+                      <td>{ROLE_INFO[account.role]?.label ?? account.role}</td>
+                      <td>
+                        {account.department ?? (DEPARTMENT_ROLES.includes(account.role) ? '—' : 'All')}
+                        {account.deskNumber ? ` · desk ${account.deskNumber}` : ''}
+                      </td>
+                      <td>{account.role === 'COORDINATOR' ? account.eventIds.map((id) => eventName(catalog, id)).join(', ') : 'All'}</td>
+                      <td>{account.active ? <Badge tone="good">Active</Badge> : <Badge tone="bad">Deactivated</Badge>}</td>
+                      <td className="adm-muted">{account.lastSignInAt ? when(account.lastSignInAt) : 'Never'}</td>
+                      <td className="adm-muted">
+                        {when(account.updatedAt)} by {account.updatedBy}
+                      </td>
+                      <td>
+                        <span className="adm-inline">
+                          <button className="adm-button adm-button--small" type="button" onClick={() => setEditing(account.username)}>
+                            Edit
                           </button>
-                        )}
-                      </span>
-                    </td>
-                  </tr>
-                ),
-              )}
-            </tbody>
-          </table>
-          {live.data?.length === 0 && <p className="adm-muted adm-empty">No staff accounts yet.</p>}
-        </div>
-      </section>
-      {session.kind === 'owner' && <DeleteEveryAccount token={token} count={live.data?.length ?? 0} onDeleted={() => live.setData([])} onSignedOut={onSignedOut} />}
-    </main>
+                          {!(session.kind === 'staff' && session.username === account.username) && (
+                            <button
+                              className="adm-button adm-button--small adm-button--danger-outline"
+                              type="button"
+                              disabled={deleting !== null}
+                              aria-label={`Delete ${account.username}`}
+                              onClick={() => void remove(account)}
+                            >
+                              {deleting === account.username ? 'Deleting…' : 'Delete'}
+                            </button>
+                          )}
+                        </span>
+                      </td>
+                    </tr>
+                  ),
+                )}
+              </tbody>
+            </table>
+            {live.data?.length === 0 && <p className="adm-muted adm-empty">No staff accounts yet.</p>}
+          </div>
+        </section>
+        {session.kind === 'owner' && <DeleteEveryAccount token={token} count={live.data?.length ?? 0} onDeleted={() => live.setData([])} onSignedOut={onSignedOut} />}
+      </main>
+    </>
   );
 }
 
@@ -506,7 +553,7 @@ const CHECK_RESULT = (check: PasswordCheck) =>
       : !check.active
         ? { tone: 'warn' as const, text: `The password is right, but ${check.username} is deactivated: tick Active with Edit.` }
         : check.signInOff
-          ? { tone: 'warn' as const, text: `The password is right, but sign-in for this role is switched off in Website controls.` }
+          ? { tone: 'warn' as const, text: `The password is right, but sign-in for this role is switched off in Switches & payment.` }
           : { tone: 'good' as const, text: `The password is right and ${check.username} can sign in.` };
 
 /** "Check a password": is this the account's password? (No sign-in is made.) */
