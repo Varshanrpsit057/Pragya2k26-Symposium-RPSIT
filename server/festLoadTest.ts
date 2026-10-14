@@ -53,6 +53,8 @@ export function mockParticipant(random: Random, n: number, phoneBase: number): F
     phone: String(6_000_000_000 + ((phoneBase + n) % 999_999_999)),
     email: `${first.toLowerCase()}.${initial.toLowerCase()}${n}@example.com`,
     college: mockCollege(random),
+    // No real codes are invented for the mock students.
+    collegeCode: '',
     branch: courseText(pick(random, COMMON_STREAMS), pick(random, COMMON_COURSES), ''),
     year: pick(random, YEARS.slice(0, 4)),
     team: random() < 0.15 ? `Team ${pick(random, ['Nova', 'Pixel', 'Quantum', 'Vertex', 'Orbit', 'Spark'])}` : '',

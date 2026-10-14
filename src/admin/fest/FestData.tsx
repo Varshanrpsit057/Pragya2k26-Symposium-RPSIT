@@ -4,23 +4,16 @@
  * - a copy of the department's data (or every department's) kept on the phone, shown at once
  *   and searchable even with no signal;
  * - every 15 seconds the phone asks only for what changed since it last asked;
- * - changes (registering, fees, attendance…) go into an outbox kept on the phone and are sent
- *   in order as soon as there is signal; a retry never registers anyone twice;
- * - a desk phone holds a block of 50 IDs and takes the next block by itself when 15 are left.
+ * - small changes (fees, attendance, events…) go into an outbox kept on the phone and are sent
+ *   in order as soon as there is signal;
+ * - registering a student and the entry fee are sent at once (`send`), so the desk sees the
+ *   server's answer before the student leaves (a UTR used elsewhere, a duplicate…).
  */
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import {
-  DEFAULT_CATALOG,
-  ID_TOP_UP_AT,
-  formatFestId,
-  type FestCatalog,
-  type FestRegistration,
-  type FestResult,
-  type FestSource,
-} from '../../lib/fest';
+import { DEFAULT_CATALOG, type FestCatalog, type FestRegistration, type FestResult, type FestSource } from '../../lib/fest';
 import type { SessionInfo } from '../../lib/staff';
 import { ApiFailure, SignedOut } from '../adminApi';
-import { ALL_ON, festCatalog, festSync, festWrite, takeIds, type DashboardSwitches } from './festApi';
+import { ALL_ON, festCatalog, festSync, festWrite, type DashboardSwitches } from './festApi';
 
 const SYNC_MS = 15_000;
 const RETRY_MS = [3_000, 6_000, 12_000, 30_000, 60_000];
@@ -67,12 +60,6 @@ interface Cache {
   savedAt: number;
 }
 
-interface IdBlock {
-  first: number;
-  last: number;
-  next: number;
-}
-
 export interface FestContextValue {
   /** The sign-in, for the few calls made straight to the API (e.g. looking up a UTR). */
   token: string;
@@ -92,10 +79,11 @@ export interface FestContextValue {
   filters: FestFilters;
   setFilters: (next: FestFilters) => void;
   refresh: () => void;
-  /** IDs this phone still holds for the department. */
-  idsLeft: (dept: string) => number;
-  /** Registers at the desk (or from a paper slip, with its ID): shown at once, sent when there is signal. */
-  register: (input: { dept: string; participant: Record<string, string>; events: string[]; payment: Record<string, unknown>; source?: FestSource; id?: string }) => FestRegistration;
+  /**
+   * Sends a change now and waits for the server (registering for a student, the entry fee, a UTR):
+   * the registration as saved, shown here at once. Throws the server's refusal, or a lost connection.
+   */
+  send: (path: FestOp['path'], body: Record<string, unknown>) => Promise<FestRegistration>;
   /** Any other change: applied on the phone at once (if `local` is given) and sent in order. */
   change: (target: string, path: FestOp['path'], body: Record<string, unknown>, label: string, local?: (registration: FestRegistration) => FestRegistration) => void;
   dismiss: (opId: string) => void;
@@ -136,7 +124,7 @@ const refused = (error: unknown) => error instanceof ApiFailure && error.status 
 
 export function FestProvider({ token, session, pageDept = null, onSignedOut, children }: { token: string; session: SessionInfo; pageDept?: string | null; onSignedOut: () => void; children: ReactNode }) {
   const keys = useMemo(
-    () => ({ cache: `fest-cache:v1:${session.username}`, outbox: `fest-outbox:v1:${session.username}`, ids: (dept: string) => `fest-ids:v1:${session.username}:${dept}` }),
+    () => ({ cache: `fest-cache:v1:${session.username}`, outbox: `fest-outbox:v1:${session.username}` }),
     [session.username],
   );
   const initial = useMemo(() => read<Cache | null>(keys.cache, null), [keys.cache]);
@@ -258,39 +246,6 @@ export function FestProvider({ token, session, pageDept = null, onSignedOut, chi
     }
   }, [token, onSignedOut, saveCache]);
 
-  // ---------------------------------------------------------------------------- ID blocks
-  const blocks = useCallback((dept: string) => read<IdBlock[]>(keys.ids(dept), []), [keys]);
-  const idsLeft = useCallback((dept: string) => blocks(dept).reduce((sum, block) => sum + Math.max(0, block.last - block.next + 1), 0), [blocks]);
-  const topping = useRef(new Set<string>());
-  const topUp = useCallback(
-    async (dept: string) => {
-      if (topping.current.has(dept) || idsLeft(dept) >= ID_TOP_UP_AT) return;
-      topping.current.add(dept);
-      try {
-        const block = await takeIds(token, { dept });
-        write(keys.ids(dept), [...blocks(dept).filter((item) => item.next <= item.last), { first: block.first, last: block.last, next: block.first }]);
-      } catch (failure) {
-        if (failure instanceof SignedOut) onSignedOut();
-      } finally {
-        topping.current.delete(dept);
-      }
-    },
-    [token, keys, blocks, idsLeft, onSignedOut],
-  );
-  const nextId = useCallback(
-    (dept: string) => {
-      const list = blocks(dept);
-      const block = list.find((item) => item.next <= item.last);
-      if (!block) return null;
-      const id = formatFestId(dept, block.next);
-      block.next += 1;
-      write(keys.ids(dept), list);
-      void topUp(dept);
-      return id;
-    },
-    [blocks, keys, topUp],
-  );
-
   // ---------------------------------------------------------------------------- the outbox
   const flush = useCallback(async () => {
     if (state.current.flushing) return;
@@ -311,29 +266,10 @@ export function FestProvider({ token, session, pageDept = null, onSignedOut, chi
             onSignedOut();
             return;
           }
-          if (failure instanceof ApiFailure && failure.code === 'ID_TAKEN' && op.path === '/api/admin/fest/registrations') {
-            // Two phones held the same IDs: take the next one and send again.
-            const dept = String(op.body.dept);
-            const id = nextId(dept);
-            if (id) {
-              const placeholder = state.current.registrations.get(op.target);
-              if (placeholder) putRegistration({ ...placeholder, id }, op.target);
-              saveOutbox(state.current.outbox.map((item) => (item.opId === op.opId ? { ...item, target: id, body: { ...item.body, id }, label: item.label.replace(op.target, id) } : item)));
-              continue;
-            }
-          }
           if (refused(failure)) {
             const existingId = failure instanceof ApiFailure ? failure.details.existingId : undefined;
             saveOutbox(state.current.outbox.map((item) => (item.opId === op.opId ? { ...item, failed: (failure as Error).message, ...(existingId && { existingId }) } : item)));
-            // Undo what the phone showed for it: the next sync brings the server's copy.
-            if (op.path === '/api/admin/fest/registrations') {
-              setRegistrations((current) => {
-                const next = new Map(current);
-                next.delete(op.target);
-                state.current.registrations = next;
-                return next;
-              });
-            }
+            // The next sync brings the server's copy back in place of what the phone showed.
             state.current.cursor = '';
             continue;
           }
@@ -349,7 +285,7 @@ export function FestProvider({ token, session, pageDept = null, onSignedOut, chi
       state.current.flushing = false;
       saveCache();
     }
-  }, [token, onSignedOut, putRegistration, putResult, saveOutbox, saveCache, nextId]);
+  }, [token, onSignedOut, putRegistration, putResult, saveOutbox, saveCache]);
   const flushRef = useRef(flush);
   useEffect(() => {
     flushRef.current = flush;
@@ -363,43 +299,22 @@ export function FestProvider({ token, session, pageDept = null, onSignedOut, chi
     [saveOutbox],
   );
 
-  const register: FestContextValue['register'] = useCallback(
-    (input) => {
-      const source = input.source ?? 'DESK';
-      const id = input.id ?? nextId(input.dept);
-      if (!id) throw new Error('No registration IDs left on this phone. Connect to the internet for a few seconds to get more, or use a paper slip.');
-      const now = new Date().toISOString();
-      const stamp = { at: now, by: session.username };
-      const submissionId = `${session.username.replace(/[^A-Za-z0-9-]/g, '-')}-${opId()}`;
-      const amount = state.current.catalog?.entryFee ?? 0;
-      const local: FestRegistration = {
-        id,
-        dept: input.dept,
-        source,
-        name: input.participant.name ?? '',
-        phone: input.participant.phone ?? '',
-        email: input.participant.email ?? '',
-        college: input.participant.college ?? '',
-        branch: input.participant.branch ?? '',
-        year: input.participant.year ?? '',
-        team: input.participant.team ?? '',
-        entry: { status: 'PAID', payment: { method: input.payment.method === 'UPI' ? 'UPI' : 'CASH', amount, ...stamp, ...(session.deskNumber && { desk: session.deskNumber }) } },
-        events: input.events.map((eventId) => ({ eventId, added: stamp })),
-        ...(session.deskNumber && { desk: session.deskNumber }),
-        created: stamp,
-        v: 0,
-        u: '',
-      };
-      putRegistration(local);
-      enqueue({
-        path: '/api/admin/fest/registrations',
-        body: { dept: input.dept, submissionId, id, participant: input.participant, events: input.events, payment: input.payment, source },
-        target: id,
-        label: `Register ${id} · ${local.name}`,
-      });
-      return local;
+  const send: FestContextValue['send'] = useCallback(
+    async (path, body) => {
+      try {
+        const answer = await festWrite(token, path, body);
+        if (!answer.registration) throw new Error('The server did not send the registration back. Refresh and look again.');
+        putRegistration(answer.registration);
+        saveCache();
+        setOnline(true);
+        return answer.registration;
+      } catch (failure) {
+        if (failure instanceof SignedOut) onSignedOut();
+        else if (!(failure instanceof ApiFailure)) setOnline(false);
+        throw failure;
+      }
     },
-    [nextId, putRegistration, enqueue, session.username, session.deskNumber],
+    [token, onSignedOut, putRegistration, saveCache],
   );
 
   const change: FestContextValue['change'] = useCallback(
@@ -424,7 +339,6 @@ export function FestProvider({ token, session, pageDept = null, onSignedOut, chi
   useEffect(() => {
     void sync();
     void flushRef.current();
-    if (session.department) void topUp(session.department);
     const timer = window.setInterval(() => {
       if (document.visibilityState === 'hidden') return;
       void sync();
@@ -443,7 +357,7 @@ export function FestProvider({ token, session, pageDept = null, onSignedOut, chi
       document.removeEventListener('visibilitychange', wake);
       window.removeEventListener('online', wake);
     };
-  }, [sync, topUp, session.department]);
+  }, [sync]);
 
   // Closing or reloading the tab while changes wait: the browser asks first. They are saved on
   // the phone either way and sent the next time this account signs in here.
@@ -478,8 +392,7 @@ export function FestProvider({ token, session, pageDept = null, onSignedOut, chi
       void sync();
       void flushRef.current();
     },
-    idsLeft,
-    register,
+    send,
     change,
     dismiss,
     retry,

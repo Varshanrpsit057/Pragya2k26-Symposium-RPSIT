@@ -1,45 +1,23 @@
 /**
  * Department admins (and the web assist team): bring in the online registrations from the
- * online form's CSV before the event day, and paper slips for when there is no signal.
+ * online form's CSV before the event day.
  */
 import { useState, type ChangeEvent } from 'react';
-import { deptShort, formatFestId, guessColumns, IMPORT_FIELDS, parseCsv, showId, toCsv, type ImportField } from '../../lib/fest';
+import { deptShort, guessColumns, IMPORT_FIELDS, parseCsv, showId, toCsv, type ImportField } from '../../lib/fest';
 import { ApiFailure, SignedOut } from '../adminApi';
 import { saveFile } from '../ui';
-import { DeptPicker, RegisterForm, useWorkDept } from './DeskView';
-import { importFest, takeIds, type ImportOutcome, type ImportRow } from './festApi';
+import { DeptPicker, useWorkDept } from './DeskView';
+import { importFest, type ImportOutcome, type ImportRow } from './festApi';
 import { useFest } from './FestData';
 
 const CHUNK = 100;
 
 export function ImportView({ token, onSignedOut }: { token: string; onSignedOut: () => void }) {
   const [dept, setDept, canPick] = useWorkDept();
-  const [tab, setTab] = useState<'online' | 'paper' | 'slips'>('online');
   return (
     <main className="adm-page">
       {canPick && <DeptPicker value={dept} onChange={setDept} />}
-      {!dept ? (
-        <p className="adm-note">Choose the department.</p>
-      ) : (
-        <>
-          <nav className="fest-tabs" aria-label="Import">
-            {(
-              [
-                ['online', 'Online registrations'],
-                ['slips', 'Paper slips'],
-                ['paper', 'Type in a paper slip'],
-              ] as const
-            ).map(([id, label]) => (
-              <button key={id} type="button" className="fest-tabs__tab" aria-current={tab === id ? 'page' : undefined} onClick={() => setTab(id)}>
-                {label}
-              </button>
-            ))}
-          </nav>
-          {tab === 'online' && <OnlineImport key={dept} dept={dept} token={token} onSignedOut={onSignedOut} />}
-          {tab === 'slips' && <PaperSlips key={dept} dept={dept} token={token} onSignedOut={onSignedOut} />}
-          {tab === 'paper' && <RegisterForm key={dept} dept={dept} paper />}
-        </>
-      )}
+      {!dept ? <p className="adm-note">Choose the department.</p> : <OnlineImport key={dept} dept={dept} token={token} onSignedOut={onSignedOut} />}
     </main>
   );
 }
@@ -78,7 +56,7 @@ function OnlineImport({ dept, token, onSignedOut }: { dept: string; token: strin
   const rows = (): ImportRow[] =>
     (table ?? []).slice(1).map((cells, index) => {
       const cell = (field: ImportField) => (columns && columns[field] >= 0 ? (cells[columns[field]] ?? '').trim() : '');
-      return { row: index + 2, name: cell('name'), phone: cell('phone'), email: cell('email'), college: cell('college'), branch: cell('branch'), year: cell('year'), team: cell('team'), events: cell('events'), ref: cell('ref') };
+      return { row: index + 2, name: cell('name'), phone: cell('phone'), email: cell('email'), college: cell('college'), collegeCode: cell('collegeCode'), branch: cell('branch'), year: cell('year'), team: cell('team'), events: cell('events'), ref: cell('ref') };
     });
 
   const run = async (dryRun: boolean) => {
@@ -242,72 +220,6 @@ function OnlineImport({ dept, token, onSignedOut }: { dept: string; token: strin
             }
           >
             Download this list
-          </button>
-        </>
-      )}
-    </section>
-  );
-}
-
-function PaperSlips({ dept, token, onSignedOut }: { dept: string; token: string; onSignedOut: () => void }) {
-  const [count, setCount] = useState(50);
-  const [block, setBlock] = useState<{ first: number; last: number } | null>(null);
-  const [error, setError] = useState('');
-  const [busy, setBusy] = useState(false);
-  const take = async () => {
-    setBusy(true);
-    setError('');
-    try {
-      const answer = await takeIds(token, { dept, source: 'PAPER', count });
-      setBlock({ first: answer.first, last: answer.last });
-    } catch (failure) {
-      if (failure instanceof SignedOut) onSignedOut();
-      else setError(failure instanceof Error ? failure.message : 'Could not get the numbers.');
-    } finally {
-      setBusy(false);
-    }
-  };
-  return (
-    <section className="adm-card adm-pad">
-      <h2 className="adm-h2">Paper slips for {deptShort(dept)}</h2>
-      <p className="adm-muted">
-        For a desk that has no signal and no IDs left on its phone. Print numbered slips (name, phone, college, events, paid by) before the day, give each desk a bundle, then type them in from
-        “Type in a paper slip”. Each number is used once.
-      </p>
-      <div className="adm-inline adm-inline--wrap">
-        <label className="adm-field">
-          <span>How many</span>
-          <select value={count} onChange={(event) => setCount(Number(event.target.value))}>
-            {[25, 50, 100, 200].map((value) => (
-              <option key={value}>{value}</option>
-            ))}
-          </select>
-        </label>
-        <button className="adm-button adm-button--primary" type="button" disabled={busy} onClick={() => void take()}>
-          {busy ? 'Getting numbers…' : 'Get slip numbers'}
-        </button>
-      </div>
-      {error && <p className="adm-error">{error}</p>}
-      {block && (
-        <>
-          <p className="adm-note">
-            Your slips: <strong>{formatFestId(dept, block.first)}</strong> to <strong>{formatFestId(dept, block.last)}</strong>.
-          </p>
-          <button
-            className="adm-button"
-            type="button"
-            onClick={() =>
-              saveFile(
-                `${dept}-paper-slips-${block.first}-${block.last}.csv`,
-                toCsv([
-                  ['Registration ID', 'Name', 'Mobile', 'College', 'Year', 'Events', 'Paid (cash / UPI + UTR)', 'Desk staff'],
-                  ...Array.from({ length: block.last - block.first + 1 }, (_, index) => [formatFestId(dept, block.first + index), '', '', '', '', '', '', '']),
-                ]),
-                'text/csv;charset=utf-8',
-              )
-            }
-          >
-            Download the slips to print (CSV)
           </button>
         </>
       )}

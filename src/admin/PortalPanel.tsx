@@ -6,7 +6,7 @@
  */
 import { useCallback, useEffect, useState, type ChangeEvent, type ReactNode } from 'react';
 import { UPI_ID } from '../lib/fest';
-import { LOGIN_LABELS, LOGIN_ROLES, QR_MAX_CHARS, SWITCH_INFO, type BackupStatus, type LoginRole, type SwitchName } from '../lib/portal';
+import { LOGIN_LABELS, LOGIN_ROLES, QR_MAX_CHARS, SWITCH_INFO, type BackupStatus, type LoginRole, type PortalSettings, type SwitchName } from '../lib/portal';
 import type { SessionInfo } from '../lib/staff';
 import { SignedOut, signedInNow } from './adminApi';
 import { fetchPortal, savePortal, saveQr, type PortalView } from './fest/festApi';
@@ -19,7 +19,7 @@ interface PanelProps {
 }
 
 const STUDENT_SWITCHES: SwitchName[] = ['selfRegistration', 'studentLookup'];
-const EVENT_SWITCHES: SwitchName[] = ['ownDepartmentEvents', 'eventEntry', 'results'];
+const EVENT_SWITCHES: SwitchName[] = ['eventEntry', 'results'];
 const STAFF_SWITCHES: SwitchName[] = ['deskRegistration', 'downloads'];
 
 /** Makes the QR code picture small enough to send (a PNG when it fits; it stays sharp enough to scan). */
@@ -113,7 +113,8 @@ export function PortalPanel({ token, onSignedOut }: PanelProps) {
   const flipLogin = (role: LoginRole) => {
     const next = !portal.logins[role];
     if (!next && !window.confirm(`Switch off sign-in for ${LOGIN_LABELS[role].toLowerCase()}?\n\nEveryone signed in with those accounts is signed out at once, and they cannot sign in until you switch it on again.`)) return;
-    void run(`login-${role}`, () => savePortal(token, { logins: { ...portal.logins, [role]: next } }));
+    // Only this role: the server keeps every other role's switch as it is now (this page's copy may be old).
+    void run(`login-${role}`, () => savePortal(token, { logins: { [role]: next } as PortalSettings['logins'] }));
   };
   const upload = async (event: ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];

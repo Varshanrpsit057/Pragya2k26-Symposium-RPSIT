@@ -149,7 +149,10 @@ export const STAFF_ROUTES: readonly StaffRoute[] = [
   { method: 'POST', path: route_(`/events/${EVENT}/reopen`), permission: 'events.correct', run: (s, { actor, body, params: [eventId] }) => s.events.reopen(actor, eventId, body) },
 
   // Staff accounts and reports (admins)
-  { method: 'GET', path: route_('/staff'), permission: 'staff.manage', run: (s) => s.staff.list() },
+  { method: 'GET', path: route_('/staff'), permission: 'staff.manage', run: async (s) => ({ ...(await s.staff.list()), failures: await s.signInFailures() }) },
+  // Before /staff/<username>: these two are not usernames.
+  { method: 'POST', path: route_('/staff/delete-all'), permission: 'staff.manage', run: (s, { actor, body }) => s.deleteAllStaff(actor, body) },
+  { method: 'POST', path: route_(`/staff/${USER}/check-password`), permission: 'staff.manage', run: (s, { actor, body, params: [username] }) => s.checkStaffPassword(actor, username, body) },
   { method: 'POST', path: route_('/staff'), permission: 'staff.manage', run: (s, { actor, body }) => s.staff.create(actor, body) },
   { method: 'POST', path: route_(`/staff/${USER}`), permission: 'staff.manage', run: (s, { actor, body, params: [username] }) => s.staff.update(actor, username, body) },
   { method: 'POST', path: route_(`/staff/${USER}/delete`), permission: 'staff.manage', run: (s, { actor, params: [username] }) => s.staff.remove(actor, username) },
@@ -189,7 +192,6 @@ export const STAFF_ROUTES: readonly StaffRoute[] = [
   { method: 'GET', path: route_('/fest/catalog'), permission: 'fest.view', run: (s) => s.fest.catalogView() },
   { method: 'POST', path: route_('/fest/catalog'), permission: 'fest.catalog', run: (s, { actor, body }) => s.fest.saveCatalog(actor, body) },
   { method: 'POST', path: route_('/fest/sync'), permission: 'fest.view', run: (s, { actor, body }) => s.fest.sync(actor, body) },
-  { method: 'POST', path: route_('/fest/blocks'), permission: 'fest.register', run: (s, { actor, body }) => s.fest.takeBlock(actor, body) },
   { method: 'POST', path: route_('/fest/registrations'), permission: 'fest.register', run: (s, { actor, body }) => s.fest.register(actor, body) },
   {
     method: 'POST',
@@ -205,9 +207,8 @@ export const STAFF_ROUTES: readonly StaffRoute[] = [
   },
   { method: 'POST', path: route_(`/fest/events/${EVENT}/results`), permission: ['fest.event', 'fest.correct'], run: (s, { actor, body, params: [eventId] }) => s.fest.results(actor, eventId, body) },
   { method: 'POST', path: route_('/fest/import'), permission: 'fest.import', run: (s, { actor, body }) => s.fest.importRows(actor, body) },
-  // Who does a UTR belong to (any department), and giving it to the student it really belongs to.
+  // Who has a UTR (any department): the desks' look-up when a UTR clashes.
   { method: 'POST', path: route_('/fest/utr'), permission: 'fest.register', run: (s, { actor, body }) => s.fest.utrLookup(actor, body) },
-  { method: 'POST', path: route_('/fest/utr/assign'), permission: 'fest.register', run: (s, { actor, body }) => s.fest.utrAssign(actor, body) },
   { method: 'POST', path: route_('/fest/test-data/clear'), permission: 'system.testing', run: (s, { actor, body }) => s.fest.clearTest(actor, body) },
   // The load test: up to 1,000 mock participants (marked TEST), a batch per call.
   { method: 'POST', path: route_('/fest/test-data/seed'), permission: 'system.testing', run: (s, { actor, body }) => s.fest.seedTest(actor, body) },

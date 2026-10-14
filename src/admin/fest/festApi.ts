@@ -1,5 +1,5 @@
 /** The fest's API calls (server/fest.ts). */
-import type { FestCatalog, FestRegistration, FestResult, FestSource, UtrHolder } from '../../lib/fest';
+import type { FestCatalog, FestRegistration, FestResult, UtrHolder } from '../../lib/fest';
 import type { BackupStatus, PortalSettings } from '../../lib/portal';
 import { request } from '../adminApi';
 
@@ -10,10 +10,8 @@ export interface DashboardSwitches {
   results: boolean;
   downloads: boolean;
   onlinePayment: boolean;
-  /** Students join only their own department's events (off: any department's). */
-  ownDepartmentEvents: boolean;
 }
-export const ALL_ON: DashboardSwitches = { deskRegistration: true, eventEntry: true, results: true, downloads: true, onlinePayment: true, ownDepartmentEvents: true };
+export const ALL_ON: DashboardSwitches = { deskRegistration: true, eventEntry: true, results: true, downloads: true, onlinePayment: true };
 
 export interface SyncAnswer {
   full: boolean;
@@ -33,8 +31,6 @@ export const saveFestCatalog = (token: string, catalog: FestCatalog, baseRevisio
   request<{ catalog: FestCatalog }>('/api/admin/fest/catalog', { method: 'POST', body: { catalog, baseRevision }, token }).then((data) => data.catalog);
 export const festSync = (token: string, since: string, dept?: string) =>
   request<SyncAnswer>('/api/admin/fest/sync', { method: 'POST', body: { ...(since && { since }), ...(dept && { dept }) }, token });
-export const takeIds = (token: string, body: { dept?: string; source?: FestSource; count?: number }) =>
-  request<{ dept: string; source: FestSource; first: number; last: number }>('/api/admin/fest/blocks', { method: 'POST', body, token });
 
 export interface ImportRow {
   row: number;
@@ -42,6 +38,7 @@ export interface ImportRow {
   phone: string;
   email: string;
   college: string;
+  collegeCode: string;
   branch: string;
   year: string;
   team: string;
@@ -56,12 +53,8 @@ export interface ImportOutcome {
 }
 export const importFest = (token: string, body: { dept?: string; rows: ImportRow[]; dryRun: boolean; eventFeesPaid?: boolean }) =>
   request<{ outcomes: ImportOutcome[] }>('/api/admin/fest/import', { method: 'POST', body, token }).then((data) => data.outcomes);
-/** Deletes a batch of test registrations; `remaining` says how many are left for the next call. */
-/** "Who does this UTR belong to?": everyone with it, in every department. */
+/** "Who has this UTR?": everyone with it, in every department (the desks, when a UTR clashes). */
 export const lookupUtr = (token: string, txn: string) => request<{ txn: string; holders: UtrHolder[] }>('/api/admin/fest/utr', { method: 'POST', body: { txn }, token });
-/** Gives the UTR to the student it belongs to (verified); whoever had it loses it, others are told. */
-export const assignUtr = (token: string, txn: string, to: string) =>
-  request<{ registration: FestRegistration; movedFrom: string | null; notFound: string[] }>('/api/admin/fest/utr/assign', { method: 'POST', body: { txn, to, confirmed: true }, token });
 /** The load test: adds mock participants (TEST) up to 1,000 in all, a batch per call. */
 export const seedFestTestData = (token: string, count?: number) =>
   request<{ added: number; total: number; remaining: number; cap: number }>('/api/admin/fest/test-data/seed', { method: 'POST', body: count ? { count } : {}, token });

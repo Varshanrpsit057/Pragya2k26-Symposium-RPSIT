@@ -56,10 +56,9 @@ describe('a student registering on their phone', () => {
     expect(view(first)).toMatchObject({ id: 'IT-2001', dept: 'IT', status: 'waiting', txnEnd: '8901', canChange: true, entryFee: 100, phoneEnd: expect.any(String) });
     expect(JSON.stringify(first.body)).not.toContain('412345678901'); // the page never shows the whole transaction ID
     expect(view(first).events).toEqual([]);
-    // The department is needed, and events (if any are sent) must be that department's.
+    // The department is needed; events are not chosen here (each is joined at its venue): any sent are not used.
     expect((await selfRegister(h, form({ dept: '' }))).body).toMatchObject({ code: 'INVALID', details: { dept: expect.any(String) } });
-    expect((await selfRegister(h, form({ events: ['cse-hackathon'] }))).body.code).toBe('INVALID');
-    expect(view(await selfRegister(h, form({ txn: '412345678902' })))).toMatchObject({ id: 'IT-2002' });
+    expect(view(await selfRegister(h, form({ txn: '412345678902', events: ['it-web-architects', 'cse-hackathon'] })))).toMatchObject({ id: 'IT-2002', events: [] });
 
     // A retry of the same submission (a dropped connection) returns the same registration.
     const again = form();
@@ -85,7 +84,7 @@ describe('a student registering on their phone', () => {
     expect((await h.call('GET', '/api/fest/info')).body.open).toBe(false);
   });
 
-  it('changes their events only from the phone that registered (its private key); the ID and mobile number only show', async () => {
+  it('shows the registration with the ID and mobile number; events are joined at the venue, never from the phone', async () => {
     const h = setup({ at: TIMES.eventDay });
     const body = form();
     await selfRegister(h, body);
@@ -93,16 +92,14 @@ describe('a student registering on their phone', () => {
     expect((await me(h, 'IT-2001', '9999999999')).status).toBe(404);
     expect((await me(h, ' it 2001 ', `+91 ${body.participant.phone}`)).status).toBe(200);
 
-    // With only the ID and mobile number: no changes.
-    const refused = await h.call('POST', '/api/fest/me/events', { id: 'IT-2001', phone: body.participant.phone, add: ['mech-aqua-rocket'] }, { ip: '10.1.1.2' });
-    expect(refused.body.code).toBe('KEY_NEEDED');
     expect((await h.call('POST', '/api/fest/me', { id: 'IT-2001', key: 'self-key-0000000000009999' }, { ip: '10.1.1.2' })).status).toBe(404);
 
-    // From the phone that registered: adds an event of their department (not another department's).
-    const changed = await h.call('POST', '/api/fest/me/events', { id: 'IT-2001', key: body.submissionId, add: ['it-web-architects'] }, { ip: '10.1.1.2' });
-    expect(view(changed)).toMatchObject({ canChange: true });
-    expect(view(changed).events.map((item) => item.eventId)).toEqual(['it-web-architects']);
-    expect((await h.call('POST', '/api/fest/me/events', { id: 'IT-2001', key: body.submissionId, add: ['mech-aqua-rocket'] }, { ip: '10.1.1.2' })).body.code).toBe('INVALID');
+    // Not even the phone that registered adds events: each event's coordinator does, at its venue.
+    const refused = await h.call('POST', '/api/fest/me/events', { id: 'IT-2001', key: body.submissionId, add: ['it-web-architects'] }, { ip: '10.1.1.2' });
+    expect(refused.body).toMatchObject({ code: 'EVENTS_AT_VENUE', error: expect.stringContaining('venue') });
+    const coordinator = await h.staff('COORDINATOR', ['it-web-architects'], 'it-web', { department: 'IT' });
+    expect((await h.call('POST', '/api/admin/fest/registrations/IT-2001/events/it-web-architects', { action: 'add' }, { token: coordinator.token })).status).toBe(200);
+    expect(view(await me(h, 'IT-2001', body.participant.phone)).events.map((item) => item.eventId)).toEqual(['it-web-architects']);
   });
 
   it('cannot be found by trying IDs one by one with a known mobile number', async () => {

@@ -1,7 +1,7 @@
 /**
- * The college-wide fest through the API: departments and events, department accounts, desks
- * with their ID blocks, live updates, the online import, event windows, results and
- * corrections, and clearing test data.
+ * The college-wide fest through the API: departments and events, department accounts, a desk
+ * registering a student for them (online, the phones' IDs), live updates, the online import,
+ * event windows, results and corrections, and clearing test data. (The desk's money: festUtr.test.ts.)
  */
 import { describe, expect, it, vi } from 'vitest';
 import { DEFAULT_CATALOG, type FestRegistration } from '../src/lib/fest';
@@ -34,21 +34,21 @@ async function department(h: Harness, dept = 'CSE') {
 }
 
 let submissions = 0;
-async function register(h: Harness, token: string, id: string, events: string[], extra: Record<string, unknown> = {}) {
+/**
+ * A desk registers a student for them (online: the next ID of the department, as on a phone), then
+ * collects the entry fee in cash; `events` are then joined at their venues (by the web assist team
+ * here). `expected`: the ID it must get. `extra.payment === null`: not paid.
+ */
+async function register(h: Harness, token: string, expected: string, events: string[], extra: Record<string, unknown> = {}) {
   submissions += 1;
-  return h.call(
-    'POST',
-    '/api/admin/fest/registrations',
-    {
-      submissionId: `sub-${String(submissions).padStart(6, '0')}`,
-      id,
-      participant: student(submissions),
-      events,
-      payment: { method: 'CASH', confirmed: true },
-      ...extra,
-    },
-    { token },
-  );
+  const { payment, ...rest } = extra;
+  let answer = await h.call('POST', '/api/admin/fest/registrations', { submissionId: `sub-${String(submissions).padStart(6, '0')}`, participant: student(submissions), events: [], ...rest }, { token });
+  if (answer.status !== 200) return answer;
+  const id = answer.body.registration.id as string;
+  if (expected) expect(id).toBe(expected);
+  if (payment !== null) answer = await h.call('POST', `/api/admin/fest/registrations/${id}`, { action: 'collect', payment: payment ?? { method: 'CASH', confirmed: true } }, { token });
+  for (const eventId of events) answer = await h.asOwner('POST', `/api/admin/fest/registrations/${id}/events/${eventId}`, { action: 'add' });
+  return answer;
 }
 
 describe('the fest catalog', () => {
@@ -91,61 +91,55 @@ describe('department accounts', () => {
 });
 
 describe('registering at a desk', () => {
-  it('uses IDs from the desk phone’s block, never twice for one submission, one phone per department', async () => {
+  it('registers a student for them online with the phones’ IDs, never twice for one submission, one phone per department', async () => {
     const h = setup({ at: TIMES.eventDay });
     const { desk } = await department(h);
-    const block = await h.call('POST', '/api/admin/fest/blocks', {}, { token: desk.token });
-    expect(block.body).toMatchObject({ dept: 'CSE', source: 'DESK', first: 1, last: 50 });
-    expect((await h.call('POST', '/api/admin/fest/blocks', {}, { token: desk.token })).body).toMatchObject({ first: 51, last: 100 });
-
-    const first = await register(h, desk.token, 'CSE-0001', ['cse-hackathon', 'cse-cyber-hunt']);
+    // Events sent with it are not used: they are joined at each venue.
+    const first = await h.call('POST', '/api/admin/fest/registrations', { submissionId: 'sub-first-000001', participant: student(900), events: ['cse-hackathon'] }, { token: desk.token });
     expect(first.status).toBe(200);
     const made: FestRegistration = first.body.registration;
-    expect(made).toMatchObject({ id: 'CSE-0001', dept: 'CSE', source: 'DESK', desk: 1, entry: { status: 'PAID', payment: { method: 'CASH', amount: 100, desk: 1 } } });
-    expect(made.events.map((entry) => entry.eventId)).toEqual(['cse-hackathon', 'cse-cyber-hunt']);
+    // Due until the desk collects it (as for a student who registered on their phone).
+    expect(made).toMatchObject({ id: 'CSE-2001', dept: 'CSE', source: 'SELF', created: { by: 'cse-desk1' }, entry: { status: 'DUE' }, events: [] });
+    expect((await h.call('POST', '/api/admin/fest/registrations/CSE-2001', { action: 'collect', payment: { method: 'CASH', confirmed: true } }, { token: desk.token })).body.registration.entry).toMatchObject({
+      status: 'PAID',
+      payment: { method: 'CASH', amount: 100, desk: 1 },
+    });
 
     // The same submission again (the network dropped the answer): the same registration.
-    const again = await h.call(
-      'POST',
-      '/api/admin/fest/registrations',
-      { submissionId: made.sid, id: 'CSE-0002', participant: student(999), events: [], payment: { method: 'CASH', confirmed: true } },
-      { token: desk.token },
-    );
-    expect(again.body).toMatchObject({ replayed: true, registration: { id: 'CSE-0001' } });
+    const again = await h.call('POST', '/api/admin/fest/registrations', { submissionId: made.sid, participant: student(999), events: [] }, { token: desk.token });
+    expect(again.body).toMatchObject({ replayed: true, registration: { id: 'CSE-2001' } });
 
-    // One phone, one registration in the department.
-    const samePhone = await h.call(
-      'POST',
-      '/api/admin/fest/registrations',
-      { submissionId: 'sub-samephone1', id: 'CSE-0003', participant: { ...student(1), phone: made.phone }, events: [], payment: { method: 'CASH', confirmed: true } },
-      { token: desk.token },
-    );
+    // One phone, one registration in the department: the desk is told whose it is.
+    const samePhone = await h.call('POST', '/api/admin/fest/registrations', { submissionId: 'sub-samephone1', participant: { ...student(1), phone: made.phone }, events: [] }, { token: desk.token });
     expect(samePhone.status).toBe(409);
-    expect(samePhone.body).toMatchObject({ code: 'DUPLICATE_PHONE', details: { existingId: 'CSE-0001' } });
-    // An ID already used (two phones holding the same block by mistake).
-    expect((await register(h, desk.token, 'CSE-0001', [])).body.code).toBe('ID_TAKEN');
+    expect(samePhone.body).toMatchObject({ code: 'DUPLICATE_PHONE', details: { existingId: 'CSE-2001' } });
+
+    // Students on their phones take the next IDs: nobody ever gets the same one.
+    const own = await h.call('POST', '/api/fest/register', { submissionId: 'own-phone-key-0000000001', dept: 'CSE', participant: student(50), events: [] }, { ip: '10.9.0.1' });
+    expect(own.body.registration.id).toBe('CSE-2002');
+    // The offline ID blocks are gone.
+    expect((await h.call('POST', '/api/admin/fest/blocks', {}, { token: desk.token })).status).toBe(404);
   });
 
-  it('keeps each department to its own IDs and events, checks the student and the payment', async () => {
+  it('keeps each desk to its own department, checks the student; Website controls can switch it off', async () => {
     const h = setup({ at: TIMES.eventDay });
     const { desk } = await department(h);
-    expect((await register(h, desk.token, 'IT-0001', [])).body.code).toBe('INVALID_ID');
-    expect((await register(h, desk.token, 'CSE-5001', [])).body.code).toBe('INVALID_ID');
-    expect((await register(h, desk.token, 'CSE-0004', ['it-web-architects'])).body.error).toMatch(/not an event of CSE/);
-    expect((await register(h, desk.token, 'CSE-0004', [], { dept: 'IT' })).status).toBe(403);
-    expect((await register(h, desk.token, 'CSE-0004', [], { participant: { ...student(5), phone: '12345' } })).body.details).toMatchObject({ phone: expect.any(String) });
-    expect((await register(h, desk.token, 'CSE-0004', [], { payment: { method: 'UPI', txn: '12', confirmed: true } })).body.error).toMatch(/transaction ID/);
-    const upi = await register(h, desk.token, 'CSE-0004', [], { payment: { method: 'UPI', txn: '412345678901', confirmed: true } });
-    expect(upi.body.registration.entry.payment).toMatchObject({ method: 'UPI', txn: '412345678901', amount: 100 });
+    expect((await register(h, desk.token, '', [], { dept: 'IT' })).status).toBe(403);
+    expect((await register(h, desk.token, '', [], { participant: { ...student(5), phone: '12345' } })).body.details).toMatchObject({ phone: expect.any(String) });
+    expect((await register(h, desk.token, '', [], { participant: { ...student(6), email: '' } })).body.details).toMatchObject({ email: expect.any(String) });
+    await h.asOwner('POST', '/api/admin/portal', { portal: { deskRegistration: false } });
+    expect((await register(h, desk.token, '', [])).body.code).toBe('SWITCHED_OFF');
+    // The web assist team still can.
+    expect((await h.asOwner('POST', '/api/admin/fest/registrations', { dept: 'CSE', submissionId: 'sub-owner-000001', participant: student(7), events: [] })).body.registration.id).toBe('CSE-2001');
   });
 
   it('stops at the closing time; the web assist team can reopen it', async () => {
     const h = setup({ at: TIMES.onsiteCloses });
     const { desk } = await department(h);
-    const closed = await register(h, desk.token, 'CSE-0001', []);
+    const closed = await register(h, desk.token, 'CSE-2001', []);
     expect(closed.body).toMatchObject({ code: 'ONSITE_CLOSED', error: 'On-site registration closed at 17 October 2026 · 11:59 AM IST.' });
     await h.asOwner('POST', '/api/admin/registration-window', { action: 'onsite-until', onsiteClosesAt: '2026-10-17T14:00' });
-    expect((await register(h, desk.token, 'CSE-0001', [])).status).toBe(200);
+    expect((await register(h, desk.token, 'CSE-2001', [])).status).toBe(200);
   });
 });
 
@@ -154,17 +148,17 @@ describe('live data', () => {
     const h = setup({ at: TIMES.eventDay });
     const cse = await department(h, 'CSE');
     const it_ = await department(h, 'IT');
-    await register(h, cse.desk.token, 'CSE-0001', []);
-    await register(h, it_.desk.token, 'IT-0001', []);
+    await register(h, cse.desk.token, 'CSE-2001', []);
+    await register(h, it_.desk.token, 'IT-2001', []);
     const overall = await h.staff('OVERALL');
 
     const hodView = await h.call('POST', '/api/admin/fest/sync', {}, { token: cse.hod.token });
     expect(hodView.body).toMatchObject({ full: true, departments: ['CSE'] });
-    expect(hodView.body.registrations.map((item: FestRegistration) => item.id)).toEqual(['CSE-0001']);
+    expect(hodView.body.registrations.map((item: FestRegistration) => item.id)).toEqual(['CSE-2001']);
     expect((await h.call('POST', '/api/admin/fest/sync', { dept: 'IT' }, { token: cse.hod.token })).status).toBe(403);
 
     const all = await h.call('POST', '/api/admin/fest/sync', {}, { token: overall.token });
-    expect(all.body.registrations.map((item: FestRegistration) => item.id).sort()).toEqual(['CSE-0001', 'IT-0001']);
+    expect(all.body.registrations.map((item: FestRegistration) => item.id).sort()).toEqual(['CSE-2001', 'IT-2001']);
     expect((await h.call('POST', '/api/admin/fest/sync', { dept: 'IT' }, { token: overall.token })).body.registrations).toHaveLength(1);
 
     // The next sync repeats the last 20 seconds (so a write in flight is never missed; the page keeps the newest copy)…
@@ -177,9 +171,9 @@ describe('live data', () => {
     const settled = await h.call('POST', '/api/admin/fest/sync', { since: next.body.cursor }, { token: overall.token });
     const later = await h.call('POST', '/api/admin/fest/sync', { since: settled.body.cursor }, { token: overall.token });
     expect(later.body.registrations).toHaveLength(0);
-    await register(h, cse.desk.token, 'CSE-0002', []);
+    await register(h, cse.desk.token, 'CSE-2002', []);
     const delta = await h.call('POST', '/api/admin/fest/sync', { since: later.body.cursor }, { token: overall.token });
-    expect(delta.body.registrations.map((item: FestRegistration) => item.id)).toEqual(['CSE-0002']);
+    expect(delta.body.registrations.map((item: FestRegistration) => item.id)).toEqual(['CSE-2002']);
     // Registration desks and coordinators see their department too.
     expect((await h.call('POST', '/api/admin/fest/sync', {}, { token: cse.coordinator.token })).body.registrations).toHaveLength(2);
   });
@@ -230,27 +224,27 @@ describe('the event window', () => {
     const h = setup({ at: TIMES.eventDay });
     const { desk, coordinator } = await department(h);
     const other = await h.staff('COORDINATOR', ['cse-cyber-hunt'], 'cse-quiz1', { department: 'CSE' });
-    await register(h, desk.token, 'CSE-0001', ['cse-hackathon']);
-    await register(h, desk.token, 'CSE-0002', []);
+    await register(h, desk.token, 'CSE-2001', ['cse-hackathon']);
+    await register(h, desk.token, 'CSE-2002', []);
     const act = (id: string, body: Record<string, unknown>, token = coordinator.token) => h.call('POST', `/api/admin/fest/registrations/${id}/events/cse-hackathon`, body, { token });
 
-    expect((await act('CSE-0001', { action: 'present' })).body.code).toBe('FEE_DUE');
-    expect((await act('CSE-0001', { action: 'fee', payment: { method: 'CASH', confirmed: true } }, other.token)).status).toBe(403);
-    const fee = await act('CSE-0001', { action: 'fee', payment: { method: 'CASH', confirmed: true } });
+    expect((await act('CSE-2001', { action: 'present' })).body.code).toBe('FEE_DUE');
+    expect((await act('CSE-2001', { action: 'fee', payment: { method: 'CASH', confirmed: true } }, other.token)).status).toBe(403);
+    const fee = await act('CSE-2001', { action: 'fee', payment: { method: 'CASH', confirmed: true } });
     expect(fee.body.registration.events[0].fee).toMatchObject({ method: 'CASH', amount: 50, by: 'cse-hack1' });
-    expect((await act('CSE-0001', { action: 'present' })).body.registration.events[0].present).toMatchObject({ by: 'cse-hack1' });
+    expect((await act('CSE-2001', { action: 'present' })).body.registration.events[0].present).toMatchObject({ by: 'cse-hack1' });
 
     // A student who came straight to the venue: added to the event there.
-    expect((await act('CSE-0002', { action: 'fee', payment: { method: 'CASH', confirmed: true } })).body.code).toBe('NOT_IN_EVENT');
-    expect((await act('CSE-0002', { action: 'add' })).body.registration.events.map((entry: { eventId: string }) => entry.eventId)).toEqual(['cse-hackathon']);
+    expect((await act('CSE-2002', { action: 'fee', payment: { method: 'CASH', confirmed: true } })).body.code).toBe('NOT_IN_EVENT');
+    expect((await act('CSE-2002', { action: 'add' })).body.registration.events.map((entry: { eventId: string }) => entry.eventId)).toEqual(['cse-hackathon']);
 
     const results = (body: Record<string, unknown>, token = coordinator.token) => h.call('POST', '/api/admin/fest/events/cse-hackathon/results', body, { token });
-    expect((await results({ action: 'save', places: [{ place: 1, ids: ['CSE-0002'] }] })).body.error).toMatch(/not marked present/);
-    const saved = await results({ action: 'save', places: [{ place: 1, ids: ['cse 1'], team: 'Byte Me' }] });
-    expect(saved.body.result.places).toEqual([{ place: 1, ids: ['CSE-0001'], team: 'Byte Me' }]);
+    expect((await results({ action: 'save', places: [{ place: 1, ids: ['CSE-2002'] }] })).body.error).toMatch(/not marked present/);
+    const saved = await results({ action: 'save', places: [{ place: 1, ids: ['cse 2001'], team: 'Byte Me' }] });
+    expect(saved.body.result.places).toEqual([{ place: 1, ids: ['CSE-2001'], team: 'Byte Me' }]);
     expect((await results({ action: 'submit' })).body.result.submitted).toMatchObject({ by: 'cse-hack1' });
     // Locked: no more changes, until the overall coordinator reopens it.
-    expect((await act('CSE-0002', { action: 'fee', payment: { method: 'CASH', confirmed: true } })).body.code).toBe('RESULTS_SUBMITTED');
+    expect((await act('CSE-2002', { action: 'fee', payment: { method: 'CASH', confirmed: true } })).body.code).toBe('RESULTS_SUBMITTED');
     expect((await results({ action: 'reopen', reason: 'Wrong winner' })).status).toBe(403);
     const overall = await h.staff('OVERALL');
     const reopened = await results({ action: 'reopen', reason: 'Wrong winner' }, overall.token);
@@ -261,12 +255,12 @@ describe('the event window', () => {
   it('lets the overall coordinator cancel a fee recorded by mistake (not once present)', async () => {
     const h = setup({ at: TIMES.eventDay });
     const { desk, coordinator } = await department(h);
-    await register(h, desk.token, 'CSE-0001', ['cse-hackathon']);
-    await h.call('POST', '/api/admin/fest/registrations/CSE-0001/events/cse-hackathon', { action: 'fee', payment: { method: 'UPI', txn: '998877665544', confirmed: true } }, { token: coordinator.token });
+    await register(h, desk.token, 'CSE-2001', ['cse-hackathon']);
+    await h.call('POST', '/api/admin/fest/registrations/CSE-2001/events/cse-hackathon', { action: 'fee', payment: { method: 'UPI', txn: '998877665544', confirmed: true } }, { token: coordinator.token });
     const overall = await h.staff('OVERALL');
-    const voided = await h.call('POST', '/api/admin/fest/registrations/CSE-0001/events/cse-hackathon', { action: 'void-fee', reason: 'Paid twice' }, { token: overall.token });
+    const voided = await h.call('POST', '/api/admin/fest/registrations/CSE-2001/events/cse-hackathon', { action: 'void-fee', reason: 'Paid twice' }, { token: overall.token });
     expect(voided.body.registration.events[0].fee.voided).toMatchObject({ reason: 'Paid twice', by: overall.username });
-    expect((await h.call('POST', '/api/admin/fest/registrations/CSE-0001/events/cse-hackathon', { action: 'void-fee', reason: 'x y z' }, { token: coordinator.token })).status).toBe(403);
+    expect((await h.call('POST', '/api/admin/fest/registrations/CSE-2001/events/cse-hackathon', { action: 'void-fee', reason: 'x y z' }, { token: coordinator.token })).status).toBe(403);
   });
 });
 
@@ -274,28 +268,28 @@ describe('corrections', () => {
   it('edits details (one phone per department still), cancels, deletes and restores', async () => {
     const h = setup({ at: TIMES.eventDay });
     const { desk, admin } = await department(h);
-    const a = (await register(h, desk.token, 'CSE-0001', [])).body.registration as FestRegistration;
-    const b = (await register(h, desk.token, 'CSE-0002', [])).body.registration as FestRegistration;
+    const a = (await register(h, desk.token, 'CSE-2001', [])).body.registration as FestRegistration;
+    const b = (await register(h, desk.token, 'CSE-2002', [])).body.registration as FestRegistration;
     const act = (id: string, body: Record<string, unknown>, token = admin.token) => h.call('POST', `/api/admin/fest/registrations/${id}`, body, { token });
 
-    expect((await act('CSE-0002', { action: 'edit', participant: { phone: a.phone } })).body).toMatchObject({ code: 'DUPLICATE_PHONE', details: { existingId: 'CSE-0001' } });
-    expect((await act('CSE-0002', { action: 'edit', participant: { name: 'Kavin R' } })).body.registration.name).toBe('Kavin R');
-    expect((await act('CSE-0002', { action: 'cancel', reason: 'Left early' }, desk.token)).status).toBe(403);
-    expect((await act('CSE-0002', { action: 'cancel', reason: 'Left early' })).body.registration.cancelled).toMatchObject({ reason: 'Left early' });
-    expect((await act('CSE-0002', { action: 'uncancel' })).body.registration.cancelled).toBeUndefined();
+    expect((await act('CSE-2002', { action: 'edit', participant: { phone: a.phone } })).body).toMatchObject({ code: 'DUPLICATE_PHONE', details: { existingId: 'CSE-2001' } });
+    expect((await act('CSE-2002', { action: 'edit', participant: { name: 'Kavin R' } })).body.registration.name).toBe('Kavin R');
+    expect((await act('CSE-2002', { action: 'cancel', reason: 'Left early' }, desk.token)).status).toBe(403);
+    expect((await act('CSE-2002', { action: 'cancel', reason: 'Left early' })).body.registration.cancelled).toMatchObject({ reason: 'Left early' });
+    expect((await act('CSE-2002', { action: 'uncancel' })).body.registration.cancelled).toBeUndefined();
 
     // Deleting frees the phone; restoring takes it back.
-    expect((await act('CSE-0002', { action: 'delete', reason: 'Test entry' })).status).toBe(403);
-    expect((await h.asOwner('POST', '/api/admin/fest/registrations/CSE-0002', { action: 'delete', reason: 'Test entry' })).body.registration.deleted).toMatchObject({ reason: 'Test entry' });
+    expect((await act('CSE-2002', { action: 'delete', reason: 'Test entry' })).status).toBe(403);
+    expect((await h.asOwner('POST', '/api/admin/fest/registrations/CSE-2002', { action: 'delete', reason: 'Test entry' })).body.registration.deleted).toMatchObject({ reason: 'Test entry' });
     const reused = await h.call(
       'POST',
       '/api/admin/fest/registrations',
-      { submissionId: 'sub-reuse-0001', id: 'CSE-0003', participant: { ...student(77), phone: b.phone }, events: [], payment: { method: 'CASH', confirmed: true } },
+      { submissionId: 'sub-reuse-0001', id: 'CSE-2003', participant: { ...student(77), phone: b.phone }, events: [], payment: { method: 'CASH', confirmed: true } },
       { token: desk.token },
     );
     expect(reused.status).toBe(200);
-    // Restoring: the phone now belongs to CSE-0003.
-    expect((await h.asOwner('POST', '/api/admin/fest/registrations/CSE-0002', { action: 'restore' })).body).toMatchObject({ code: 'DUPLICATE_PHONE', details: { existingId: 'CSE-0003' } });
+    // Restoring: the phone now belongs to CSE-2003.
+    expect((await h.asOwner('POST', '/api/admin/fest/registrations/CSE-2002', { action: 'restore' })).body).toMatchObject({ code: 'DUPLICATE_PHONE', details: { existingId: 'CSE-2003' } });
   });
 });
 
@@ -304,25 +298,26 @@ describe('test data', () => {
     const h = setup({ at: TIMES.eventDay });
     const cse = await department(h, 'CSE');
     const it_ = await department(h, 'IT');
-    await register(h, it_.desk.token, 'IT-0001', []);
+    await register(h, it_.desk.token, 'IT-2001', []);
     await h.asOwner('POST', '/api/admin/testing/session', { action: 'start', label: 'Rehearsal' });
-    await register(h, cse.desk.token, 'CSE-0001', []);
-    await register(h, it_.desk.token, 'IT-0002', []);
+    await register(h, cse.desk.token, 'CSE-2001', []);
+    await register(h, it_.desk.token, 'IT-2002', []);
     const cleared = await h.asOwner('POST', '/api/admin/fest/test-data/clear', {});
     expect(cleared.body).toMatchObject({ cleared: 2, remaining: 0 });
     expect(cleared.body.restarted).toContain('CSE');
     expect(cleared.body.restarted).not.toContain('IT');
     const left = await h.asOwner('POST', '/api/admin/fest/sync', {});
-    expect(left.body.registrations.map((item: FestRegistration) => item.id)).toEqual(['IT-0001']);
+    expect(left.body.registrations.map((item: FestRegistration) => item.id)).toEqual(['IT-2001']);
     expect([...h.files.objects.keys()].some((key) => key.startsWith('backups/fest-test-data-'))).toBe(true);
-    expect((await h.call('POST', '/api/admin/fest/blocks', {}, { token: cse.desk.token })).body.first).toBe(1);
+    // CSE starts again at its first ID; IT, with a real registration, carries on.
+    await register(h, cse.desk.token, 'CSE-2001', []);
   });
 
   it('deletes a batch per call (inside the API’s time limit), and only the last call restarts IDs and tells every phone to reload', async () => {
     const h = setup({ at: TIMES.eventDay });
     const cse = await department(h, 'CSE');
     await h.asOwner('POST', '/api/admin/testing/session', { action: 'start', label: 'Load test' });
-    for (const id of ['CSE-0001', 'CSE-0002', 'CSE-0003']) await register(h, cse.desk.token, id, []);
+    for (const id of ['CSE-2001', 'CSE-2002', 'CSE-2003']) await register(h, cse.desk.token, id, []);
     const before = (await h.asOwner('POST', '/api/admin/fest/sync', {})).body.resetAt;
 
     const first = await h.asOwner('POST', '/api/admin/fest/test-data/clear', { limit: 2 });
@@ -344,10 +339,10 @@ describe('the backup', () => {
   it('writes every department’s registrations and results to one private file', async () => {
     const h = setup({ at: TIMES.eventDay });
     const { desk } = await department(h);
-    await register(h, desk.token, 'CSE-0001', ['cse-hackathon']);
+    await register(h, desk.token, 'CSE-2001', ['cse-hackathon']);
     expect(await h.service.fest.backup()).toEqual({ registrations: 1, results: 0, file: 'saved', sheet: 'off' });
     const saved = JSON.parse(new TextDecoder().decode(h.files.objects.get('backups/fest/all.json')!.bytes));
-    expect(saved.registrations.map((item: FestRegistration) => item.id)).toEqual(['CSE-0001']);
+    expect(saved.registrations.map((item: FestRegistration) => item.id)).toEqual(['CSE-2001']);
     expect(saved.catalog.events).toHaveLength(44);
   });
 });

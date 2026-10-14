@@ -144,9 +144,8 @@ describe('Website controls', () => {
     await controls(h, { deskRegistration: false, eventEntry: false, results: false, downloads: false });
 
     const sync = await h.call('POST', '/api/admin/fest/sync', {}, { token: desk.token });
-    expect(sync.body.switches).toEqual({ deskRegistration: false, eventEntry: false, results: false, downloads: false, onlinePayment: true, ownDepartmentEvents: true });
-    const block = await h.call('POST', '/api/admin/fest/blocks', {}, { token: desk.token });
-    const walkIn = { submissionId: 'walk-in-000001', id: `CSE-${String(block.body.first).padStart(4, '0')}`, participant: form().participant, events: [], payment: { method: 'CASH', confirmed: true } };
+    expect(sync.body.switches).toEqual({ deskRegistration: false, eventEntry: false, results: false, downloads: false, onlinePayment: true });
+    const walkIn = { submissionId: 'walk-in-000001', participant: { ...form().participant, phone: '9876500099' }, events: [] };
     expect((await h.call('POST', '/api/admin/fest/registrations', walkIn, { token: desk.token })).body.code).toBe('SWITCHED_OFF');
     expect((await h.call('POST', '/api/admin/fest/registrations/CSE-2001/events/cse-hackathon', { action: 'add' }, { token: coordinator.token })).body.code).toBe('SWITCHED_OFF');
     expect((await h.call('POST', '/api/admin/fest/events/cse-hackathon/results', { action: 'save', places: [] }, { token: coordinator.token })).body.code).toBe('SWITCHED_OFF');

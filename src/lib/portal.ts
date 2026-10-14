@@ -25,11 +25,6 @@ export interface PortalSwitches {
   results: boolean;
   /** Excel downloads in the dashboards. */
   downloads: boolean;
-  /**
-   * Students take part only in their own department's events (an AI&DS student in AI&DS events),
-   * and each event's coordinators see only their department's students. Off: any department's.
-   */
-  ownDepartmentEvents: boolean;
   /** Sign-in for each role (off: those accounts are signed out and cannot sign in). */
   logins: Record<LoginRole, boolean>;
 }
@@ -54,7 +49,6 @@ export const DEFAULT_PORTAL: PortalSettings = {
   eventEntry: true,
   results: true,
   downloads: true,
-  ownDepartmentEvents: true,
   logins: { OVERALL: true, DEPT_ADMIN: true, DESK: true, COORDINATOR: true },
   upiId: DEFAULT_UPI.upiId,
   upiPayee: DEFAULT_UPI.upiPayee,
@@ -81,9 +75,9 @@ export const SWITCH_INFO: Record<SwitchName, { label: string; on: string; off: s
     off: 'Only the phone that registered shows the ID; others ask at a desk.',
   },
   deskRegistration: {
-    label: 'Desk registration of walk-ins',
-    on: 'Registration desks register students who come without registering.',
-    off: 'Desks only verify payments and check students in.',
+    label: 'Desks register a student for them',
+    on: 'Only for a student who cannot register on a phone: the desk types their details (online), then collects the fee as for anyone.',
+    off: 'Students register on their phones only; desks collect and verify payments.',
   },
   eventEntry: {
     label: 'Event entry at the venues',
@@ -94,11 +88,6 @@ export const SWITCH_INFO: Record<SwitchName, { label: string; on: string; off: s
     label: 'Results entry',
     on: 'Event coordinators enter and submit each event’s winners.',
     off: 'Winners cannot be entered or submitted.',
-  },
-  ownDepartmentEvents: {
-    label: 'Students join only their own department’s events',
-    on: 'A student registered under AI&DS takes part only in AI&DS events, and each event’s coordinator sees only their department’s students.',
-    off: 'Any student can join any department’s events, and event coordinators can find students of every department.',
   },
   downloads: {
     label: 'Excel downloads',
@@ -131,7 +120,6 @@ export function readPortal(value: unknown, base: PortalSettings = DEFAULT_PORTAL
     eventEntry: flag(input.eventEntry, base.eventEntry),
     results: flag(input.results, base.results),
     downloads: flag(input.downloads, base.downloads),
-    ownDepartmentEvents: flag(input.ownDepartmentEvents, base.ownDepartmentEvents),
     logins: Object.fromEntries(LOGIN_ROLES.map((role) => [role, flag(logins[role], base.logins[role])])) as Record<LoginRole, boolean>,
     upiId,
     upiPayee: typeof input.upiPayee === 'string' ? words(input.upiPayee, 80) : base.upiPayee,

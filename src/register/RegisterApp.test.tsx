@@ -155,7 +155,10 @@ describe('a student on their phone', () => {
     render(<RegisterApp />);
     expect(await screen.findByText('AI&DS-2001')).toBeInTheDocument();
     expect(await screen.findByText('Verified')).toBeInTheDocument();
-    expect(screen.getByText(/You are verified/)).toBeInTheDocument();
+    // The student sees that the desk collected and verified it: how much, how, when, which desk.
+    expect(screen.getByText('Payment collected and verified.')).toBeInTheDocument();
+    expect(screen.getByText(/₹100 by UPI · .* IST · AI&DS desk 1\./)).toBeInTheDocument();
+    expect(screen.getByText(/Go to your AI&DS events/)).toBeInTheDocument();
   });
 
   it('may pay in cash at the desk instead (the choice is kept), and sees only the desk while online payment is off', async () => {

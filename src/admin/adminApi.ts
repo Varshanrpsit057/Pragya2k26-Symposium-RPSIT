@@ -17,7 +17,7 @@ import { API_BASE, apiUrl } from '../lib/api';
 import type { HelpCategory, HelpRequest, SystemStatus } from '../lib/help';
 import type { RegistrationErrors } from '../lib/registration';
 import type { StudentPortalState } from '../lib/student';
-import type { SessionInfo, SignedInView, StaffAccountView, StaffRole } from '../lib/staff';
+import type { SessionInfo, SignedInView, SignInFailure, StaffAccountView, StaffRole } from '../lib/staff';
 import {
   CLEAR_PHRASE,
   type ClearResult,
@@ -306,6 +306,22 @@ export const reopenResults = (token: string, eventId: string, reason: string) =>
 // --- Staff, reports --------------------------------------------------------------------------
 
 export const listStaff = (token: string) => request<{ staff: StaffAccountView[] }>('/api/admin/staff', { token }).then((data) => data.staff);
+/** The last refused sign-ins (who was tried, why, when). */
+export const staffSignInFailures = (token: string) => request<{ failures?: SignInFailure[] }>('/api/admin/staff', { token }).then((data) => data.failures ?? []);
+
+export interface PasswordCheck {
+  username: string;
+  exists: boolean;
+  active: boolean;
+  matches: boolean;
+  signInOff: boolean;
+}
+/** Whether a password is the account's (no sign-in, no session). */
+export const checkStaffPassword = (token: string, username: string, password: string) =>
+  request<PasswordCheck>(`/api/admin/staff/${encodeURIComponent(username)}/check-password`, { method: 'POST', body: { password }, token });
+/** The owner only: deletes every staff account (typed confirmation). */
+export const deleteAllStaff = (token: string, confirm: string) =>
+  request<{ deleted: number }>('/api/admin/staff/delete-all', { method: 'POST', body: { confirm }, token }).then((data) => data.deleted);
 
 export interface StaffChange {
   username?: string;

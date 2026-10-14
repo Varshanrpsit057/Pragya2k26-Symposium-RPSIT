@@ -1,12 +1,16 @@
 /**
  * An event's window (event coordinators; department admins and the web assist team for any
- * event): the students registered for it, the fee, attendance, adding a student who came
- * straight to the venue, and the winners, submitted to the overall coordinator.
+ * event): the department's students (only they take part in its events), opened one at a time to
+ * check them, added to the event, the fee, attendance, and the winners, submitted to the overall
+ * coordinator. Its participants and the department download as Excel.
  */
 import { useMemo, useState } from 'react';
+import { formatIst } from '../../lib/countdown';
 import { canJoin, deptShort, entryOf, eventLabel, eventOf, eventsOf, feePaid, isActive, parseIdList, rupees, showId, teamRule, totalsOf, type FestEvent, type FestRegistration } from '../../lib/fest';
 import { Badge, when } from '../ui';
 import { DeptPicker, useWorkDept } from './DeskView';
+import { PORTAL, today } from './excel';
+import { downloadStudents } from './exports';
 import { useFest } from './FestData';
 import { NO_PAYMENT, PaymentChoice, RegistrationCard, ShortList, Stat, matches, paymentBody, paymentReady, stampNow, type PaymentDraft } from './festUi';
 
@@ -49,23 +53,24 @@ export function EventWindow() {
 }
 
 function EventPanel({ event }: { event: FestEvent }) {
-  const { registrations, results, session, change, switches } = useFest();
-  // Students of the event's department only, unless Website controls opened events to every department.
-  const ownOnly = switches.ownDepartmentEvents;
+  const { registrations, results, session, change, switches, catalog } = useFest();
+  // Every student of the department: they join the event here, at its venue.
+  const [scope, setScope] = useState<'event' | 'dept'>('dept');
   const [query, setQuery] = useState('');
+  const [open, setOpen] = useState<string | null>(null);
   const [paying, setPaying] = useState<string | null>(null);
   const [payment, setPayment] = useState<PaymentDraft>(NO_PAYMENT);
   const result = results.get(event.id) ?? null;
   // Website controls can switch event entry off (the web assist team can still fix things).
   const entryOff = !switches.eventEntry && session.role !== 'ADMIN';
   const locked = Boolean(result?.submitted) || entryOff;
-  // The department's own students, and anyone who registered themselves (they may join any event).
-  const inDept = useMemo(() => [...registrations.values()].filter((item) => canJoin(item, event, ownOnly) && isActive(item)), [registrations, event, ownOnly]);
-  const registered = useMemo(() => inDept.filter((item) => entryOf(item, event.id)).sort((a, b) => a.id.localeCompare(b.id)), [inDept, event.id]);
+  const canDownload = switches.downloads || session.role === 'ADMIN';
+  // The event's department's students: only they take part in its events.
+  const inDept = useMemo(() => [...registrations.values()].filter((item) => canJoin(item, event) && isActive(item)).sort((a, b) => a.id.localeCompare(b.id)), [registrations, event]);
+  const registered = useMemo(() => inDept.filter((item) => entryOf(item, event.id)), [inDept, event.id]);
   const totals = totalsOf(registered, event.id);
   const q = query.trim();
-  const shown = q ? registered.filter((item) => matches(item, q)) : registered;
-  const others = q.length >= 2 ? inDept.filter((item) => !entryOf(item, event.id) && matches(item, q)) : [];
+  const list = (scope === 'event' ? registered : inDept).filter((item) => matches(item, q));
   const path = (id: string) => `/api/admin/fest/registrations/${id}/events/${event.id}` as const;
   const patchEntry = (registration: FestRegistration, next: Record<string, unknown>) => ({
     ...registration,
@@ -89,6 +94,7 @@ function EventPanel({ event }: { event: FestEvent }) {
       ...current,
       events: [...current.events, { eventId: event.id, added: stampNow(session.username) }],
     }));
+  const note = (what: string) => `${PORTAL} · ${eventLabel(event)} · ${what} · downloaded by ${session.displayName} ${formatIst(Date.now())}`;
 
   return (
     <>
@@ -100,6 +106,21 @@ function EventPanel({ event }: { event: FestEvent }) {
           <Stat label="Fee paid" value={totals.feesPaid} sub={`${rupees(totals.feeCash)} cash · ${rupees(totals.feeUpi)} UPI`} />
           <Stat label="Present" value={totals.present} />
         </div>
+        {canDownload && catalog && (
+          <span className="adm-inline adm-inline--wrap">
+            <button className="adm-button adm-button--small" type="button" disabled={!registered.length} onClick={() => downloadStudents(`techfest-${event.id}-${today()}.xlsx`, event.name, note('its participants'), registered, catalog)}>
+              Download this event (Excel)
+            </button>
+            <button
+              className="adm-button adm-button--small"
+              type="button"
+              disabled={!inDept.length}
+              onClick={() => downloadStudents(`techfest-${event.dept.toLowerCase()}-students-${today()}.xlsx`, `${deptShort(event.dept)} students`, note(`every ${deptShort(event.dept)} student`), inDept, catalog)}
+            >
+              Download all {deptShort(event.dept)} students (Excel)
+            </button>
+          </span>
+        )}
         {result?.submitted && (
           <p className="adm-note">
             Results submitted by {result.submitted.by} {when(result.submitted.at)}. The event is closed: ask the overall coordinator if something must change.
@@ -109,73 +130,107 @@ function EventPanel({ event }: { event: FestEvent }) {
       </section>
 
       <section className="adm-card adm-pad">
+        <div className="fest-chips" role="group" aria-label="Show">
+          <button type="button" className={`fest-chip-button${scope === 'dept' ? ' is-on' : ''}`} aria-pressed={scope === 'dept'} onClick={() => setScope('dept')}>
+            All {deptShort(event.dept)} students ({inDept.length})
+          </button>
+          <button type="button" className={`fest-chip-button${scope === 'event' ? ' is-on' : ''}`} aria-pressed={scope === 'event'} onClick={() => setScope('event')}>
+            In this event ({registered.length})
+          </button>
+        </div>
         <label className="adm-field">
           <span>Find a student</span>
-          <input type="search" value={query} placeholder="Registration ID, name, phone or college" onChange={(change_) => setQuery(change_.target.value)} />
+          <input type="search" value={query} placeholder={`Registration ID (${deptShort(event.dept)}-2001), name, phone or college`} onChange={(change_) => setQuery(change_.target.value)} />
         </label>
+        <p className="adm-muted">
+          Every {deptShort(event.dept)} student is here. Open the student’s ID, check their name and college with them, add them to the event, take the fee and mark them present. Only{' '}
+          {deptShort(event.dept)} students take part in {deptShort(event.dept)} events.
+        </p>
         <ShortList
-          items={shown}
-          empty={q ? 'Nobody registered for this event matches.' : 'Nobody has registered for this event yet.'}
+          items={list}
+          empty={
+            q
+              ? `Nobody ${scope === 'event' ? 'in this event' : `registered under ${deptShort(event.dept)}`} matches. A student of another department takes part in their own department’s events.`
+              : scope === 'event'
+                ? `Nobody has joined this event yet: add them from All ${deptShort(event.dept)} students.`
+                : `Nobody has registered under ${deptShort(event.dept)} yet.`
+          }
           render={(registration) => {
-            const entry = entryOf(registration, event.id)!;
-            const paid = feePaid(entry) || event.fee === 0;
+            const entry = entryOf(registration, event.id);
+            const paid = Boolean(entry) && (feePaid(entry!) || event.fee === 0);
+            const entryPaid = registration.entry.status === 'PAID';
             return (
               <RegistrationCard key={registration.id} registration={registration} eventFocus={event}>
-                {!locked && !paid && paying !== registration.id && (
-                  <button className="adm-button adm-button--primary" type="button" onClick={() => setPaying(registration.id)}>
-                    Take {rupees(event.fee)}
+                {open !== registration.id ? (
+                  <button className="adm-button adm-button--small" type="button" onClick={() => setOpen(registration.id)}>
+                    Open {showId(registration.id)}
                   </button>
-                )}
-                {paying === registration.id && (
-                  <div className="fest-inline-form">
-                    <PaymentChoice amount={event.fee} value={payment} onChange={setPayment} name={`fee-${registration.id}`} />
-                    <span className="adm-inline">
-                      <button className="adm-button adm-button--primary" type="button" disabled={!paymentReady(payment)} onClick={() => takeFee(registration)}>
-                        Save the fee
+                ) : (
+                  <div className="fest-inline-form" role="group" aria-label={`${showId(registration.id)} details`}>
+                    <dl className="fest-factgrid">
+                      <div className="fest-fact">
+                        <dt>Name</dt>
+                        <dd>{registration.name}</dd>
+                      </div>
+                      <div className="fest-fact">
+                        <dt>College</dt>
+                        <dd>{registration.college}</dd>
+                      </div>
+                      <div className="fest-fact">
+                        <dt>Course · year</dt>
+                        <dd>{[registration.branch, registration.year].filter(Boolean).join(' · ') || '—'}</dd>
+                      </div>
+                      <div className="fest-fact">
+                        <dt>Mobile</dt>
+                        <dd>{registration.phone}</dd>
+                      </div>
+                      <div className="fest-fact">
+                        <dt>Entry fee</dt>
+                        <dd>{entryPaid ? <Badge tone="good">Paid · verified at the desk</Badge> : <Badge tone="bad">Not paid: send them to the {deptShort(registration.dept)} desk</Badge>}</dd>
+                      </div>
+                    </dl>
+                    {!locked && !entry && (
+                      <button className="adm-button adm-button--primary" type="button" disabled={!event.active} onClick={() => addToEvent(registration)}>
+                        Add to {event.name}
                       </button>
-                      <button className="adm-button" type="button" onClick={() => setPaying(null)}>
-                        Cancel
+                    )}
+                    {!locked && entry && !paid && paying !== registration.id && (
+                      <button className="adm-button adm-button--primary" type="button" onClick={() => setPaying(registration.id)}>
+                        Take {rupees(event.fee)}
                       </button>
-                    </span>
+                    )}
+                    {paying === registration.id && (
+                      <div className="fest-inline-form">
+                        <PaymentChoice amount={event.fee} value={payment} onChange={setPayment} name={`fee-${registration.id}`} />
+                        <span className="adm-inline">
+                          <button className="adm-button adm-button--primary" type="button" disabled={!paymentReady(payment)} onClick={() => takeFee(registration)}>
+                            Save the fee
+                          </button>
+                          <button className="adm-button" type="button" onClick={() => setPaying(null)}>
+                            Cancel
+                          </button>
+                        </span>
+                      </div>
+                    )}
+                    {!locked && entry && paid && !entry.present && (
+                      <button className="adm-button adm-button--approve" type="button" disabled={!entryPaid} onClick={() => markPresent(registration, true)}>
+                        {entryPaid ? 'Mark present' : 'Entry fee due: send to the desk'}
+                      </button>
+                    )}
+                    {!locked && entry?.present && (
+                      <button className="adm-button adm-button--small" type="button" onClick={() => markPresent(registration, false)}>
+                        Undo present
+                      </button>
+                    )}
+                    <button className="adm-button adm-button--small" type="button" onClick={() => setOpen(null)}>
+                      Close
+                    </button>
                   </div>
-                )}
-                {!locked && paid && !entry.present && (
-                  <button className="adm-button adm-button--approve" type="button" disabled={registration.entry.status !== 'PAID'} onClick={() => markPresent(registration, true)}>
-                    {registration.entry.status === 'PAID' ? 'Mark present' : 'Entry fee due: send to the desk'}
-                  </button>
-                )}
-                {!locked && entry.present && (
-                  <button className="adm-button adm-button--small" type="button" onClick={() => markPresent(registration, false)}>
-                    Undo present
-                  </button>
                 )}
               </RegistrationCard>
             );
           }}
         />
-        {others.length > 0 && !locked && (
-          <>
-            <h3 className="adm-h3">{ownOnly ? `${deptShort(event.dept)} students not in this event yet` : 'Students not in this event yet (any department)'}</h3>
-            <ShortList
-              items={others}
-              empty=""
-              render={(registration) => (
-                <RegistrationCard key={registration.id} registration={registration}>
-                  <button className="adm-button adm-button--primary" type="button" disabled={!event.active} onClick={() => addToEvent(registration)}>
-                    Add to {event.name}
-                  </button>
-                </RegistrationCard>
-              )}
-            />
-          </>
-        )}
-        {q.length >= 2 && !shown.length && !others.length && (
-          <p className="adm-muted">
-            {ownOnly
-              ? `Not registered under ${deptShort(event.dept)}: only ${deptShort(event.dept)} students take part in its events. Students of another department register at that department’s events.`
-              : 'Not registered yet: send them to a registration desk first.'}
-          </p>
-        )}
       </section>
 
       <Winners event={event} registered={registered} />

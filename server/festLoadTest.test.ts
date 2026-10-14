@@ -68,7 +68,7 @@ describe('students join only their own department’s events', () => {
       { ip: '10.6.0.1' },
     );
 
-  it('keeps an AI&DS student to AI&DS events and each coordinator to their department, until Website controls opens events to everyone', async () => {
+  it('keeps an AI&DS student to AI&DS events and each coordinator to their department, with no switch to open them', async () => {
     const h = setup({ at: TIMES.eventDay });
     await register(h, 'AIDS', 0);
     await register(h, 'CSE', 1);
@@ -77,23 +77,24 @@ describe('students join only their own department’s events', () => {
     const add = (id: string) => h.call('POST', `/api/admin/fest/registrations/${id}/events/cse-hackathon`, { action: 'add' }, { token: cse.token });
     const seen = async () => ((await h.call('POST', '/api/admin/fest/sync', {}, { token: cse.token })).body.registrations as FestRegistration[]).map((item) => item.id).sort();
 
-    // On (the default): the CSE coordinator gets only CSE students, and cannot add an AI&DS one.
+    // The CSE coordinator gets only CSE students, and cannot add an AI&DS one.
     expect(await seen()).toEqual(['CSE-2001']);
     expect((await add('AIDS-2001')).body).toMatchObject({ code: 'OTHER_DEPARTMENT', error: expect.stringContaining('AI&DS events only') });
     expect((await add('CSE-2001')).status).toBe(200);
 
-    // Off: every department's students, and any of them can join.
+    // The old "open events to every department" setting does nothing any more.
     await h.asOwner('POST', '/api/admin/portal', { portal: { ownDepartmentEvents: false } });
     const sync = await h.call('POST', '/api/admin/fest/sync', {}, { token: cse.token });
-    expect(sync.body.switches.ownDepartmentEvents).toBe(false);
-    expect(await seen()).toEqual(['AIDS-2001', 'AIDS-2002', 'CSE-2001']);
-    expect((await add('AIDS-2001')).status).toBe(200);
-
-    // On again: back to CSE students only; the AI&DS student already in the event keeps it.
-    await h.asOwner('POST', '/api/admin/portal', { portal: { ownDepartmentEvents: true } });
+    expect(sync.body.switches).not.toHaveProperty('ownDepartmentEvents');
     expect(await seen()).toEqual(['CSE-2001']);
     expect((await add('AIDS-2002')).body.code).toBe('OTHER_DEPARTMENT');
-    const kept = (await h.asOwner('POST', '/api/admin/fest/sync', {})).body.registrations.find((item: FestRegistration) => item.id === 'AIDS-2001');
-    expect(kept.events.map((entry: { eventId: string }) => entry.eventId)).toEqual(['cse-hackathon']);
+    // Nor does a registration bring any event with it (events are joined at the venue).
+    const other = await h.call(
+      'POST',
+      '/api/fest/register',
+      { submissionId: 'access-test-key-00000009', dept: 'AIDS', participant: { name: 'Student D', phone: '9777000009', college: 'Sona', branch: 'B.E. CSE', year: '2nd Year', email: 's9@example.com' }, events: ['cse-hackathon'] },
+      { ip: '10.6.0.1' },
+    );
+    expect(other.body.registration).toMatchObject({ id: 'AIDS-2003', events: [] });
   });
 });

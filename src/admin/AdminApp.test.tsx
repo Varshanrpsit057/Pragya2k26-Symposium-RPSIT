@@ -55,10 +55,10 @@ const sections = async () => {
 
 describe('dashboard of the student coordinators', () => {
   it.each([
-    ['ADMIN', {}, ['Overview', 'Registrations', 'Results', 'Colleges', 'Register', 'Event windows', 'Online & paper', 'Departments & events', 'Website controls', 'Accounts', 'Event-day controls', 'Help requests', 'System status', 'Testing', 'Roles']],
+    ['ADMIN', {}, ['Overview', 'Registrations', 'Results', 'Colleges', 'Desk', 'Event windows', 'Online import', 'Departments & events', 'Website controls', 'Accounts', 'Event-day controls', 'Help requests', 'System status', 'Testing', 'Roles']],
     ['OVERALL', {}, ['Overview', 'Registrations', 'Results', 'Colleges', 'Roles']],
     ['HOD', { department: 'CSE' }, ['Overview', 'Registrations', 'Results', 'Colleges', 'Roles']],
-    ['DEPT_ADMIN', { department: 'CSE' }, ['Overview', 'Registrations', 'Results', 'Colleges', 'Register', 'Event windows', 'Online & paper', 'Roles']],
+    ['DEPT_ADMIN', { department: 'CSE' }, ['Overview', 'Registrations', 'Results', 'Colleges', 'Desk', 'Event windows', 'Online import', 'Roles']],
     ['DESK', { department: 'CSE', deskNumber: 2 }, ['Registration desk', 'Roles']],
     ['COORDINATOR', { department: 'CSE', eventIds: ['cse-hackathon'] }, ['My events', 'Roles']],
   ] as const)('shows %s only its own sections', async (role, extra, expected) => {
@@ -114,7 +114,7 @@ describe('dashboard of the student coordinators', () => {
     expect(within(panel).queryByRole('heading', { name: 'Certificate team' })).toBeNull();
     const coordinator = within(panel).getByRole('heading', { name: 'Event coordinator' }).closest('article') as HTMLElement;
     expect(coordinator).toHaveClass('is-mine');
-    expect(within(coordinator).getByText(/Event window: search students, take the event fee.*\(assigned events only\)/)).toBeInTheDocument();
+    expect(within(coordinator).getByText(/Event window: every student of the department, added to the event at its venue.*\(assigned events only\)/)).toBeInTheDocument();
     expect(within(panel).getByText(/IDs carry the department \(CSE-0147\)/)).toBeInTheDocument();
   });
 });

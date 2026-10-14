@@ -82,12 +82,12 @@ export const PERMISSION_LABELS: Record<Permission, string> = {
   'site.switches': 'Website controls: switch each part of the portal off and on (student registration, online payment, lookups, desk registration, event entry, results, downloads, each role’s sign-in) and upload, replace or remove the UPI QR code',
   'fest.view': "See the live registrations, events, money and results (department roles: their own department only)",
   'fest.viewAll': 'See every department, with filters by department, event, venue and desk',
-  'fest.register': 'Register students at a desk (works offline: it sends when the network is back) and check in online registrants',
+  'fest.register': 'The registration desk: open a student’s ID, collect the ₹100 entry fee (cash, or UPI with its UTR) or verify the UTR they sent, correct a UTR that clashes (kept in their UTR log), and register a student for them only when they cannot do it on a phone (online)',
   'fest.import': 'Upload the online registrations (the CSV from the online form) before the event day',
   'fest.edit': "Correct a student's details and change their events",
   'fest.cancel': 'Cancel a registration, or undo a cancellation',
   'fest.delete': 'Delete a registration (it can be restored), and restore it',
-  'fest.event': 'Event window: search students, take the event fee, add a student to the event, mark attendance, enter and submit winners (coordinators: their own events)',
+  'fest.event': 'Event window: every student of the department, added to the event at its venue; take the event fee, mark attendance, enter and submit winners (coordinators: their own events)',
   'fest.correct': 'Corrections: cancel an event fee recorded by mistake, reopen submitted results',
   'fest.catalog': 'Edit departments and events: names, venues, times, fees, team sizes, desks',
 };
@@ -170,7 +170,7 @@ export const ROLE_INFO: Record<StaffRole, { label: string; summary: string }> = 
   },
   OVERALL: {
     label: 'Overall coordinator (HOD)',
-    summary: 'Every department and every event live, with filters on every category (department, event, venue, how they registered, desk, entry fee, status, college, search): registrations, money, attendance and winners, downloaded as Excel; corrections (cancel a fee recorded by mistake, reopen results).',
+    summary: 'Every department and every event live, with filters on every category (department, event, venue, how they registered, desk, entry fee, status, college, search): registrations, money, attendance and winners; the college ranking (medal table: 1st, 2nd, 3rd, then participations), filtered by participations and prizes; all downloaded as Excel; corrections (cancel a fee recorded by mistake, reopen results).',
   },
   HOD: {
     label: 'Department HOD (no longer used)',
@@ -178,15 +178,15 @@ export const ROLE_INFO: Record<StaffRole, { label: string; summary: string }> = 
   },
   DEPT_ADMIN: {
     label: 'Department admin',
-    summary: 'Their department: watch its desks and events, register students and verify payments, correct details, cancel registrations, help at any of its events, upload paper slips, download its lists as Excel.',
+    summary: 'Their department: all its students and events, live; work at its desk (collect and verify payments), correct details, cancel registrations, help at any of its events, upload the online form’s CSV, download its lists as Excel.',
   },
   DESK: {
     label: 'Registration desk',
-    summary: 'Two per department. Verify the UPI payments students made on their phones (type the UTR: it must match theirs and be used once), take the ₹100 entry fee in cash or UPI, register walk-ins, check students in and correct details.',
+    summary: 'Their department’s desk. The department’s students are listed: open the ID the student tells you, check their details, then collect the ₹100 entry fee (cash, or UPI with its UTR) or verify the UTR they sent (it must match and be used once). A UTR that clashes shows every student who has it, and either one’s UTR can be corrected. Registers a student only when they cannot do it on a phone. Downloads the department’s list as Excel.',
   },
   COORDINATOR: {
     label: 'Event coordinator',
-    summary: 'One per event. Their event only: find the student by their Registration ID, enter them (individual or team) with the event fee, mark attendance, enter the winners and submit the results.',
+    summary: 'One per event. Every student of the department: find them by their Registration ID, check them, add them to the event (individual or team), take the event fee, mark attendance, enter the 1st, 2nd and 3rd places and submit the results. Downloads the event’s and the department’s lists as Excel.',
   },
   CERTIFICATE: {
     label: 'Certificate team',
@@ -221,7 +221,19 @@ export interface StaffAccountView {
   updatedAt: string;
   updatedBy: string;
   passwordChangedAt: string;
+  /** When they last signed in (null: never, or not since this was recorded). */
+  lastSignInAt: string | null;
 }
+
+/** A refused sign-in, kept for Accounts: the username tried, why, and when (never the password). */
+export interface SignInFailure {
+  username: string;
+  reason: 'no such account' | 'wrong password' | 'account deactivated' | 'sign-in switched off';
+  at: string;
+}
+
+/** What the owner types to delete every staff account. */
+export const DELETE_ALL_STAFF = 'DELETE ALL';
 
 /** Who is signed in, and what the server's clock says about registration right now. */
 export interface SessionInfo {

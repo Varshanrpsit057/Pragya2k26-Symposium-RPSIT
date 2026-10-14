@@ -18,7 +18,7 @@ import { RolesPanel } from './RolesPanel';
 import { StaffPanel } from './StaffPanel';
 import { SystemPanel } from './SystemPanel';
 import { TestingPanel } from './TestingPanel';
-import { Badge, ErrorNote, HELP_EVENT, messageOf, useLiveData, when } from './ui';
+import { Badge, ErrorNote, HELP_EVENT, LocalCopyBanner, messageOf, useLiveData, when } from './ui';
 
 type TabId = 'overview' | 'registrations' | 'results' | 'colleges' | 'desk' | 'event' | 'import' | 'catalog' | 'controls' | 'window' | 'help' | 'system' | 'staff' | 'testing' | 'roles';
 
@@ -31,9 +31,9 @@ const TABS: { id: TabId; label: (session: SessionInfo) => string; show: (session
   { id: 'registrations', label: () => 'Registrations', show: watches },
   { id: 'results', label: () => 'Results', show: watches },
   { id: 'colleges', label: () => 'Colleges', show: watches },
-  { id: 'desk', label: (session) => (session.role === 'DESK' ? 'Registration desk' : 'Register'), show: (session) => can(session, 'fest.register') },
+  { id: 'desk', label: (session) => (session.role === 'DESK' ? 'Registration desk' : 'Desk'), show: (session) => can(session, 'fest.register') },
   { id: 'event', label: (session) => (session.role === 'COORDINATOR' ? 'My events' : 'Event windows'), show: (session) => can(session, 'fest.event') },
-  { id: 'import', label: () => 'Online & paper', show: (session) => can(session, 'fest.import') },
+  { id: 'import', label: () => 'Online import', show: (session) => can(session, 'fest.import') },
   { id: 'catalog', label: () => 'Departments & events', show: (session) => can(session, 'fest.catalog') },
   { id: 'controls', label: () => 'Website controls', show: (session) => can(session, 'site.switches') },
   { id: 'staff', label: () => 'Accounts', show: (session) => can(session, 'staff.manage') },
@@ -156,6 +156,7 @@ function LoginForm({ notice, onSignedIn }: { notice: string; onSignedIn: (token:
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
   const [help, setHelp] = useState(false);
+  const [shown, setShown] = useState(false);
 
   const submit = async (event: FormEvent) => {
     event.preventDefault();
@@ -174,6 +175,7 @@ function LoginForm({ notice, onSignedIn }: { notice: string; onSignedIn: (token:
 
   return (
     <main className="adm-login">
+      <LocalCopyBanner />
       <form className="adm-card adm-login__card" onSubmit={submit}>
         <p className="adm-login__brand">INFINITE TECHFEST’26</p>
         <h1 className="adm-login__title">On-site Registration Portal</h1>
@@ -182,11 +184,26 @@ function LoginForm({ notice, onSignedIn }: { notice: string; onSignedIn: (token:
         {notice && <p className="adm-note">{notice}</p>}
         <label className="adm-field">
           <span>Username</span>
-          <input value={username} onChange={(event) => setUsername(event.target.value)} autoComplete="username" required autoFocus />
+          <input value={username} onChange={(event) => setUsername(event.target.value)} autoComplete="username" autoCapitalize="none" autoCorrect="off" spellCheck={false} required autoFocus />
         </label>
         <label className="adm-field">
           <span>Password</span>
-          <input type="password" value={password} onChange={(event) => setPassword(event.target.value)} autoComplete="current-password" required />
+          {/* Show: a browser that remembers another login fills this box, and a paste then adds to it. */}
+          <span className="adm-inline">
+            <input
+              type={shown ? 'text' : 'password'}
+              value={password}
+              onChange={(event) => setPassword(event.target.value)}
+              autoComplete="current-password"
+              autoCapitalize="none"
+              autoCorrect="off"
+              spellCheck={false}
+              required
+            />
+            <button className="adm-button adm-button--small" type="button" aria-pressed={shown} onClick={() => setShown(!shown)}>
+              {shown ? 'Hide' : 'Show'}
+            </button>
+          </span>
         </label>
         {error && (
           <p className="adm-error" role="alert">
@@ -277,6 +294,7 @@ function ShellBody({ token, session, onSession, onSignOut, onSignedOut }: ShellP
 
   return (
     <div className="adm">
+      <LocalCopyBanner />
       <header className="adm-bar">
         <div>
           <p className="adm-bar__brand">INFINITE TECHFEST’26 · On-site Registration Portal</p>

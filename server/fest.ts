@@ -4,14 +4,15 @@
  *   catalog        departments and events (the web assist team edits them; Control table)
  *   sync           each screen asks for what changed since it last asked: its department, or
  *                  every department for the overall coordinator and the web assist team
- *   ID blocks      a desk phone takes 50 IDs at a time (CSE-0001…), so it can register offline
- *   registrations  desk (and paper) registrations: one phone per department, one registration
- *                  per desk submission (a retry returns the first one); online ones imported
+ *   registrations  students register on their own phones (CSE-2001…); a desk may register one
+ *                  for them (online, same IDs); online ones imported before the day
+ *   desk           collects the entry fee (cash or UPI) or verifies the UTR the student sent; a
+ *                  UTR counts once across the fest, and corrections keep an audit trail
  *   event window   fee, attendance, adding a student, winners; submitted results lock the event
  *
  * Every rule is checked here; the dashboards only hide what a role cannot use.
  */
-import { canJoin, catalogProblem, DEFAULT_CATALOG, departmentOf, deptShort, entryOf, eventOf, feePaid, formatFestId, ID_BLOCK, ID_RANGES, isActive, matchEvents, normaliseFestId, parseFestId, participantProblems, readParticipant, selfRegistrationProblems, showId, sourceOfNumber, toStudentView, TXN, type FestCatalog, type FestDepartment, type FestEvent, type FestMethod, type FestParticipant, type FestPayment, type FestPlace, type FestRegistration, type FestResult, type FestSource, type FestStamp } from '../src/lib/fest';
+import { canJoin, catalogProblem, DEFAULT_CATALOG, departmentOf, deptShort, entryOf, eventOf, feePaid, formatFestId, ID_RANGES, isActive, matchEvents, normaliseFestId, parseFestId, participantProblems, readParticipant, selfRegistrationProblems, showId, toStudentView, TXN, type FestCatalog, type FestDepartment, type FestEvent, type FestMethod, type FestParticipant, type FestPayment, type FestPlace, type FestRegistration, type FestResult, type FestSource, type FestStamp, type UtrChange } from '../src/lib/fest';
 import { timingSafeEqual } from 'node:crypto';
 import { formatIst, parseEventStart } from '../src/lib/countdown';
 import { DEFAULT_PORTAL, portalProblem, QR_IMAGE, QR_MAX_CHARS, readPortal, tidyUtr, UTR, type BackupStatus, type PortalSettings, type SwitchName } from '../src/lib/portal';
@@ -21,7 +22,7 @@ import { ApiError } from './errors';
 import { TXN_SCOPE } from './festStore';
 import type { FileStore } from './files';
 import type { FestSheetBackup, FestSnapshot } from './festSheet';
-import type { FestCreate, FestStore } from './festStore';
+import type { FestStore } from './festStore';
 import { mockParticipant, mockRegistration, MAX_TEST_PARTICIPANTS } from './festLoadTest';
 import { describeError } from './google';
 import { requirePermission, type Actor } from './roles';
@@ -272,8 +273,6 @@ export class FestService {
     }
     const own = this.ownDepartment(actor);
     if (wanted && wanted !== own) throw new ApiError(403, 'OTHER_DEPARTMENT', `Your account is for ${deptShort(own)}.`);
-    // Events open to every department: an event's coordinators find students of any department.
-    if (actor.role === 'COORDINATOR' && !(await this.portal()).ownDepartmentEvents) return catalog.departments.map((dept) => dept.code);
     return [own];
   }
 
@@ -336,34 +335,20 @@ export class FestService {
 
   /** The switches the dashboards follow (hiding what is off; the server refuses it anyway). */
   private async dashboardSwitches() {
-    const { deskRegistration, eventEntry, results, downloads, onlinePayment, ownDepartmentEvents } = await this.portal();
-    return { deskRegistration, eventEntry, results, downloads, onlinePayment, ownDepartmentEvents };
-  }
-
-  /** IDs for a desk phone (50 at a time), or a block of paper slips. */
-  async takeBlock(actor: Actor, body: unknown) {
-    const department = await this.workDepartment(actor, isObject(body) ? body.dept : undefined);
-    const source: FestSource = isObject(body) && body.source === 'PAPER' ? 'PAPER' : 'DESK';
-    if (source === 'PAPER') requirePermission(actor, 'fest.import');
-    const count = source === 'PAPER' ? Math.min(Math.max(int(isObject(body) ? body.count : 0, 50), 1), 200) : ID_BLOCK;
-    const first = await this.deps.store.takeNumbers(department.code, source, count);
-    const last = first + count - 1;
-    if (last > ID_RANGES[source].last) throw new ApiError(409, 'IDS_EXHAUSTED', `${deptShort(department.code)} has used every ${source === 'PAPER' ? 'paper' : 'desk'} ID. Ask the web assist team.`);
-    this.deps.log('Fest IDs handed out', { dept: department.code, source, first, last, by: actor.username });
-    return { success: true as const, dept: department.code, source, first, last };
+    const { deskRegistration, eventEntry, results, downloads, onlinePayment } = await this.portal();
+    return { deskRegistration, eventEntry, results, downloads, onlinePayment };
   }
 
   // -----------------------------------------------------------------------------------------
   // Registering
 
-  /** The events asked for: the department's own, or any department's for a self-registered student. */
+  /** The events asked for: the department's own only (a student takes part in their department's events). */
   private async readEventIds(catalog: FestCatalog, dept: string, value: unknown): Promise<string[]> {
     const requested = Array.isArray(value) ? value.filter((id): id is string => typeof id === 'string').slice(0, 60) : [];
     const ids: string[] = [];
-    const ownOnly = requested.length ? (await this.portal()).ownDepartmentEvents : true;
     for (const id of requested) {
       const event = eventOf(catalog, id);
-      if (!event || !canJoin({ dept }, event, ownOnly)) throw new ApiError(400, 'INVALID', `${showId(id)} is not an event of ${deptShort(dept)}: students take part in their own department’s events.`);
+      if (!event || !canJoin({ dept }, event)) throw new ApiError(400, 'INVALID', `${showId(id)} is not an event of ${deptShort(dept)}: students take part in their own department’s events.`);
       if (!event.active || departmentOf(catalog, event.dept)?.active === false) throw new ApiError(400, 'INVALID', `${event.name} is closed for registration.`);
       if (!ids.includes(id)) ids.push(id);
     }
@@ -402,69 +387,79 @@ export class FestService {
     return `On-site registration closed${closes ? ` at ${formatIst(closes)}` : ''}.`;
   }
 
+  /**
+   * A desk registers a student who could not do it on their phone (online only; Website controls can
+   * switch it off). The same IDs as the students' own phones (CSE-2001…), the entry fee due: the desk
+   * then collects it (or verifies the student's UTR) like anyone else's.
+   */
   async register(actor: Actor, body: unknown) {
     if (!isObject(body)) throw new ApiError(400, 'INVALID', 'The registration could not be read.');
     const department = await this.workDepartment(actor, body.dept);
     if (!department.active) throw new ApiError(400, 'INVALID', `${deptShort(department.code)} is not taking registrations.`);
     const dept = department.code;
-    const source: 'DESK' | 'PAPER' = body.source === 'PAPER' ? 'PAPER' : 'DESK';
-    if (source === 'PAPER') requirePermission(actor, 'fest.import');
-    // Paper slips filled during an outage may be typed in after closing time.
-    if (source === 'DESK' && registrationPhase(this.deps.schedule, this.deps.now()) === 'closed') throw new ApiError(403, 'ONSITE_CLOSED', this.closedMessage());
-    if (source === 'DESK') await this.requireSwitch(actor, 'deskRegistration', 'Desk registration is switched off by the web assist team. Students register on their phones.');
-
+    if (registrationPhase(this.deps.schedule, this.deps.now()) === 'closed') throw new ApiError(403, 'ONSITE_CLOSED', this.closedMessage());
+    await this.requireSwitch(actor, 'deskRegistration', 'Registering for a student is switched off by the web assist team. Students register on their phones.');
     const submissionId = text(body.submissionId, 80);
     if (!SUBMISSION.test(submissionId)) throw new ApiError(400, 'INVALID', 'The registration could not be read. Please try again.');
-    const replay = await this.deps.store.findSubmission(dept, submissionId);
-    if (replay) return { success: true as const, registration: await this.required(dept, replay), replayed: true };
-
-    const id = normaliseFestId(text(body.id, 20));
-    const parsed = parseFestId(id);
-    if (!parsed || parsed.dept !== dept || sourceOfNumber(parsed.number) !== source) {
-      throw new ApiError(400, 'INVALID_ID', `The ID must be a ${deptShort(dept)} ${source === 'PAPER' ? 'paper slip' : 'desk'} ID.`);
-    }
     const participant = readParticipant(body.participant);
-    const problems = participantProblems(participant);
+    const problems = selfRegistrationProblems(participant);
     if (Object.keys(problems).length) throw new ApiError(400, 'INVALID', Object.values(problems)[0]!, undefined, undefined, problems as Record<string, string>);
+    const created = await this.createSelf(dept, participant, submissionId, this.stamp(actor), '');
+    if (!created.replayed) this.deps.log('Fest registration at a desk', { id: created.registration.id, dept, by: actor.username, ...(created.registration.test && { test: true }) });
+    return { success: true as const, registration: created.registration, replayed: created.replayed };
+  }
+
+  /**
+   * A new registration with the next ID students' phones use (CSE-2001…), the entry fee due, and no
+   * events: a student joins each event at its venue, where its coordinator adds them (events a page
+   * sends are not used). A retry of the same submission returns the first one; a mobile number
+   * registered in the department already is refused.
+   */
+  private async createSelf(dept: string, participant: FestParticipant, submissionId: string, stamp: FestStamp, txn: string): Promise<{ registration: FestRegistration; replayed: boolean }> {
+    const replay = await this.deps.store.findSubmission(dept, submissionId);
+    if (replay) return { registration: await this.required(dept, replay), replayed: true };
     const catalog = await this.catalog();
-    const eventIds = await this.readEventIds(catalog, dept, body.events);
-    await this.ensureOpenEvents(eventIds);
-    const payment = this.readPayment(actor, body.payment, catalog.entryFee);
-    const stamp = this.stamp(actor);
     const mark = await this.deps.testMark();
-    const registration: FestRegistration = {
-      id,
-      dept,
-      source,
-      ...participant,
-      entry: { status: 'PAID', payment },
-      events: eventIds.map((eventId) => ({ eventId, added: stamp })),
-      ...(actor.deskNumber && { desk: actor.deskNumber }),
-      created: stamp,
-      sid: submissionId,
-      ...(mark.test ? { test: true } : {}),
-      v: 1,
-      u: this.iso(),
+    const duplicate = (existingId: string | null) => {
+      // A student is never told whose ID it is; a desk is (it then opens that registration).
+      const desk = stamp.by !== STUDENT;
+      return new ApiError(
+        409,
+        'DUPLICATE_PHONE',
+        desk
+          ? `This mobile number is already registered in ${deptShort(dept)} as ${showId(existingId ?? '')}. Open that registration instead.`
+          : `This mobile number is already registered in ${deptShort(dept)}. Open "My registration ID", or go to a ${deptShort(dept)} registration desk.`,
+        undefined,
+        undefined,
+        desk ? { existingId: existingId ?? '' } : undefined,
+      );
     };
-    // A UPI payment is accepted once across the fest.
-    await this.claimPayment(payment, id);
-    let created: FestCreate;
-    try {
-      created = await this.deps.store.createRegistration(registration, submissionId);
-    } catch (error) {
-      await this.releasePayment(payment, id);
-      throw error;
+    // Checked before an ID is taken, so a refused number leaves no gap in the IDs.
+    const holder = await this.deps.store.findPhone(dept, participant.phone);
+    if (holder) throw duplicate(holder);
+    for (let attempt = 0; attempt < 5; attempt += 1) {
+      const number = await this.deps.store.takeNumbers(dept, 'SELF', 1);
+      if (number > ID_RANGES.SELF.last) throw new ApiError(409, 'IDS_EXHAUSTED', `${deptShort(dept)} has used every registration ID. Ask the web assist team.`);
+      const registration: FestRegistration = {
+        id: formatFestId(dept, number),
+        dept,
+        source: 'SELF',
+        ...participant,
+        entry: txn ? { status: 'DUE', claim: { txn, amount: catalog.entryFee, at: stamp.at } } : { status: 'DUE' },
+        events: [],
+        created: stamp,
+        sid: submissionId,
+        ...(mark.test ? { test: true } : {}),
+        v: 1,
+        u: this.iso(),
+      };
+      const created = await this.deps.store.createRegistration(registration, submissionId);
+      if (created.created) return { registration, replayed: false };
+      if (created.reason === 'submission') return { registration: await this.required(dept, created.existingId!), replayed: true };
+      if (created.reason === 'phone') throw duplicate(created.existingId ?? null);
+      // 'id': that number is taken (e.g. after test data was cleared): take the next one.
     }
-    if (!created.created) await this.releasePayment(payment, id);
-    if (created.created) {
-      this.deps.log('Fest registration', { id, dept, source, events: eventIds.length, by: actor.username, ...(registration.test && { test: true }) });
-      return { success: true as const, registration, replayed: false };
-    }
-    if (created.reason === 'submission') return { success: true as const, registration: await this.required(dept, created.existingId!), replayed: true };
-    if (created.reason === 'phone') {
-      throw new ApiError(409, 'DUPLICATE_PHONE', `This phone number is already registered in ${deptShort(dept)} as ${showId(created.existingId ?? '')}.`, undefined, undefined, { existingId: created.existingId ?? '' });
-    }
-    throw new ApiError(409, 'ID_TAKEN', `${showId(id)} is already used. The next free ID will be used.`);
+    throw new ApiError(409, 'BUSY', 'Registration is busy. Please try again.');
   }
 
   /** Claims a UPI payment's transaction ID for this registration (refused when another one has it). */
@@ -476,6 +471,15 @@ export class FestService {
 
   private async releasePayment(payment: FestPayment | undefined, id: string) {
     if (payment?.method === 'UPI' && payment.txn) await this.deps.store.releaseTxn(TXN_SCOPE, payment.txn, id);
+  }
+
+  /**
+   * Releases a claim this call made, unless the registration's saved payment carries that UTR (a
+   * repeated request: the first one's claim must stay).
+   */
+  private async releaseUnlessKept(payment: FestPayment, registration: FestRegistration) {
+    const kept = registration.entry.status === 'PAID' && sameUtr(registration.entry.payment?.txn, payment.txn);
+    if (!kept) await this.releasePayment(payment, registration.id);
   }
 
   private async required(dept: string, id: string) {
@@ -511,29 +515,35 @@ export class FestService {
     return { id, dept: parsed.dept };
   }
 
-  /** Check-in, entry fee, details, events, cancel, delete and restore. */
+  /** The entry fee (collect or verify), check-in, UTR corrections, details, events, cancel, delete and restore. */
   async act(actor: Actor, rawId: string, body: unknown) {
     const { id, dept } = this.target(rawId);
     const action = isObject(body) ? body.action : null;
     const needs: Record<string, Permission> = {
+      collect: 'fest.register',
       checkin: 'fest.register',
       entry: 'fest.register',
+      verify: 'fest.register',
+      reject: 'fest.register',
+      utr: 'fest.register',
       edit: 'fest.edit',
       events: 'fest.edit',
       cancel: 'fest.cancel',
       uncancel: 'fest.cancel',
       delete: 'fest.delete',
       restore: 'fest.delete',
-      verify: 'fest.register',
-      reject: 'fest.register',
     };
     if (typeof action !== 'string' || !needs[action]) throw new ApiError(400, 'INVALID', 'Choose what to do.');
     requirePermission(actor, needs[action]);
-    await this.workDepartment(actor, dept);
+    // A UTR that clashes may be another department's student's: either desk may correct it.
+    if (action === 'utr') await this.utrScope(actor, dept, id);
+    else await this.workDepartment(actor, dept);
     const input = body as Record<string, unknown>;
     const catalog = await this.catalog();
     const stamp = this.stamp(actor);
     const reason = text(input.reason, 200);
+    const desk = actor.deskNumber ?? undefined;
+    const arrived = (registration: FestRegistration) => registration.checkedIn ?? { ...stamp, ...(desk && { desk }) };
     const live = (registration: FestRegistration) => {
       if (registration.deleted) throw new ApiError(409, 'DELETED', 'This registration was deleted.');
       if (registration.cancelled) throw new ApiError(409, 'CANCELLED', 'This registration was cancelled.');
@@ -541,77 +551,94 @@ export class FestService {
 
     if (action === 'events') return this.changeEvents(catalog, dept, id, input, stamp);
 
-    if ((action === 'checkin' || action === 'entry') && isObject(input.payment) && input.payment.method === 'UPI') {
-      // A UPI payment taken at the desk: its transaction ID is accepted once across the fest.
+    if (action === 'collect' || action === 'checkin' || action === 'entry') {
+      // The entry fee taken at the desk: cash, or UPI with its UTR (accepted once across the fest).
+      // Anyone whose fee is due can pay, checked in or not (e.g. after their UTR was found to be
+      // someone else's); 'entry' takes the fee without checking them in.
       const current = await this.required(dept, id);
       live(current);
-      if (current.entry.status === 'DUE' && !(action === 'checkin' && current.checkedIn)) {
-        const payment = this.readPayment(actor, input.payment, catalog.entryFee);
-        await this.claimPayment(payment, id);
-        try {
-          const result = await this.mutate(dept, id, (registration) => {
-            live(registration);
-            if (registration.entry.status === 'PAID' || (action === 'checkin' && registration.checkedIn)) return null;
-            const entry = { status: 'PAID' as const, payment };
-            return { next: action === 'checkin' ? { checkedIn: { ...stamp, ...(actor.deskNumber && { desk: actor.deskNumber }) }, entry } : { entry } };
-          });
-          if (!result.changed) await this.releasePayment(payment, id);
-          return result;
-        } catch (error) {
-          await this.releasePayment(payment, id);
-          throw error;
-        }
+      if (current.entry.status === 'PAID') {
+        // Paid already (online, or at another desk): arriving only checks them in.
+        if (action === 'entry' || current.checkedIn) return { success: true as const, registration: current, changed: false };
+        return this.mutate(dept, id, (registration) => {
+          live(registration);
+          return registration.checkedIn ? null : { next: { checkedIn: arrived(registration) } };
+        });
       }
-    }
-
-    if (action === 'verify') {
-      // The desk has seen the money arrive with this transaction ID (it may correct a typo).
-      const current = await this.required(dept, id);
-      live(current);
-      if (current.entry.status === 'PAID') return { success: true as const, registration: current, changed: false };
-      const claim = current.entry.claim;
-      if (!claim) throw new ApiError(409, 'NO_CLAIM', 'There is no transaction ID to check: take the entry fee instead.');
-      // The desk types the UTR from the payment it received: it must be the one the student sent.
-      const txn = tidyUtr(text(input.txn, 40)).toUpperCase();
-      if (!TXN.test(txn)) throw new ApiError(400, 'INVALID', 'Type the UTR from the payment you received.');
-      if (txn !== tidyUtr(claim.txn).toUpperCase()) {
-        throw new ApiError(409, 'TXN_MISMATCH', `That UTR does not match the one ${showId(id)} sent (it ends ${claim.txn.slice(-4)}). Check it again, or mark the payment not found.`);
-      }
-      if (input.confirmed !== true) throw new ApiError(400, 'INVALID', `Tick that you have seen ₹${claim.amount} received with this transaction ID.`);
-      const holder = await this.deps.store.claimTxn(TXN_SCOPE, txn, id);
-      if (holder && holder !== id) throw new ApiError(409, 'TXN_USED', `This transaction ID was already accepted for ${showId(holder)}.`, undefined, undefined, { existingId: holder });
+      const payment = this.readPayment(actor, input.payment, catalog.entryFee);
+      await this.claimPayment(payment, id);
       try {
-        return await this.mutate(dept, id, (registration) => {
+        const result = await this.mutate(dept, id, (registration) => {
           live(registration);
           if (registration.entry.status === 'PAID') return null;
-          const desk = actor.deskNumber ?? undefined;
-          const payment: FestPayment = { method: 'UPI', amount: registration.entry.claim?.amount ?? catalog.entryFee, txn, ...stamp, ...(desk && { desk }) };
-          return { next: { entry: { status: 'PAID', payment, claim: registration.entry.claim }, checkedIn: registration.checkedIn ?? { ...stamp, ...(desk && { desk }) } } };
+          // A UTR the student sent earlier stays on record (it was not the payment taken).
+          const entry = { status: 'PAID' as const, payment, ...(registration.entry.claim && { claim: registration.entry.claim }) };
+          return { next: action === 'entry' ? { entry } : { entry, checkedIn: arrived(registration) } };
         });
+        if (!result.changed) await this.releaseUnlessKept(payment, result.registration);
+        if (result.changed) this.deps.log('Fest entry fee collected', { id, method: payment.method, by: actor.username });
+        return result;
       } catch (error) {
-        await this.deps.store.releaseTxn(TXN_SCOPE, txn, id);
+        await this.releaseAfterFailure(payment, dept, id);
         throw error;
       }
     }
 
-    return this.mutate(dept, id, (registration) => {
+    if (action === 'verify') {
+      // The student paid on their phone and sent the UTR: the desk types the UTR it sees on the
+      // payment. It must be the one the student sent, or (ticked) the student typed theirs wrong.
+      const current = await this.required(dept, id);
+      live(current);
+      if (current.entry.status === 'PAID') return { success: true as const, registration: current, changed: false };
+      const claim = current.entry.claim;
+      if (!claim) throw new ApiError(409, 'NO_CLAIM', 'They have not sent a UTR: collect the fee instead (cash, or UPI with its UTR).');
+      const txn = tidyUtr(text(input.txn, 40)).toUpperCase();
+      if (!TXN.test(txn)) throw new ApiError(400, 'INVALID', 'Type the UTR from the payment (12 digits).');
+      const typo = !sameUtr(txn, claim.txn);
+      if (typo && input.correct !== true) {
+        throw new ApiError(
+          409,
+          'TXN_MISMATCH',
+          `That UTR does not match the one ${showId(id)} sent (it ends ${claim.txn.slice(-4)}). Check the digits; if the student typed theirs wrong, tick that the UTR you typed is the right one.`,
+        );
+      }
+      if (input.confirmed !== true) throw new ApiError(400, 'INVALID', `Tick that you have seen ₹${claim.amount} received with this UTR.`);
+      const payment: FestPayment = { method: 'UPI', amount: claim.amount, txn, ...stamp, ...(desk && { desk }) };
+      await this.claimPayment(payment, id);
+      try {
+        const result = await this.mutate(dept, id, (registration) => {
+          live(registration);
+          if (registration.entry.status === 'PAID' || !registration.entry.claim) return null;
+          const sent = registration.entry.claim;
+          const utrLog = sameUtr(txn, sent.txn) ? registration.utrLog : [...(registration.utrLog ?? []), { ...stamp, from: sent.txn, to: txn, reason: 'The student typed it wrong; corrected at the desk when verifying' }];
+          return { next: { entry: { status: 'PAID', payment, claim: sent }, checkedIn: arrived(registration), ...(utrLog && { utrLog }) } };
+        });
+        if (!result.changed) await this.releaseUnlessKept(payment, result.registration);
+        if (result.changed) this.deps.log('Fest UTR verified', { id, utr: txn.slice(-4), corrected: typo, by: actor.username });
+        return result;
+      } catch (error) {
+        await this.releaseAfterFailure(payment, dept, id);
+        throw error;
+      }
+    }
+
+    if (action === 'utr') return this.changeUtr(dept, id, input, stamp, live);
+
+    if (action === 'uncancel' || action === 'restore') {
+      // Brought back: its UPI payment is claimed again (refused if another student has the UTR now).
+      const current = await this.required(dept, id);
+      const payment = current.entry.status === 'PAID' ? current.entry.payment : undefined;
+      if (payment && !payment.voided) await this.claimPayment(payment, id);
+    }
+
+    const result = await this.mutate(dept, id, (registration) => {
       switch (action) {
-        case 'checkin': {
-          live(registration);
-          if (registration.checkedIn) return null;
-          const entry = registration.entry.status === 'DUE' ? { status: 'PAID' as const, payment: this.readPayment(actor, input.payment, catalog.entryFee) } : registration.entry;
-          return { next: { checkedIn: { ...stamp, ...(actor.deskNumber && { desk: actor.deskNumber }) }, entry } };
-        }
-        case 'entry':
-          live(registration);
-          if (registration.entry.status === 'PAID') return null;
-          return { next: { entry: { status: 'PAID', payment: this.readPayment(actor, input.payment, catalog.entryFee) } } };
         case 'edit': {
           live(registration);
           const participant = readParticipant({ ...pick(registration), ...(isObject(input.participant) ? input.participant : {}) });
           const problems = participantProblems(participant);
           if (Object.keys(problems).length) throw new ApiError(400, 'INVALID', Object.values(problems)[0]!, undefined, undefined, problems as Record<string, string>);
-          if (Object.entries(participant).every(([key, value]) => registration[key as keyof FestParticipant] === value)) return null;
+          if (Object.entries(participant).every(([key, value]) => (registration[key as keyof FestParticipant] ?? '') === value)) return null;
           return { next: participant, ...(participant.phone !== registration.phone && { phone: { from: registration.phone, to: participant.phone } }) };
         }
         case 'cancel':
@@ -629,7 +656,7 @@ export class FestService {
           if (!registration.deleted) return null;
           return { next: { deleted: undefined }, phone: { from: '', to: registration.phone } };
         case 'reject':
-          // The money was not found: the student sees why on their page and can send the right ID.
+          // The money was not found: the student sees why on their page and can send the right UTR.
           live(registration);
           if (registration.entry.status === 'PAID' || !registration.entry.claim) return null;
           if (reason.length < 3) throw new ApiError(400, 'INVALID', 'Say what is wrong (e.g. not received, wrong amount).');
@@ -638,6 +665,83 @@ export class FestService {
           return null;
       }
     });
+    // Cancelled or deleted: its UTR is free again (e.g. registered under the wrong department).
+    if (result.changed && (action === 'cancel' || action === 'delete')) await this.releasePayment(result.registration.entry.payment, id);
+    return result;
+  }
+
+  /**
+   * Corrects a student's UTR (a typo, or one that clashed with another student's), with the
+   * reason kept in the registration's UTR log. A verified payment's new UTR is accepted once
+   * across the fest like any other; a UTR the student sent (not checked yet) waits for the desk.
+   */
+  private async changeUtr(dept: string, id: string, input: Record<string, unknown>, stamp: FestStamp, live: (registration: FestRegistration) => void) {
+    const to = tidyUtr(text(input.txn, 40)).toUpperCase();
+    if (!TXN.test(to)) throw new ApiError(400, 'INVALID', 'Type the right UTR (the 12 digits of the payment).');
+    const reason = text(input.reason, 200);
+    if (reason.length < 3) throw new ApiError(400, 'INVALID', 'Say why the UTR is changed (e.g. typed wrong, belongs to the other student).');
+    const current = await this.required(dept, id);
+    live(current);
+    const paid = current.entry.status === 'PAID' && current.entry.payment?.method === 'UPI' && Boolean(current.entry.payment.txn);
+    const from = paid ? current.entry.payment!.txn! : current.entry.status === 'DUE' ? current.entry.claim?.txn : undefined;
+    if (!from) throw new ApiError(409, 'NO_UTR', `${showId(id)} has no UTR to change.`);
+    if (sameUtr(from, to)) return { success: true as const, registration: current, changed: false };
+    const change: UtrChange = { ...stamp, from, to, reason };
+    if (paid) {
+      const holder = await this.deps.store.claimTxn(TXN_SCOPE, to, id);
+      if (holder && holder !== id) throw new ApiError(409, 'TXN_USED', `This UTR is already accepted for ${showId(holder)}.`, undefined, undefined, { existingId: holder });
+      try {
+        const result = await this.mutate(dept, id, (registration) => {
+          const payment = registration.entry.payment;
+          if (registration.entry.status !== 'PAID' || payment?.method !== 'UPI' || !sameUtr(payment.txn, from)) {
+            throw new ApiError(409, 'BUSY', 'This payment was changed meanwhile. Look at it again.');
+          }
+          return { next: { entry: { ...registration.entry, payment: { ...payment, txn: to } }, utrLog: [...(registration.utrLog ?? []), change] } };
+        });
+        await this.deps.store.releaseTxn(TXN_SCOPE, from, id);
+        this.deps.log('Fest UTR changed', { id, from: from.slice(-4), to: to.slice(-4), by: stamp.by });
+        return result;
+      } catch (error) {
+        await this.deps.store.releaseTxn(TXN_SCOPE, to, id);
+        throw error;
+      }
+    }
+    const accepted = await this.deps.store.findTxn(TXN_SCOPE, to);
+    if (accepted && accepted !== id) throw new ApiError(409, 'TXN_USED', `This UTR is already accepted for ${showId(accepted)}.`, undefined, undefined, { existingId: accepted });
+    const result = await this.mutate(dept, id, (registration) => {
+      const claim = registration.entry.claim;
+      if (registration.entry.status !== 'DUE' || !claim || !sameUtr(claim.txn, from)) throw new ApiError(409, 'BUSY', 'This payment was changed meanwhile. Look at it again.');
+      // A corrected UTR is checked afresh (a "not found" mark goes).
+      return { next: { entry: { status: 'DUE', claim: { ...claim, txn: to } }, utrLog: [...(registration.utrLog ?? []), change] } };
+    });
+    this.deps.log('Fest UTR changed', { id, from: from.slice(-4), to: to.slice(-4), by: stamp.by });
+    return result;
+  }
+
+  /**
+   * Who may correct this student's UTR: their own department's desks (and the web assist team), and
+   * another department's desk only when the UTR clashes with one of its own students'.
+   */
+  private async utrScope(actor: Actor, dept: string, id: string) {
+    if (!DEPARTMENT_ROLES.includes(actor.role) || actor.department === dept) {
+      await this.workDepartment(actor, dept);
+      return;
+    }
+    const own = this.ownDepartment(actor);
+    const target = await this.required(dept, id);
+    const txn = target.entry.status === 'PAID' ? target.entry.payment?.txn : target.entry.claim?.txn;
+    if (txn) {
+      const { holders } = await this.utrHolders(tidyUtr(txn).toUpperCase());
+      if (holders.some((item) => item.dept === own && item.id !== id && isActive(item))) return;
+    }
+    throw new ApiError(403, 'OTHER_DEPARTMENT', `Your account is for ${deptShort(own)}: another department's UTR is changed only when it clashes with one of yours.`);
+  }
+
+  /** After a failed save: releases the claim unless the registration (as saved now) carries it. */
+  private async releaseAfterFailure(payment: FestPayment, dept: string, id: string) {
+    const now = await this.deps.store.getRegistration(dept, id).catch(() => null);
+    if (now) await this.releaseUnlessKept(payment, now);
+    else await this.releasePayment(payment, id);
   }
 
   // -----------------------------------------------------------------------------------------
@@ -681,69 +785,6 @@ export class FestService {
     const order = { accepted: 0, sent: 1, notFound: 2 } as const;
     const list = holders.map(view).sort((a, b) => order[a.state] - order[b.state] || a.at.localeCompare(b.at));
     return { success: true as const, txn, holders: list };
-  }
-
-  /**
-   * The desk gives a UTR to the student it really belongs to: that student is verified with it;
-   * the registration it was accepted for (if another) loses it and is back to not paid, and anyone
-   * else who sent it is marked not found, each with the reason on their own page.
-   */
-  async utrAssign(actor: Actor, body: unknown) {
-    const txn = this.readUtr(body);
-    if (!isObject(body) || body.confirmed !== true) throw new ApiError(400, 'INVALID', 'Tick that you have seen this payment received.');
-    const { id, dept } = this.target(text(body.to, 20));
-    await this.workDepartment(actor, dept);
-    const catalog = await this.catalog();
-    const stamp = this.stamp(actor);
-    const desk = actor.deskNumber ?? undefined;
-    const target = await this.required(dept, id);
-    if (!isActive(target)) throw new ApiError(409, 'CANCELLED', `${showId(id)} is cancelled or deleted.`);
-    const already = target.entry.status === 'PAID';
-    if (already && tidyUtr(target.entry.payment?.txn ?? '').toUpperCase() === txn) return { success: true as const, registration: target, movedFrom: null, notFound: [] };
-    if (already) throw new ApiError(409, 'ALREADY_PAID', `${showId(id)} has already paid (${target.entry.payment?.method === 'CASH' ? 'cash' : `UTR ending ${target.entry.payment?.txn?.slice(-4) ?? ''}`}).`);
-    const reason = text(body.reason, 200) || `UTR ending ${txn.slice(-4)} belongs to ${showId(id)}`;
-    const { accepted, holders } = await this.utrHolders(txn);
-
-    // The registration it was accepted for gives it up first.
-    let movedFrom: string | null = null;
-    if (accepted && accepted !== id) {
-      const owner = parseFestId(accepted);
-      if (owner) {
-        await this.mutate(owner.dept, accepted, (registration) => {
-          if (registration.entry.status !== 'PAID' || tidyUtr(registration.entry.payment?.txn ?? '').toUpperCase() !== txn) return null;
-          return { next: { entry: { status: 'DUE', ...(registration.entry.claim && { claim: registration.entry.claim }), rejected: { ...stamp, reason } } } };
-        });
-      }
-      await this.deps.store.releaseTxn(TXN_SCOPE, txn, accepted);
-      movedFrom = accepted;
-    }
-    const holder = await this.deps.store.claimTxn(TXN_SCOPE, txn, id);
-    if (holder && holder !== id) throw new ApiError(409, 'BUSY', 'Someone changed this UTR at the same moment. Please look it up again.');
-    let result;
-    try {
-      result = await this.mutate(dept, id, (registration) => {
-        if (!isActive(registration)) throw new ApiError(409, 'CANCELLED', `${showId(id)} is cancelled or deleted.`);
-        if (registration.entry.status === 'PAID') return null;
-        const payment: FestPayment = { method: 'UPI', amount: registration.entry.claim?.amount ?? catalog.entryFee, txn, ...stamp, ...(desk && { desk }) };
-        return { next: { entry: { status: 'PAID', payment, ...(registration.entry.claim && { claim: registration.entry.claim }) }, checkedIn: registration.checkedIn ?? { ...stamp, ...(desk && { desk }) } } };
-      });
-    } catch (error) {
-      await this.deps.store.releaseTxn(TXN_SCOPE, txn, id);
-      throw error;
-    }
-    // Anyone else who sent it (and waits) is told it was not found, with whose it is.
-    const notFound: string[] = [];
-    for (const other of holders) {
-      if (other.id === id || other.id === movedFrom || other.entry.status === 'PAID' || other.entry.rejected || !other.entry.claim) continue;
-      if (tidyUtr(other.entry.claim.txn).toUpperCase() !== txn) continue;
-      await this.mutate(other.dept, other.id, (registration) => {
-        if (registration.entry.status === 'PAID' || registration.entry.rejected || !registration.entry.claim) return null;
-        return { next: { entry: { ...registration.entry, rejected: { ...stamp, reason } } } };
-      });
-      notFound.push(other.id);
-    }
-    this.deps.log('UTR given to its owner', { utr: txn.slice(-4), to: id, from: movedFrom, notFound, by: actor.username });
-    return { success: true as const, registration: result.registration, movedFrom, notFound };
   }
 
   /** Adds and removes events (a fee paid or attendance marked keeps an event). */
@@ -816,43 +857,14 @@ export class FestService {
 
     const participant = readParticipant(body.participant);
     const problems = selfRegistrationProblems(participant);
+    // The students' own form asks for their college code too.
+    if (!participant.collegeCode) problems.collegeCode = 'Enter your college code.';
     if (Object.keys(problems).length) throw new ApiError(400, 'INVALID', Object.values(problems)[0]!, undefined, undefined, problems as Record<string, string>);
-    const eventIds = await this.readEventIds(catalog, dept, body.events);
-    await this.ensureOpenEvents(eventIds);
     const txn = text(body.txn, 40).replace(/\s/g, '');
     if (txn && !TXN.test(txn)) throw new ApiError(400, 'INVALID', 'Check the UPI transaction ID (UTR).', undefined, undefined, { txn: 'Check the UPI transaction ID (UTR).' });
-
-    const stamp: FestStamp = { at: this.iso(), by: STUDENT };
-    const mark = await this.deps.testMark();
-    for (let attempt = 0; attempt < 5; attempt += 1) {
-      const number = await this.deps.store.takeNumbers(dept, 'SELF', 1);
-      if (number > ID_RANGES.SELF.last) throw new ApiError(409, 'IDS_EXHAUSTED', `${deptShort(dept)} registration on phones is full. Please go to a ${deptShort(dept)} registration desk.`);
-      const registration: FestRegistration = {
-        id: formatFestId(dept, number),
-        dept,
-        source: 'SELF',
-        ...participant,
-        entry: txn ? { status: 'DUE', claim: { txn, amount: catalog.entryFee, at: stamp.at } } : { status: 'DUE' },
-        events: eventIds.map((eventId) => ({ eventId, added: stamp })),
-        created: stamp,
-        sid: submissionId,
-        ...(mark.test ? { test: true } : {}),
-        v: 1,
-        u: this.iso(),
-      };
-      const created = await this.deps.store.createRegistration(registration, submissionId);
-      if (created.created) {
-        this.deps.log('Fest self-registration', { id: registration.id, events: eventIds.length, ...(registration.test && { test: true }) });
-        return { success: true as const, registration: toStudentView(registration, true), replayed: false };
-      }
-      if (created.reason === 'submission') return { success: true as const, registration: toStudentView(await this.required(dept, created.existingId!), true), replayed: true };
-      if (created.reason === 'phone') {
-        // Never says whose ID it is: the student finds it with "My registration ID", or at a desk.
-        throw new ApiError(409, 'DUPLICATE_PHONE', `This mobile number is already registered in ${deptShort(dept)}. Open "My registration ID", or go to a ${deptShort(dept)} registration desk.`);
-      }
-      // 'id': that number is taken (e.g. after test data was cleared): take the next one.
-    }
-    throw new ApiError(409, 'BUSY', 'Registration is busy. Please try again.');
+    const created = await this.createSelf(dept, participant, submissionId, { at: this.iso(), by: STUDENT }, txn);
+    if (!created.replayed) this.deps.log('Fest self-registration', { id: created.registration.id, events: created.registration.events.length, ...(created.registration.test && { test: true }) });
+    return { success: true as const, registration: toStudentView(created.registration, true), replayed: created.replayed };
   }
 
   /**
@@ -908,11 +920,9 @@ export class FestService {
     return { success: true as const, registrations: found.map((registration) => toStudentView(registration, false)) };
   }
 
-  /** The student adds or removes their events (any department's), from the phone that registered. */
-  async studentEvents(body: unknown) {
-    const { registration } = await this.ownRegistration(body, true);
-    const result = await this.changeEvents(await this.catalog(), registration.dept, registration.id, body as Record<string, unknown>, { at: this.iso(), by: STUDENT });
-    return { success: true as const, registration: toStudentView(result.registration, true) };
+  /** Students do not pick events on their phones: each event's coordinator adds them at its venue. */
+  async studentEvents(): Promise<never> {
+    throw new ApiError(403, 'EVENTS_AT_VENUE', 'You join each event at its venue: show your registration ID to its coordinator.');
   }
 
   /** The student sends the right transaction ID after a desk did not find the payment (from the phone that registered). */
@@ -955,9 +965,8 @@ export class FestService {
     if (!['add', 'fee', 'present', 'absent', 'void-fee'].includes(String(action))) throw new ApiError(400, 'INVALID', 'Choose what to do.');
     requirePermission(actor, action === 'void-fee' ? 'fest.correct' : 'fest.event');
     if (action !== 'void-fee') this.eventAccess(actor, event);
-    // Adding a student needs their own department's event (unless Website controls opened events to
-    // every department); one already in the event (added while they were open) keeps it.
-    if (action === 'add' && !canJoin({ dept }, event, (await this.portal()).ownDepartmentEvents)) {
+    // A student takes part only in their own department's events.
+    if (action === 'add' && !canJoin({ dept }, event)) {
       throw new ApiError(400, 'OTHER_DEPARTMENT', `${showId(id)} is registered under ${deptShort(dept)}: they take part in ${deptShort(dept)} events only.`);
     }
     if (action !== 'void-fee') await this.requireSwitch(actor, 'eventEntry', 'Event entry is switched off by the web assist team.');
@@ -1322,10 +1331,14 @@ const pick = (registration: FestRegistration): FestParticipant => ({
   phone: registration.phone,
   email: registration.email,
   college: registration.college,
+  collegeCode: registration.collegeCode ?? '',
   branch: registration.branch,
   year: registration.year,
   team: registration.team,
 });
+
+/** The same UTR, however it was typed (spaces, dashes, case). */
+const sameUtr = (a: string | undefined, b: string | undefined) => Boolean(a && b) && tidyUtr(a!).toUpperCase() === tidyUtr(b!).toUpperCase();
 
 /** The switches that are off, for the log. */
 const offSwitches = (portal: PortalSettings) => [

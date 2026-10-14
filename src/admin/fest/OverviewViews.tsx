@@ -6,18 +6,31 @@
  * - Overview: totals, then by department, by event (with venue and time) and by desk
  * - Registrations: the filtered list, each with its details and the corrections a role may make
  * - Results: every event's winners as submitted, reopened only by the overall coordinator
- * - Colleges: students per college and the 1st, 2nd and 3rd places each college won
+ * - Colleges: the college ranking (medal table): students, event participations and the 1st, 2nd
+ *   and 3rd places each college won, filtered by participations and prizes
  */
 import { useMemo, useState } from 'react';
-import { collegeSummary, deptShort, eventLabel, eventOf, feePaid, isActive, participantProblems, readParticipant, rupees, showId, totalsOf, type CollegeRow, type FestCatalog, type FestEvent, type FestParticipant, type FestRegistration } from '../../lib/fest';
+import { collegeSummary, deptShort, eventLabel, eventOf, feePaid, isActive, medalOrder, participantProblems, readParticipant, rupees, showId, totalsOf, type CollegeRow, type FestEvent, type FestParticipant } from '../../lib/fest';
 import { hasPermission } from '../../lib/staff';
 import { Badge, when } from '../ui';
 import { filterNote, saveTable, today } from './excel';
+import { exportRows, howRegistered } from './exports';
 import { ordinal } from './EventWindow';
 import { useFest } from './FestData';
 import { FilterBar, NO_PAYMENT, PaymentChoice, ShortList, Stat, applyFilters, deptName, paymentBody, paymentReady, stampNow, type PaymentDraft } from './festUi';
 
-const sourceLabel = { DESK: 'Desk', ONLINE: 'Online', PAPER: 'Paper', SELF: 'Own phone' } as const;
+
+/** The detail drawer's labels for each field a correction may change. */
+const FIELD_LABEL: Record<keyof FestParticipant, string> = {
+  name: 'Name',
+  phone: 'Phone',
+  email: 'Email',
+  college: 'College',
+  collegeCode: 'College code',
+  branch: 'Department / course',
+  year: 'Year',
+  team: 'Team',
+};
 
 function useFiltered() {
   const { registrations, filters, catalog, session, switches } = useFest();
@@ -46,7 +59,7 @@ export function FestOverview() {
       <section className="adm-card adm-pad">
         <FilterBar showDept={viewAll} />
         <div className="fest-stats">
-          <Stat label="Registered" value={totals.registered} sub={`${totals.self} own phone · ${totals.desk} desk · ${totals.online} online${totals.paper ? ` · ${totals.paper} paper` : ''}`} />
+          <Stat label="Registered" value={totals.registered} sub={`${totals.self} own phone${totals.forThem ? ` · ${totals.forThem} by a desk` : ''}${totals.desk ? ` · ${totals.desk} desk (earlier)` : ''} · ${totals.online} online${totals.paper ? ` · ${totals.paper} paper` : ''}`} />
           {totals.awaiting > 0 && <Stat label="Payments to check" value={totals.awaiting} sub="Self-registered, waiting for a desk" />}
           <Stat label="On campus" value={totals.checkedIn} sub={totals.online ? `${totals.online - (totals.checkedIn - totals.desk - totals.paper)} online not arrived` : undefined} />
           <Stat label="Entry fees" value={rupees(totals.entryCash + totals.entryUpi + totals.entryOnline)} sub={`${rupees(totals.entryCash)} cash · ${rupees(totals.entryUpi)} UPI · ${rupees(totals.entryOnline)} online`} />
@@ -189,42 +202,6 @@ export function FestOverview() {
 
 // ------------------------------------------------------------------------------------------ Registrations
 
-function exportRows(list: FestRegistration[], catalog: FestCatalog) {
-  const name = (id: string) => eventOf(catalog, id)?.name ?? id;
-  const rows: (string | number)[][] = [
-    ['Registration ID', 'Department', 'Name', 'Phone', 'Email', 'College', 'Department / course', 'Year', 'Team', 'Registered', 'Desk', 'Entry fee', 'Paid by', 'UTR accepted', 'UTR sent by student', 'Verified by', 'Arrived', 'Events', 'Event fees paid', 'Present at', 'Registered at', 'Registered by', 'Status'],
-  ];
-  for (const item of list) {
-    const payment = item.entry.payment;
-    rows.push([
-      showId(item.id),
-      deptShort(item.dept),
-      item.name,
-      item.phone,
-      item.email,
-      item.college,
-      item.branch,
-      item.year,
-      item.team,
-      sourceLabel[item.source],
-      item.desk ?? '',
-      item.entry.status === 'PAID' ? (payment?.amount ?? '') : item.entry.rejected ? 'NOT FOUND' : item.entry.claim ? 'TO CHECK' : 'DUE',
-      payment?.method ?? '',
-      payment?.txn ?? '',
-      item.entry.claim?.txn ?? '',
-      payment ? `${payment.by}${payment.desk ? ` (desk ${payment.desk})` : ''}` : '',
-      item.source === 'ONLINE' ? (item.checkedIn ? when(item.checkedIn.at) : 'No') : 'Yes',
-      item.events.map((entry) => name(entry.eventId)).join('; '),
-      item.events.filter((entry) => feePaid(entry)).map((entry) => `${name(entry.eventId)} (${entry.fee!.method})`).join('; '),
-      item.events.filter((entry) => entry.present).map((entry) => name(entry.eventId)).join('; '),
-      when(item.created.at),
-      item.created.by,
-      item.deleted ? 'Deleted' : item.cancelled ? 'Cancelled' : item.test ? 'TEST' : 'Active',
-    ]);
-  }
-  return rows;
-}
-
 export function FestRegistrations() {
   const { catalog, filters, session } = useFest();
   const { list, viewAll, canDownload } = useFiltered();
@@ -281,7 +258,7 @@ export function FestRegistrations() {
                   <td>{item.college}</td>
                   <td>{item.events.map((entry) => name(entry.eventId)).join(', ') || '—'}</td>
                   <td>
-                    {sourceLabel[item.source]}
+                    {howRegistered(item)}
                     {item.desk ? ` · desk ${item.desk}` : ''}
                     {item.source === 'ONLINE' && (item.checkedIn ? ' · arrived' : ' · not arrived')}
                   </td>
@@ -325,7 +302,16 @@ function RegistrationDetail({ id, onClose }: { id: string; onClose: () => void }
   const can = (permission: Parameters<typeof hasPermission>[1]) => hasPermission(session.role, permission);
   const path = `/api/admin/fest/registrations/${registration.id}` as const;
   const act = (action: string, extra: Record<string, unknown> = {}, label = action) => change(registration.id, path, { action, ...extra }, `${label} · ${registration.id}`);
-  const form = draft ?? { name: registration.name, phone: registration.phone, email: registration.email, college: registration.college, branch: registration.branch, year: registration.year, team: registration.team };
+  const form: FestParticipant = draft ?? {
+    name: registration.name,
+    phone: registration.phone,
+    email: registration.email,
+    college: registration.college,
+    collegeCode: registration.collegeCode ?? '',
+    branch: registration.branch,
+    year: registration.year,
+    team: registration.team,
+  };
   const problems = participantProblems(readParticipant(form));
 
   return (
@@ -350,7 +336,7 @@ function RegistrationDetail({ id, onClose }: { id: string; onClose: () => void }
             {registration.email && ` · ${registration.email}`}
           </dd>
           <dt>College</dt>
-          <dd>{[registration.college, registration.branch, registration.year].filter(Boolean).join(' · ')}</dd>
+          <dd>{[registration.college, registration.collegeCode && `code ${registration.collegeCode}`, registration.branch, registration.year].filter(Boolean).join(' · ')}</dd>
           {registration.team && (
             <>
               <dt>Team</dt>
@@ -359,7 +345,7 @@ function RegistrationDetail({ id, onClose }: { id: string; onClose: () => void }
           )}
           <dt>Registered</dt>
           <dd>
-            {sourceLabel[registration.source]}
+            {howRegistered(registration)}
             {registration.desk ? ` · desk ${registration.desk}` : ''} · {registration.created.by} {when(registration.created.at)}
             {registration.ref && ` · ref ${registration.ref}`}
           </dd>
@@ -460,9 +446,9 @@ function RegistrationDetail({ id, onClose }: { id: string; onClose: () => void }
           <section>
             {editing ? (
               <div className="fest-form">
-                {(['name', 'phone', 'email', 'college', 'branch', 'year', 'team'] as const).map((field) => (
+                {(['name', 'phone', 'email', 'college', 'collegeCode', 'branch', 'year', 'team'] as const).map((field) => (
                   <label key={field} className="adm-field">
-                    <span>{field[0].toUpperCase() + field.slice(1)}</span>
+                    <span>{FIELD_LABEL[field]}</span>
                     <input value={form[field]} onChange={(event) => setDraft({ ...form, [field]: event.target.value })} />
                     {problems[field] && <span className="adm-field__error">{problems[field]}</span>}
                   </label>
@@ -530,41 +516,71 @@ function RegistrationDetail({ id, onClose }: { id: string; onClose: () => void }
 
 const COLLEGE_COLUMNS: { key: keyof CollegeRow; label: string }[] = [
   { key: 'name', label: 'College' },
+  { key: 'code', label: 'Code' },
   { key: 'students', label: 'Students' },
+  { key: 'participations', label: 'Event participations' },
   { key: 'first', label: '1st' },
   { key: 'second', label: '2nd' },
   { key: 'third', label: '3rd' },
-  { key: 'places', label: 'Places won' },
+  { key: 'places', label: 'Total prizes' },
 ];
 
-/** College-wise: how many students each college sent, and how many 1st, 2nd and 3rd places they won. */
+/** The default order: the medal table (1st, 2nd, 3rd, then participations, then students). */
+const MEDALS = 'medals' as const;
+
+/**
+ * The college ranking: each college's students, their event participations (attended) and the
+ * prizes they won, in medal-table order, filtered by college, participations and prizes; downloaded
+ * as Excel in the order shown.
+ */
 export function FestColleges() {
   const { catalog, results, filters, setFilters, session } = useFest();
   const { list, viewAll, canDownload } = useFiltered();
-  const [sort, setSort] = useState<{ key: keyof CollegeRow; down: boolean }>({ key: 'places', down: true });
+  const [sort, setSort] = useState<{ key: keyof CollegeRow | typeof MEDALS; down: boolean }>({ key: MEDALS, down: true });
+  const [minEvents, setMinEvents] = useState(0);
+  const [minPrizes, setMinPrizes] = useState(0);
   const rows = useMemo(() => {
     // Places count for the events the filters show (all events when none is chosen).
     const shown = catalog ? new Set(catalog.events.filter((event) => (!filters.dept || event.dept === filters.dept) && (!filters.eventId || event.id === filters.eventId)).map((event) => event.id)) : new Set<string>();
-    const summary = collegeSummary(list, [...results.values()].filter((result) => shown.has(result.eventId)));
+    const summary = collegeSummary(list, [...results.values()].filter((result) => shown.has(result.eventId))).filter((row) => row.participations >= minEvents && row.places >= minPrizes);
     const { key, down } = sort;
+    if (key === MEDALS) return summary.sort(medalOrder);
     return [...summary].sort((a, b) => {
       const order = typeof a[key] === 'number' ? (a[key] as number) - (b[key] as number) : String(a[key]).localeCompare(String(b[key]));
-      return (down ? -order : order) || a.name.localeCompare(b.name);
+      return (down ? -order : order) || medalOrder(a, b);
     });
-  }, [catalog, list, results, filters, sort]);
+  }, [catalog, list, results, filters, sort, minEvents, minPrizes]);
   if (!catalog) return <p className="adm-loading">Loading the live data…</p>;
-  const totals = rows.reduce((sum, row) => ({ students: sum.students + row.students, first: sum.first + row.first, second: sum.second + row.second, third: sum.third + row.third }), { students: 0, first: 0, second: 0, third: 0 });
+  const totals = rows.reduce(
+    (sum, row) => ({ students: sum.students + row.students, participations: sum.participations + row.participations, first: sum.first + row.first, second: sum.second + row.second, third: sum.third + row.third }),
+    { students: 0, participations: 0, first: 0, second: 0, third: 0 },
+  );
+  const limits = [minEvents && `at least ${minEvents} participations`, minPrizes && `at least ${minPrizes} prizes`].filter(Boolean).join(' · ');
   const download = () => {
-    const table: (string | number)[][] = [['College', 'Students', '1st places', '2nd places', '3rd places', 'Places won'], ...rows.map((row) => [row.name, row.students, row.first, row.second, row.third, row.places])];
-    saveTable(`techfest-colleges-${filters.dept || 'all'}-${today()}.xlsx`, 'Colleges', filterNote(filters, session.displayName), table);
+    const table: (string | number)[][] = [
+      ['Rank', 'College', 'College code', 'Students', 'Event participations', 'Event registrations', '1st prizes', '2nd prizes', '3rd prizes', 'Total prizes'],
+      ...rows.map((row, index) => [index + 1, row.name, row.code, row.students, row.participations, row.registrations, row.first, row.second, row.third, row.places]),
+    ];
+    saveTable(`techfest-college-ranking-${filters.dept || 'all'}-${today()}.xlsx`, 'College ranking', `${filterNote(filters, session.displayName)}${limits ? ` · ${limits}` : ''}`, table);
   };
   return (
     <main className="adm-page">
       <section className="adm-card adm-pad">
         <FilterBar showDept={viewAll} />
+        <div className="fest-filters" role="group" aria-label="Ranking filters">
+          <label className="adm-field">
+            <span>Event participations (at least)</span>
+            <input type="number" min={0} inputMode="numeric" value={minEvents} onChange={(event) => setMinEvents(Math.max(0, Number(event.target.value) || 0))} />
+          </label>
+          <label className="adm-field">
+            <span>Prizes won (at least)</span>
+            <input type="number" min={0} inputMode="numeric" value={minPrizes} onChange={(event) => setMinPrizes(Math.max(0, Number(event.target.value) || 0))} />
+          </label>
+        </div>
         <div className="fest-stats">
           <Stat label="Colleges" value={rows.length} />
           <Stat label="Students" value={totals.students} />
+          <Stat label="Event participations" value={totals.participations} />
           <Stat label="1st places" value={totals.first} />
           <Stat label="2nd places" value={totals.second} />
           <Stat label="3rd places" value={totals.third} />
@@ -572,18 +588,29 @@ export function FestColleges() {
       </section>
       <section className="adm-card adm-pad">
         <div className="adm-toolbar">
-          <h3 className="adm-h3">By college</h3>
-          {canDownload && (
-            <button className="adm-button adm-button--small" type="button" disabled={!rows.length} onClick={download}>
-              Download (Excel)
-            </button>
-          )}
+          <h3 className="adm-h3">College ranking</h3>
+          <span className="adm-inline">
+            {sort.key !== MEDALS && (
+              <button className="adm-button adm-button--small" type="button" onClick={() => setSort({ key: MEDALS, down: true })}>
+                Back to the medal order
+              </button>
+            )}
+            {canDownload && (
+              <button className="adm-button adm-button--small" type="button" disabled={!rows.length} onClick={download}>
+                Download (Excel)
+              </button>
+            )}
+          </span>
         </div>
-        <p className="adm-muted">Places from submitted results only; a team counts once for its college. Tap a heading to sort, a college to see its students.</p>
+        <p className="adm-muted">
+          Medal order: most 1st prizes first, then 2nd, then 3rd, then event participations, then students. Participations are the events its students attended; prizes come from submitted
+          results (a team counts once for its college). Tap a heading to sort by it, a college to see its students.
+        </p>
         <div className="adm-table-wrap">
           <table className="adm-table adm-table--static fest-table">
             <thead>
               <tr>
+                <th scope="col">#</th>
                 {COLLEGE_COLUMNS.map((column) => (
                   <th key={column.key} scope="col" aria-sort={sort.key === column.key ? (sort.down ? 'descending' : 'ascending') : undefined}>
                     <button className="fest-sort" type="button" onClick={() => setSort((current) => ({ key: column.key, down: current.key === column.key ? !current.down : column.key !== 'name' }))}>
@@ -595,10 +622,13 @@ export function FestColleges() {
               </tr>
             </thead>
             <tbody>
-              {rows.map((row) => (
+              {rows.map((row, index) => (
                 <tr key={row.key} className="fest-row-link" onClick={() => setFilters({ ...filters, college: row.key })}>
+                  <td>{index + 1}</td>
                   <th scope="row">{row.name}</th>
+                  <td>{row.code}</td>
                   <td>{row.students}</td>
+                  <td>{row.participations}</td>
                   <td>{row.first}</td>
                   <td>{row.second}</td>
                   <td>{row.third}</td>
@@ -608,7 +638,7 @@ export function FestColleges() {
             </tbody>
           </table>
         </div>
-        {!rows.length && <p className="adm-muted">No students match these filters.</p>}
+        {!rows.length && <p className="adm-muted">No college matches these filters.</p>}
       </section>
     </main>
   );

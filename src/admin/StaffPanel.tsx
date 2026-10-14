@@ -2,12 +2,10 @@
 import { useCallback, useState, type FormEvent } from 'react';
 import { events as allEvents } from '../content/events';
 import { deptShort, eventLabel, type FestCatalog } from '../lib/fest';
-import { CREATABLE_ROLES, DEPARTMENT_ROLES, ROLE_INFO, type SessionInfo, type StaffAccountView, type StaffRole } from '../lib/staff';
-import { ApiFailure, SignedOut, createStaff, deleteStaff, listStaff, signOutStaff, signedInNow, updateStaff, type StaffChange } from './adminApi';
-import { PORTAL, saveTable } from './fest/excel';
-import { buildLoginsDoc, DOCX_TYPE } from './loginsDoc';
+import { CREATABLE_ROLES, DELETE_ALL_STAFF, DEPARTMENT_ROLES, ROLE_INFO, type SessionInfo, type SignInFailure, type StaffAccountView, type StaffRole } from '../lib/staff';
+import { SignedOut, checkStaffPassword, createStaff, deleteAllStaff, deleteStaff, listStaff, signOutStaff, signedInNow, staffSignInFailures, updateStaff, type PasswordCheck, type StaffChange } from './adminApi';
 import { useFestCatalog } from './fest/FestData';
-import { Badge, ErrorNote, LiveStatus, saveFile, useLiveData, when } from './ui';
+import { Badge, ErrorNote, LiveStatus, useLiveData, when } from './ui';
 
 interface PanelProps {
   token: string;
@@ -83,8 +81,9 @@ export function StaffPanel({ token, session, onSignedOut }: PanelProps) {
   return (
     <main className="adm-page">
       <SignedInNow token={token} session={session} onSignedOut={onSignedOut} />
-      <DepartmentAccounts token={token} existing={live.data ?? []} onCreated={replace} onSignedOut={onSignedOut} />
       <NewAccount token={token} onCreated={replace} onSignedOut={onSignedOut} />
+      <CheckPassword token={token} accounts={live.data ?? []} onSignedOut={onSignedOut} />
+      <RecentFailures token={token} onSignedOut={onSignedOut} />
       <section className="adm-card adm-pad">
         <div className="adm-toolbar">
           <h2 className="adm-h2">Staff accounts</h2>
@@ -111,6 +110,7 @@ export function StaffPanel({ token, session, onSignedOut }: PanelProps) {
                 <th scope="col">Department</th>
                 <th scope="col">Events</th>
                 <th scope="col">Status</th>
+                <th scope="col">Last sign-in</th>
                 <th scope="col">Changed</th>
                 <th scope="col" />
               </tr>
@@ -130,6 +130,7 @@ export function StaffPanel({ token, session, onSignedOut }: PanelProps) {
                     </td>
                     <td>{account.role === 'COORDINATOR' ? account.eventIds.map((id) => eventName(catalog, id)).join(', ') : 'All'}</td>
                     <td>{account.active ? <Badge tone="good">Active</Badge> : <Badge tone="bad">Deactivated</Badge>}</td>
+                    <td className="adm-muted">{account.lastSignInAt ? when(account.lastSignInAt) : 'Never'}</td>
                     <td className="adm-muted">
                       {when(account.updatedAt)} by {account.updatedBy}
                     </td>
@@ -159,6 +160,7 @@ export function StaffPanel({ token, session, onSignedOut }: PanelProps) {
           {live.data?.length === 0 && <p className="adm-muted adm-empty">No staff accounts yet.</p>}
         </div>
       </section>
+      {session.kind === 'owner' && <DeleteEveryAccount token={token} count={live.data?.length ?? 0} onDeleted={() => live.setData([])} onSignedOut={onSignedOut} />}
     </main>
   );
 }
@@ -249,15 +251,7 @@ function NewAccount({ token, onCreated, onSignedOut }: { token: string; onCreate
           </select>
         </label>
         <ScopeFields role={form.role} department={form.department} deskNumber={form.deskNumber} onChange={(next) => setForm({ ...form, ...next, eventIds: [] })} />
-        <label className="adm-field">
-          <span>Password (at least 14 characters)</span>
-          <span className="adm-inline">
-            <input value={form.password} onChange={(event) => setForm({ ...form, password: event.target.value })} required autoComplete="new-password" />
-            <button className="adm-button adm-button--small" type="button" onClick={() => setForm({ ...form, password: generatePassword() })}>
-              Generate
-            </button>
-          </span>
-        </label>
+        <PasswordField label="Password (at least 14 characters)" value={form.password} onChange={(password) => setForm({ ...form, password })} required />
         {form.role === 'COORDINATOR' && (
           <div className="adm-form__wide">
             <EventChoice value={form.eventIds} department={form.department} onChange={(eventIds) => setForm({ ...form, eventIds })} />
@@ -271,12 +265,7 @@ function NewAccount({ token, onCreated, onSignedOut }: { token: string; onCreate
         </div>
       </form>
       <ErrorNote error={error} />
-      {created && (
-        <p className="adm-note">
-          Created <strong>{created.username}</strong>. Give the password to them privately now: <span className="adm-mono">{created.password}</span>. It is not
-          shown again.
-        </p>
-      )}
+      {created && <NewLogin username={created.username} password={created.password} what="Created" />}
     </section>
   );
 }
@@ -344,15 +333,7 @@ function EditAccount({ token, account, onDone, onSignedOut }: { token: string; a
             <input type="checkbox" checked={change.active} onChange={(event) => setChange({ ...change, active: event.target.checked })} />
             <span>Active (untick to sign them out and block sign-in)</span>
           </label>
-          <label className="adm-field">
-            <span>New password (leave empty to keep)</span>
-            <span className="adm-inline">
-              <input value={password} onChange={(event) => setPassword(event.target.value)} autoComplete="new-password" />
-              <button className="adm-button adm-button--small" type="button" onClick={() => setPassword(generatePassword())}>
-                Generate
-              </button>
-            </span>
-          </label>
+          <PasswordField label="New password (leave empty to keep)" value={password} onChange={setPassword} />
           {change.role === 'COORDINATOR' && (
             <div className="adm-form__wide">
               <EventChoice value={change.eventIds ?? []} department={change.department} onChange={(eventIds) => setChange({ ...change, eventIds })} />
@@ -365,7 +346,7 @@ function EditAccount({ token, account, onDone, onSignedOut }: { token: string; a
             <button className="adm-button" type="button" disabled={busy} onClick={() => onDone(null)}>
               Cancel
             </button>
-            {password && <span className="adm-muted">Give the new password to them privately: <span className="adm-mono">{password}</span></span>}
+            {password && <span className="adm-muted">Saving signs them out everywhere; give them this password privately: <span className="adm-mono">{password}</span> <CopyButton text={password} /></span>}
           </div>
           <div className="adm-form__wide">
             <ErrorNote error={error} />
@@ -446,258 +427,233 @@ function SignedInNow({ token, session, onSignedOut }: { token: string; session: 
   );
 }
 
-interface PlannedAccount {
-  username: string;
-  displayName: string;
-  role: StaffRole;
-  department: string;
-  deskNumber?: number;
-  eventIds: string[];
-  password: string;
-  /** created now; exists (left as it is); reset: an existing account given this new password. */
-  status?: 'created' | 'exists' | 'reset' | 'failed';
-  message?: string;
-}
-
-/** Each department's registration desk logins. */
-export const DESK_LOGINS = 2;
-
 /**
- * The accounts a department needs: its department admin, two registration desks and one
- * coordinator for each event. (The overall coordinator, the HOD, is one account for every
- * department; there is no HOD account per department.)
+ * A password box that a phone keyboard cannot change (no capital letter added, no autocorrect, no
+ * spell check), with Generate.
  */
-export function planFor(catalog: FestCatalog, code: string): PlannedAccount[] {
-  const dept = catalog.departments.find((item) => item.code === code);
-  if (!dept) return [];
-  const lower = code.toLowerCase();
-  const plan: PlannedAccount[] = [
-    { username: `${lower}-admin`, displayName: `${deptShort(code)} Department admin`, role: 'DEPT_ADMIN', department: code, eventIds: [], password: generatePassword() },
-    ...Array.from({ length: DESK_LOGINS }, (_, index) => ({
-      username: `${lower}-desk${index + 1}`,
-      displayName: `${deptShort(code)} Desk ${index + 1}`,
-      role: 'DESK' as StaffRole,
-      department: code,
-      deskNumber: index + 1,
-      eventIds: [],
-      password: generatePassword(),
-    })),
-  ];
-  for (const event of catalog.events.filter((item) => item.dept === code)) {
-    const slug = event.id.replace(new RegExp(`^${lower}-`), '').slice(0, 24).replace(/-+$/, '');
-    plan.push({
-      username: `${lower}-${slug}`,
-      displayName: `${event.name.replace(/[^\p{L}\p{N} .'()&-]/gu, ' ').replace(/\s+/g, ' ').trim().slice(0, 40)} coordinator`,
-      role: 'COORDINATOR',
-      department: code,
-      eventIds: [event.id],
-      password: generatePassword(),
-    });
-  }
-  return plan;
-}
-
-/** The account already there for it: the same username, or (a coordinator) one that already has that event. */
-export const existingFor = (item: PlannedAccount, existing: readonly StaffAccountView[]) =>
-  existing.find((account) => account.username === item.username) ??
-  existing.find((account) => item.role === 'COORDINATOR' && account.role === 'COORDINATOR' && item.eventIds.every((id) => account.eventIds.includes(id)));
-export const planExists = (item: PlannedAccount, existing: readonly StaffAccountView[]) => Boolean(existingFor(item, existing));
-
-/** Every department at once (the department list's first choice). */
-const ALL = '*';
-
-/**
- * Makes a department's accounts in one go (those that do not exist yet), with strong
- * passwords shown once and downloadable to print and hand out.
- */
-function DepartmentAccounts({ token, existing, onCreated, onSignedOut }: { token: string; existing: StaffAccountView[]; onCreated: (account: StaffAccountView) => void; onSignedOut: () => void }) {
-  const catalog = useFestCatalog();
-  const [code, setCode] = useState('');
-  const [plan, setPlan] = useState<PlannedAccount[]>([]);
-  const [busy, setBusy] = useState(false);
-  const choose = (next: string) => {
-    setCode(next);
-    const codes = next === ALL ? catalog.departments.map((dept) => dept.code) : next ? [next] : [];
-    setPlan(
-      codes
-        .flatMap((dept) => planFor(catalog, dept))
-        .map((item) => {
-          // An account already there keeps its own username (a coordinator may have been made by hand).
-          const found = existingFor(item, existing);
-          return found ? { ...item, username: found.username, status: 'exists' as const } : item;
-        }),
-    );
-  };
-  const hods = existing.filter((account) => account.role === 'HOD');
-  const create = async () => {
-    setBusy(true);
-    const next = [...plan];
-    for (const [index, item] of next.entries()) {
-      if (item.status) continue;
-      try {
-        const account = await createStaff(token, { username: item.username, displayName: item.displayName, role: item.role, department: item.department, deskNumber: item.deskNumber ?? null, eventIds: item.eventIds, password: item.password });
-        onCreated(account);
-        next[index] = { ...item, status: 'created' };
-      } catch (failure) {
-        if (failure instanceof SignedOut) {
-          onSignedOut();
-          return;
-        }
-        next[index] = { ...item, status: failure instanceof ApiFailure && failure.code === 'USERNAME_TAKEN' ? 'exists' : 'failed', message: failure instanceof Error ? failure.message : '' };
-      }
-      setPlan([...next]);
-    }
-    setBusy(false);
-  };
-  /**
-   * Passwords are shown once and only their hash is kept, so the logins of accounts made earlier
-   * cannot be downloaded again: they get new passwords (and are signed out) instead.
-   */
-  const resetExisting = async () => {
-    const targets = plan.filter((item) => item.status === 'exists');
-    if (
-      !window.confirm(
-        `Give the ${targets.length} existing account${targets.length === 1 ? '' : 's'} new passwords?\n\nTheir old passwords stop working at once and anyone signed in with them is signed out. Then download the new logins and hand them out again.`,
-      )
-    )
-      return;
-    setBusy(true);
-    const next = [...plan];
-    for (const [index, item] of next.entries()) {
-      if (item.status !== 'exists') continue;
-      const password = generatePassword();
-      try {
-        await updateStaff(token, item.username, { password });
-        next[index] = { ...item, password, status: 'reset', message: '' };
-      } catch (failure) {
-        if (failure instanceof SignedOut) {
-          onSignedOut();
-          return;
-        }
-        next[index] = { ...item, status: 'failed', message: failure instanceof Error ? failure.message : '' };
-      }
-      setPlan([...next]);
-    }
-    setBusy(false);
-  };
-  const created = plan.filter((item) => item.status === 'created' || item.status === 'reset');
-  const toCreate = plan.filter((item) => !item.status).length;
-  const toReset = plan.filter((item) => item.status === 'exists').length;
-  const fileName = code === ALL ? 'all-departments' : code.toLowerCase();
-  const scopeName = code === ALL ? 'every department' : deptShort(code);
-  const forWhat = (item: PlannedAccount) => (item.role === 'DESK' ? `Desk ${item.deskNumber}` : item.eventIds.length ? item.eventIds.map((id) => eventName(catalog, id)).join(', ') : `${deptShort(item.department)} department`);
-  const downloadWord = () => {
-    const groups = catalog.departments
-      .map((dept) => ({
-        title: `${deptShort(dept.code)} · ${dept.name}`,
-        signInAt: `${window.location.origin}/landing/${dept.code.toLowerCase()}/admin/`,
-        rows: created.filter((item) => item.department === dept.code).map((item) => ({ role: ROLE_INFO[item.role].label, for: forWhat(item), username: item.username, password: item.password })),
-      }))
-      .filter((group) => group.rows.length);
-    const made = new Intl.DateTimeFormat('en-IN', { timeZone: 'Asia/Kolkata', dateStyle: 'medium', timeStyle: 'short' }).format(new Date());
-    saveFile(`${fileName}-logins.docx`, buildLoginsDoc(groups, `R P Sarathy Institute of Technology, Salem · logins for ${scopeName}, made ${made}`), DOCX_TYPE);
-  };
-
+function PasswordField({ label, value, onChange, required = false }: { label: string; value: string; onChange: (next: string) => void; required?: boolean }) {
   return (
-    <section className="adm-card adm-pad">
-      <h2 className="adm-h2">Create a department’s accounts</h2>
-      <p className="adm-muted">
-        The department admin, {DESK_LOGINS} registration desks and one coordinator for each event, with strong passwords. Accounts that already exist are left as they are. The overall
-        coordinator (the HOD) is one account for every department: create it above with the role Overall coordinator.
+    <label className="adm-field">
+      <span>{label}</span>
+      <span className="adm-inline">
+        <input
+          value={value}
+          onChange={(event) => onChange(event.target.value)}
+          required={required}
+          autoComplete="new-password"
+          autoCapitalize="none"
+          autoCorrect="off"
+          spellCheck={false}
+          className="adm-mono"
+        />
+        <button className="adm-button adm-button--small" type="button" onClick={() => onChange(generatePassword())}>
+          Generate
+        </button>
+      </span>
+    </label>
+  );
+}
+
+/** Copies exactly the text (no space or line break around it), and says so. */
+function CopyButton({ text, label = 'Copy' }: { text: string; label?: string }) {
+  const [done, setDone] = useState<'' | 'copied' | 'failed'>('');
+  const copy = async () => {
+    try {
+      await navigator.clipboard.writeText(text);
+      setDone('copied');
+    } catch {
+      setDone('failed');
+    }
+    window.setTimeout(() => setDone(''), 2_500);
+  };
+  return (
+    <button className="adm-button adm-button--small" type="button" onClick={() => void copy()}>
+      {done === 'copied' ? 'Copied ✓' : done === 'failed' ? 'Copy it by hand' : label}
+    </button>
+  );
+}
+
+/** A login just made: shown once, with Copy for the username, the password, or both. */
+function NewLogin({ username, password, what }: { username: string; password: string; what: string }) {
+  return (
+    <div className="adm-note" role="status">
+      <p>
+        {what} <strong className="adm-mono">{username}</strong>. Give the login to them privately now: it is not shown again.
       </p>
-      {hods.length > 0 && (
-        <p className="adm-note">
-          Department HOD accounts are no longer used: {hods.map((account) => account.username).join(', ')}. Deactivate or delete them in the list above.
+      <p className="adm-inline adm-inline--wrap">
+        <span>
+          Username <span className="adm-mono">{username}</span>
+        </span>
+        <CopyButton text={username} />
+        <span>
+          Password <span className="adm-mono">{password}</span>
+        </span>
+        <CopyButton text={password} />
+        <CopyButton text={`Username: ${username}\nPassword: ${password}`} label="Copy both" />
+      </p>
+      <p className="adm-muted">
+        On the sign-in page, clear the password box first: a browser that remembers the owner&apos;s password fills it in, and pasting adds to it. Use Show to see what is in the box.
+      </p>
+    </div>
+  );
+}
+
+const CHECK_RESULT = (check: PasswordCheck) =>
+  !check.exists
+    ? { tone: 'bad' as const, text: `There is no account ${check.username}. Check the spelling (usernames are lower-case), or make it.` }
+    : !check.matches
+      ? { tone: 'bad' as const, text: `That is not ${check.username}'s password. Set a new one with Edit, and give it to them.` }
+      : !check.active
+        ? { tone: 'warn' as const, text: `The password is right, but ${check.username} is deactivated: tick Active with Edit.` }
+        : check.signInOff
+          ? { tone: 'warn' as const, text: `The password is right, but sign-in for this role is switched off in Website controls.` }
+          : { tone: 'good' as const, text: `The password is right and ${check.username} can sign in.` };
+
+/** "Check a password": is this the account's password? (No sign-in is made.) */
+function CheckPassword({ token, accounts, onSignedOut }: { token: string; accounts: StaffAccountView[]; onSignedOut: () => void }) {
+  const [username, setUsername] = useState('');
+  const [password, setPassword] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [check, setCheck] = useState<PasswordCheck | null>(null);
+  const [error, setError] = useState<unknown>(null);
+  const run = async (event: FormEvent) => {
+    event.preventDefault();
+    setBusy(true);
+    setError(null);
+    setCheck(null);
+    try {
+      setCheck(await checkStaffPassword(token, username.trim().toLowerCase(), password));
+    } catch (failure) {
+      if (failure instanceof SignedOut) onSignedOut();
+      else setError(failure);
+    } finally {
+      setBusy(false);
+    }
+  };
+  const result = check && CHECK_RESULT(check);
+  return (
+    <section className="adm-card adm-pad" aria-label="Check a password">
+      <h2 className="adm-h2">Check a password</h2>
+      <p className="adm-muted">Someone cannot sign in? Type their username and the password they were given: this says whether it is right, without signing in.</p>
+      <form className="adm-form" onSubmit={(event) => void run(event)}>
+        <label className="adm-field">
+          <span>Username</span>
+          <input value={username} list="staff-usernames" onChange={(event) => setUsername(event.target.value)} autoComplete="off" autoCapitalize="none" autoCorrect="off" spellCheck={false} required />
+          <datalist id="staff-usernames">
+            {accounts.map((account) => (
+              <option key={account.username} value={account.username} />
+            ))}
+          </datalist>
+        </label>
+        <label className="adm-field">
+          <span>Password</span>
+          <input value={password} onChange={(event) => setPassword(event.target.value)} autoComplete="off" autoCapitalize="none" autoCorrect="off" spellCheck={false} className="adm-mono" required />
+        </label>
+        <div className="adm-form__wide">
+          <button className="adm-button" type="submit" disabled={busy}>
+            {busy ? 'Checking…' : 'Check'}
+          </button>
+        </div>
+      </form>
+      {result && (
+        <p className="adm-note" role="status">
+          <Badge tone={result.tone}>{result.tone === 'good' ? 'Right' : 'Problem'}</Badge> {result.text}
         </p>
       )}
-      <label className="adm-field">
-        <span>Department</span>
-        <select value={code} onChange={(event) => choose(event.target.value)} disabled={busy}>
-          <option value="">Choose…</option>
-          <option value={ALL}>All {catalog.departments.length} departments</option>
-          {catalog.departments.map((dept) => (
-            <option key={dept.code} value={dept.code}>
-              {deptShort(dept.code)} · {dept.name}
-            </option>
-          ))}
-        </select>
-      </label>
-      {plan.length > 0 && (
-        <>
-          <div className="adm-table-wrap">
-            <table className="adm-table adm-table--static">
-              <thead>
-                <tr>
-                  <th scope="col">Username</th>
-                  <th scope="col">Name</th>
-                  <th scope="col">Role</th>
-                  <th scope="col" />
+      <ErrorNote error={error} />
+    </section>
+  );
+}
+
+const FAILURE_LABEL: Record<SignInFailure['reason'], string> = {
+  'no such account': 'No such account (a typo in the username, or not made yet)',
+  'wrong password': 'Wrong password',
+  'account deactivated': 'Account deactivated',
+  'sign-in switched off': 'Sign-in switched off for this role',
+};
+
+/** The last refused sign-ins: who was tried, why, when (never the password). */
+function RecentFailures({ token, onSignedOut }: { token: string; onSignedOut: () => void }) {
+  const load = useCallback(() => staffSignInFailures(token), [token]);
+  const live = useLiveData(load, onSignedOut, 30_000);
+  const failures = live.data ?? [];
+  return (
+    <section className="adm-card adm-pad" aria-label="Recent failed sign-ins">
+      <div className="adm-toolbar">
+        <h2 className="adm-h2">Recent failed sign-ins ({failures.length})</h2>
+        <LiveStatus updatedAt={live.updatedAt} loading={live.loading} onRefresh={live.refresh} />
+      </div>
+      <ErrorNote error={live.error} />
+      {failures.length === 0 ? (
+        <p className="adm-muted">{live.loading ? 'Loading…' : 'None.'}</p>
+      ) : (
+        <div className="adm-table-wrap">
+          <table className="adm-table adm-table--static">
+            <thead>
+              <tr>
+                <th scope="col">When</th>
+                <th scope="col">Username tried</th>
+                <th scope="col">Why it was refused</th>
+              </tr>
+            </thead>
+            <tbody>
+              {failures.map((item, index) => (
+                <tr key={`${item.at}-${index}`}>
+                  <td>{when(item.at)}</td>
+                  <td className="adm-mono">{item.username || '(empty)'}</td>
+                  <td>{FAILURE_LABEL[item.reason] ?? item.reason}</td>
                 </tr>
-              </thead>
-              <tbody>
-                {plan.map((item) => (
-                  <tr key={item.username}>
-                    <td className="adm-mono">{item.username}</td>
-                    <td>{item.displayName}</td>
-                    <td>
-                      {ROLE_INFO[item.role].label}
-                      {item.deskNumber ? ` ${item.deskNumber}` : ''}
-                    </td>
-                    <td>
-                      {item.status === 'created' && <Badge tone="good">Created</Badge>}
-                      {item.status === 'reset' && <Badge tone="good">New password</Badge>}
-                      {item.status === 'exists' && <Badge tone="plain">Already exists</Badge>}
-                      {item.status === 'failed' && <Badge tone="bad">{item.message || 'Failed'}</Badge>}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-          <div className="adm-inline adm-inline--wrap">
-            <button className="adm-button adm-button--primary" type="button" disabled={busy || toCreate === 0} onClick={() => void create()}>
-              {busy ? 'Working…' : `Create ${toCreate} accounts`}
-            </button>
-            {toReset > 0 && (
-              <button className="adm-button adm-button--danger-outline" type="button" disabled={busy} onClick={() => void resetExisting()}>
-                New passwords for the {toReset} existing account{toReset === 1 ? '' : 's'}
-              </button>
-            )}
-            <button className="adm-button" type="button" disabled={!created.length} onClick={downloadWord}>
-              Download the logins (Word)
-            </button>
-            <button
-              className="adm-button"
-              type="button"
-              disabled={!created.length}
-              onClick={() =>
-                saveTable(`${fileName}-logins.xlsx`, 'Staff logins', `${PORTAL} · logins for ${scopeName}: give each person their own, privately`, [
-                  ['Department', 'Role', 'Name', 'Username', 'Password', 'Desk', 'Events', 'Sign in at'],
-                  ...created.map((item) => [
-                    deptShort(item.department),
-                    ROLE_INFO[item.role].label,
-                    item.displayName,
-                    item.username,
-                    item.password,
-                    item.deskNumber ?? '',
-                    item.eventIds.map((id) => eventName(catalog, id)).join('; '),
-                    `${window.location.origin}/landing/${item.department.toLowerCase()}/admin/`,
-                  ]),
-                ])
-              }
-            >
-              Download the logins (Excel)
-            </button>
-          </div>
-          {!created.length && toReset > 0 && !busy && (
-            <p className="adm-muted">
-              These accounts were made earlier: their passwords were shown only then and cannot be read again. To download the logins, give them new passwords (they are signed out until
-              they use the new one).
-            </p>
-          )}
-          {created.length > 0 && <p className="adm-note">Download the logins now: the passwords are not shown again. Give each person their own login privately.</p>}
-        </>
+              ))}
+            </tbody>
+          </table>
+        </div>
       )}
+    </section>
+  );
+}
+
+/** The owner only: delete every staff account, so each login can be made again by hand. */
+function DeleteEveryAccount({ token, count, onDeleted, onSignedOut }: { token: string; count: number; onDeleted: () => void; onSignedOut: () => void }) {
+  const [typed, setTyped] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [done, setDone] = useState('');
+  const [error, setError] = useState<unknown>(null);
+  const run = async () => {
+    if (!window.confirm(`Delete all ${count} staff accounts?\n\nEveryone but you is signed out at once and can no longer sign in. Your own sign-in (from the Amplify secrets) stays. This cannot be undone.`)) return;
+    setBusy(true);
+    setError(null);
+    setDone('');
+    try {
+      const deleted = await deleteAllStaff(token, typed.trim());
+      setDone(`Deleted ${deleted} accounts. Make each login again with New staff account.`);
+      setTyped('');
+      onDeleted();
+    } catch (failure) {
+      if (failure instanceof SignedOut) onSignedOut();
+      else setError(failure);
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <section className="adm-card adm-pad" aria-label="Delete every staff account">
+      <h2 className="adm-h2">Delete every staff account</h2>
+      <p className="adm-muted">
+        Only you (the owner) see this. It deletes all {count} staff accounts, including other web assist accounts, and signs them out. Registrations, payments and
+        results stay. Type <strong className="adm-mono">{DELETE_ALL_STAFF}</strong> to confirm.
+      </p>
+      <span className="adm-inline adm-inline--wrap">
+        <input value={typed} aria-label={`Type ${DELETE_ALL_STAFF}`} onChange={(event) => setTyped(event.target.value)} autoComplete="off" autoCapitalize="characters" spellCheck={false} />
+        <button className="adm-button adm-button--danger-outline" type="button" disabled={busy || typed.trim() !== DELETE_ALL_STAFF || count === 0} onClick={() => void run()}>
+          {busy ? 'Deleting…' : `Delete all ${count} accounts`}
+        </button>
+      </span>
+      {done && (
+        <p className="adm-note" role="status">
+          {done}
+        </p>
+      )}
+      <ErrorNote error={error} />
     </section>
   );
 }

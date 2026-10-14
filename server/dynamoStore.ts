@@ -357,7 +357,7 @@ export class DynamoStore implements Store {
     return (await this.scanPrefix<Record<string, unknown>>('session#')).map((item) => ({
       username: String(item.username),
       kind: item.kind === 'staff' ? ('staff' as const) : ('owner' as const),
-      credential: '',
+      credential: typeof item.credential === 'string' ? item.credential : '',
       createdAt: Number(item.createdAt),
       expiresAt: Number(item.expiresAt),
       ...(item.deskNumber !== undefined && { deskNumber: Number(item.deskNumber) }),
@@ -410,6 +410,23 @@ export class DynamoStore implements Store {
     } catch (error) {
       if (error instanceof Error && error.name === 'ConditionalCheckFailedException') return false;
       throw error;
+    }
+  }
+
+  async noteStaffSignIn(username: string, at: string) {
+    try {
+      await this.db.send(
+        new UpdateCommand({
+          TableName: this.tables.control,
+          Key: { pk: `${STAFF_PREFIX}${username}` },
+          UpdateExpression: 'SET lastSignInAt = :at',
+          ConditionExpression: 'attribute_exists(pk)',
+          ExpressionAttributeValues: { ':at': at },
+        }),
+      );
+    } catch (error) {
+      // Deleted meanwhile: nothing to record.
+      if (!(error instanceof Error && error.name === 'ConditionalCheckFailedException')) throw error;
     }
   }
 

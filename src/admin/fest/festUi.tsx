@@ -67,6 +67,7 @@ export const matches = (registration: FestRegistration, query: string) => {
     registration.name.toLowerCase().includes(q) ||
     registration.phone.includes(compact) ||
     registration.college.toLowerCase().includes(q) ||
+    (registration.collegeCode ?? '').toLowerCase() === compact ||
     // The desk may search by the transaction ID it sees in the payment.
     (compact.length >= 4 && [registration.entry.claim?.txn, registration.entry.payment?.txn].some((txn) => txn?.toLowerCase().includes(compact)))
   );
@@ -280,7 +281,7 @@ export function RegistrationCard({ registration, children, showDept = false, eve
         {pending.has(registration.id) && <Badge tone="warn">Waiting to send</Badge>}
         {registration.source === 'ONLINE' && <Badge tone={registration.checkedIn ? 'good' : 'plain'}>{registration.checkedIn ? 'Online · arrived' : 'Online · not arrived'}</Badge>}
         {registration.source === 'PAPER' && <Badge tone="plain">Paper slip</Badge>}
-        {registration.source === 'SELF' && registration.entry.status === 'PAID' && <Badge tone="good">Verified</Badge>}
+        {registration.source !== 'ONLINE' && registration.entry.status === 'PAID' && <Badge tone="good">Paid</Badge>}
         {awaitingCheck(registration) && <Badge tone="warn">Payment to check</Badge>}
         {registration.entry.rejected && registration.entry.status === 'DUE' && <Badge tone="bad">Payment not found</Badge>}
         {registration.entry.status === 'DUE' && !registration.entry.claim && <Badge tone="bad">Entry fee due</Badge>}
@@ -290,7 +291,7 @@ export function RegistrationCard({ registration, children, showDept = false, eve
       </header>
       <p className="fest-card__meta">
         {showDept && <>{deptShort(registration.dept)} · </>}
-        {registration.source === 'SELF' && <>Registered on their phone · </>}
+        {registration.source === 'SELF' && <>{registration.created.by === 'student' ? 'Registered on their phone' : 'Registered at the desk'} · </>}
         {registration.phone} · {registration.college}
         {registration.team && <> · Team {registration.team}</>}
       </p>
