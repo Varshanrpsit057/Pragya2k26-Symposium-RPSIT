@@ -261,14 +261,22 @@ describe('an event coordinator', () => {
     fireEvent.click(within(screen.getByRole('group', { name: 'CSE-2002 details' })).getByRole('button', { name: 'Add to Hackathon' }));
     await waitFor(async () => expect((await sync(h, coordinator.token)).find((item) => item.id === 'CSE-2002')?.events.map((entry) => entry.eventId)).toEqual(['cse-hackathon']));
 
+    // Winners are found in the event's own participants marked present: CSE-2002 joined but is not present.
     const winners = screen.getByRole('region', { name: 'Winners' });
-    fireEvent.change(within(winners).getByLabelText('1st place'), { target: { value: 'cse 2001' } });
+    fireEvent.change(within(winners).getByLabelText('Find the 1st place winner'), { target: { value: 'cse 2002' } });
+    expect(within(winners).getByText(/Nobody present in this event matches/)).toBeInTheDocument();
+    fireEvent.change(within(winners).getByLabelText('Find the 1st place winner'), { target: { value: 'kavin' } });
+    fireEvent.click(within(winners).getByRole('button', { name: 'CSE-2001 Kavin R' }));
+    // A row for the student; placed once, they are no longer offered for another place.
+    expect(within(winners).getByRole('button', { name: 'Remove CSE-2001 from the 1st place' })).toBeInTheDocument();
+    fireEvent.change(within(winners).getByLabelText('Find the 2nd place winner'), { target: { value: 'kavin' } });
+    expect(within(winners).getByText(/Nobody present in this event matches/)).toBeInTheDocument();
     fireEvent.click(within(winners).getByRole('button', { name: 'Submit results' }));
     await waitFor(async () => {
       const result = (await h.call('POST', '/api/admin/fest/sync', {}, { token: coordinator.token })).body.results[0];
       expect(result).toMatchObject({ eventId: 'cse-hackathon', places: [{ place: 1, ids: ['CSE-2001'] }], submitted: { by: 'cse-hack1' } });
     });
-    expect(await within(winners).findByText(/CSE-2001 Kavin R/)).toBeInTheDocument();
+    expect(await within(winners).findByRole('cell', { name: 'Kavin R' })).toBeInTheDocument();
   });
 
   it('opens straight on the event its link names', async () => {
@@ -439,6 +447,62 @@ describe('Website controls', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Remove the QR code' }));
     await waitFor(() => expect(screen.getByText('No QR code uploaded')).toBeInTheDocument());
     expect((await h.call('GET', '/api/fest/payment')).body.qr).toBeNull();
+  });
+});
+
+describe('department logins', () => {
+  it('makes every login of a department in one click and saves them in a Word file that works', async () => {
+    const h = setup({ at: TIMES.eventDay });
+    // An account made by hand earlier gets a new password (and its role is put right).
+    await h.staff('COORDINATOR', ['cse-hackathon'], 'cse-desk1', { department: 'CSE' });
+    const token = await h.login();
+    backend(h);
+    const files = downloads();
+    vi.spyOn(window, 'confirm').mockReturnValue(true);
+    signIn(token);
+    render(<AdminApp />);
+    fireEvent.click(within(await screen.findByRole('navigation', { name: 'Sections' })).getByRole('button', { name: 'Accounts' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Department logins' }));
+    const chooser = screen.getByRole('group', { name: 'Departments' });
+    fireEvent.click(within(chooser).getByRole('button', { name: 'CSE' }));
+    fireEvent.click(within(chooser).getByRole('button', { name: 'Non-technical events (view only)' }));
+    // CSE: its admin, 2 desks and 6 events; and the shared non-technical login.
+    fireEvent.click(screen.getByRole('button', { name: 'Make 10 logins and download the Word file' }));
+    const made = await screen.findByRole('region', { name: 'Logins made' }, { timeout: 20_000 });
+    expect(within(made).getByRole('heading', { name: 'Logins made (10)' })).toBeInTheDocument();
+
+    const doc = await xlsxText(files.at(-1)!);
+    for (const text of ['word/document.xml', 'cse-admin', 'cse-desk1', 'cse-desk2', 'cse-hackathon', 'nontech', 'Non-technical events (view only)', 'landing/cse/admin/?event=cse-hackathon']) expect(doc).toContain(text);
+
+    // The password in the file signs in, with the role the department needs.
+    const row = within(made).getByRole('cell', { name: 'cse-desk1' }).closest('tr') as HTMLElement;
+    const password = within(row).getAllByRole('cell')[3].textContent!;
+    expect(doc).toContain(password);
+    const desk = await h.loginAs('cse-desk1', password);
+    expect((await h.call('GET', '/api/admin/session', undefined, { token: desk })).body).toMatchObject({ role: 'DESK', department: 'CSE', deskNumber: 1 });
+    expect(await h.loginAs('nontech', within(within(made).getByRole('cell', { name: 'nontech' }).closest('tr') as HTMLElement).getAllByRole('cell')[3].textContent!)).toBeTruthy();
+  });
+});
+
+describe('the gate pass check (non-technical events)', () => {
+  it('shows only that screen: type an ID, see whether the entry fee is paid', async () => {
+    const h = setup({ at: TIMES.eventDay });
+    const desk = await h.staff('DESK', [], 'cse-desk1', { department: 'CSE', deskNumber: 1 });
+    await collect(h, desk.token, await onPhone(h, 'CSE', 1, { name: 'Kavin R' }));
+    await onPhone(h, 'IT', 2, { name: 'Asha K' });
+    const gate = await h.staff('NONTECH', [], 'nontech');
+    backend(h);
+    signIn(gate.token);
+    render(<AdminApp />);
+    expect(await screen.findByRole('heading', { name: 'Non-technical events' })).toBeInTheDocument();
+    expect(screen.queryByRole('navigation', { name: 'Sections' })).toBeNull();
+    await screen.findByText('Kavin R');
+    fireEvent.change(screen.getByLabelText('Registration ID or name'), { target: { value: 'cse 2001' } });
+    expect(await screen.findByText(/Entry fee paid and verified/)).toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText('Registration ID or name'), { target: { value: 'IT-2001' } });
+    expect(await screen.findByText(/send them to the IT registration desk to pay/)).toBeInTheDocument();
+    // No phone numbers anywhere.
+    expect(document.body.textContent).not.toContain('98400');
   });
 });
 

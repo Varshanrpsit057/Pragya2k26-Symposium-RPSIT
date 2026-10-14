@@ -1,11 +1,12 @@
 /** Pieces every fest screen uses: the live status, the filters, payments and registration cards. */
-import { useMemo, useState, type ReactNode } from 'react';
-import { awaitingCheck, collegeKey, collegeSummary, deptShort, entryOf, eventLabel, eventOf, feePaid, isActive, rupees, showId, type FestCatalog, type FestEvent, type FestRegistration } from '../../lib/fest';
+import { useEffect, useMemo, useState, type ReactNode } from 'react';
+import { awaitingCheck, collegeKey, collegeSummary, deptShort, entryOf, eventLabel, eventOf, feePaid, isActive, rupees, showId, type FestCatalog, type FestEvent, type FestRegistration, type HandOver } from '../../lib/fest';
 import { SearchSelect } from '../../components/ui/SearchSelect';
 import { Badge, clockTime, when } from '../ui';
 
 const ALL_COLLEGES = 'All colleges';
 import { NO_FILTERS, useFest, type FestFilters } from './FestData';
+import { listHandOvers } from './festApi';
 
 /** Online or not, when the data last arrived, what is waiting to be sent, and what the server refused. */
 export function SyncBar() {
@@ -290,6 +291,7 @@ export function RegistrationCard({
       <p className="fest-card__meta">
         {showDept && <>{deptShort(registration.dept)} · </>}
         {registration.phone} · {registration.college}
+        {registration.collegeCode && <> ({registration.collegeCode})</>}
         {registration.team && <> · Team {registration.team}</>}
       </p>
       {eventFocus ? (
@@ -321,6 +323,38 @@ export function RegistrationCard({
     </article>
   );
 }
+
+/** The desks' cash hand-overs this account sees, newest first (fetched every minute). */
+export function useHandOvers() {
+  const { token } = useFest();
+  const [list, setList] = useState<HandOver[]>([]);
+  const [tick, setTick] = useState(0);
+  useEffect(() => {
+    let active = true;
+    listHandOvers(token).then(
+      (next) => {
+        if (active) setList(next);
+      },
+      () => undefined,
+    );
+    const timer = window.setTimeout(() => setTick((count) => count + 1), 60_000);
+    return () => {
+      active = false;
+      window.clearTimeout(timer);
+    };
+  }, [token, tick]);
+  return { list, added: (entry: HandOver) => setList((current) => [entry, ...current]) };
+}
+
+/** The latest hand-over of each desk ('CSE-1' → it). */
+export const latestHandOvers = (list: HandOver[]) => {
+  const latest = new Map<string, HandOver>();
+  for (const item of list) if (!latest.has(`${item.dept}-${item.desk}`)) latest.set(`${item.dept}-${item.desk}`, item);
+  return latest;
+};
+
+/** '✓ matched', 'short ₹100' or 'over ₹50'. */
+export const handOverGap = (item: HandOver) => (item.counted === item.system ? '✓ matched' : item.counted < item.system ? `short ${rupees(item.system - item.counted)}` : `over ${rupees(item.counted - item.system)}`);
 
 /** A short list with "Show more", so long lists stay fast on a phone. */
 export function ShortList<T>({ items, render, empty, step = 30 }: { items: T[]; render: (item: T) => ReactNode; empty: ReactNode; step?: number }) {

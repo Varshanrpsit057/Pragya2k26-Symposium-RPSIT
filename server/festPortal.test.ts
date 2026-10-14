@@ -98,15 +98,15 @@ describe('“My registration ID” on another phone', () => {
     const h = setup({ at: TIMES.eventDay });
     const a = form();
     await selfRegister(h, a);
-    await selfRegister(h, { ...form({ dept: 'MECH' }), participant: a.participant });
+    // One department per student: the same number is refused under another department, and told where it is.
+    const again = await selfRegister(h, { ...form({ dept: 'MECH' }), participant: a.participant });
+    expect(again.body).toMatchObject({ code: 'DUPLICATE_PHONE', error: expect.stringContaining('already registered under CSE') });
+    expect(again.body.details?.existingId).toBeUndefined();
     const find = (phone: string, email: string) => h.call('POST', '/api/fest/find', { phone, email }, { ip: '10.5.1.1' });
     expect((await find(a.participant.phone, 'someone@example.com')).status).toBe(404);
     const found = await find(`+91 ${a.participant.phone}`, a.participant.email.toUpperCase());
     expect(found.status).toBe(200);
-    expect(found.body.registrations.map((item: StudentView) => [item.id, item.canChange])).toEqual([
-      ['CSE-2001', false],
-      ['MECH-2001', false],
-    ]);
+    expect(found.body.registrations.map((item: StudentView) => [item.id, item.canChange])).toEqual([['CSE-2001', false]]);
   });
 
   it('allows a few tries for each mobile number, and can be switched off', async () => {

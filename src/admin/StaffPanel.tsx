@@ -1,6 +1,7 @@
 /**
- * Accounts (web assist team), in four views:
+ * Accounts (web assist team), in five views:
  *   Accounts           create, set roles, assign events, reset passwords, deactivate, delete
+ *   Department logins  one click: every login of a department, saved in a Word file
  *   Signed in now      who is signed in, at which desk; sign someone out
  *   Sign-in problems   recent failed sign-ins, and checking a password someone was given
  *   Roles              what each role may do (the list the server enforces)
@@ -11,6 +12,7 @@ import { DESKS, deptShort, eventLabel, type FestCatalog } from '../lib/fest';
 import { CREATABLE_ROLES, DELETE_ALL_STAFF, DEPARTMENT_ROLES, ROLE_INFO, type SessionInfo, type SignInFailure, type StaffAccountView, type StaffRole } from '../lib/staff';
 import { SignedOut, checkStaffPassword, createStaff, deleteAllStaff, deleteStaff, listStaff, signOutStaff, signedInNow, staffSignInFailures, updateStaff, type PasswordCheck, type StaffChange } from './adminApi';
 import { useFestCatalog } from './fest/FestData';
+import { DepartmentLogins, type MadeLogin } from './DepartmentLogins';
 import { RolesPanel } from './RolesPanel';
 import { Badge, ErrorNote, LiveStatus, useLiveData, when } from './ui';
 
@@ -21,7 +23,7 @@ interface PanelProps {
 }
 
 /** A strong random password to hand over (shown once; only its hash is stored). */
-function generatePassword(): string {
+export function generatePassword(): string {
   const alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789';
   const bytes = crypto.getRandomValues(new Uint8Array(14));
   const body = Array.from(bytes, (byte) => alphabet[byte % alphabet.length]).join('');
@@ -85,9 +87,12 @@ export function StaffPanel({ token, session, onSignedOut }: PanelProps) {
     });
 
   const catalog = useFestCatalog();
-  const [view, setView] = useState<'accounts' | 'signed-in' | 'problems' | 'roles'>('accounts');
+  const [view, setView] = useState<'accounts' | 'logins' | 'signed-in' | 'problems' | 'roles'>('accounts');
+  // The logins just made, with their passwords: kept here, so switching views does not lose them.
+  const [madeLogins, setMadeLogins] = useState<MadeLogin[] | null>(null);
   const views: [typeof view, string][] = [
     ['accounts', `Accounts${live.data ? ` (${live.data.length})` : ''}`],
+    ['logins', 'Department logins'],
     ['signed-in', 'Signed in now'],
     ['problems', 'Sign-in problems'],
     ['roles', 'Roles'],
@@ -103,6 +108,22 @@ export function StaffPanel({ token, session, onSignedOut }: PanelProps) {
       </div>
     </div>
   );
+  if (view === 'logins')
+    return (
+      <>
+        {chooser}
+        <DepartmentLogins
+          token={token}
+          by={session.displayName}
+          made={madeLogins}
+          onSignedOut={onSignedOut}
+          onMade={(list) => {
+            setMadeLogins(list);
+            live.refresh();
+          }}
+        />
+      </>
+    );
   if (view === 'roles')
     return (
       <>

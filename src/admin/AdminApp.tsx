@@ -7,7 +7,8 @@ import { ConsoleHome } from './ConsoleHome';
 import { CatalogEditor } from './fest/CatalogEditor';
 import { DeskView } from './fest/DeskView';
 import { EventWindow, linkedEvent } from './fest/EventWindow';
-import { FestProvider, useFest } from './fest/FestData';
+import { FestProvider, useFestMaybe } from './fest/FestData';
+import { GateView } from './fest/GateView';
 import { SyncBar } from './fest/festUi';
 import { ImportView } from './fest/ImportView';
 import { FestOverview, FestRegistrations, FestResults } from './fest/OverviewViews';
@@ -20,7 +21,7 @@ import { SystemPanel } from './SystemPanel';
 import { TestingPanel } from './TestingPanel';
 import { Badge, ErrorNote, HELP_EVENT, LocalCopyBanner, messageOf, useLiveData, when } from './ui';
 
-type TabId = 'home' | 'overview' | 'registrations' | 'results' | 'desk' | 'event' | 'import' | 'catalog' | 'controls' | 'window' | 'help' | 'system' | 'staff' | 'testing';
+type TabId = 'home' | 'overview' | 'registrations' | 'results' | 'desk' | 'event' | 'gate' | 'import' | 'catalog' | 'controls' | 'window' | 'help' | 'system' | 'staff' | 'testing';
 
 /** Roles that watch (every department, or their own) rather than work at a desk or an event. */
 const watches = (session: SessionInfo) => can(session, 'fest.viewAll') || session.role === 'HOD' || session.role === 'DEPT_ADMIN';
@@ -38,6 +39,7 @@ const TABS: { id: TabId; label: (session: SessionInfo) => string; show: (session
   { id: 'results', label: () => 'Results', show: watches, group: 'Live' },
   { id: 'desk', label: (session) => (session.role === 'DESK' ? 'Registration desk' : 'Desk'), show: (session) => can(session, 'fest.register'), group: 'Event day' },
   { id: 'event', label: (session) => (session.role === 'COORDINATOR' ? 'My events' : 'Event windows'), show: (session) => can(session, 'fest.event'), group: 'Event day' },
+  { id: 'gate', label: () => 'Gate pass check', show: (session) => can(session, 'fest.gate'), group: 'Event day' },
   { id: 'import', label: () => 'Online import', show: (session) => can(session, 'fest.import'), group: 'Event day' },
   { id: 'controls', label: () => 'Switches & payment', show: (session) => can(session, 'site.switches'), group: 'Website' },
   { id: 'window', label: () => 'Times & notice', show: (session) => can(session, 'registration.window') || can(session, 'site.notice'), group: 'Website' },
@@ -294,6 +296,7 @@ function ShellBody({ token, session, onSession, onSignOut, onSignedOut }: ShellP
       {current === 'results' && <FestResults />}
       {current === 'desk' && <DeskView />}
       {current === 'event' && <EventWindow />}
+      {current === 'gate' && <GateView token={token} onSignedOut={onSignedOut} />}
       {current === 'import' && <ImportView token={token} onSignedOut={onSignedOut} />}
       {current === 'catalog' && <CatalogEditor token={token} onSignedOut={onSignedOut} />}
       {current === 'controls' && <PortalPanel {...panel} />}
@@ -304,7 +307,8 @@ function ShellBody({ token, session, onSession, onSignOut, onSignedOut }: ShellP
       {current === 'staff' && <StaffPanel {...panel} />}
     </>
   );
-  const { outbox } = useFest();
+  // Roles without the live data (the gate pass check) have nothing waiting to send.
+  const outbox = useFestMaybe()?.outbox ?? [];
   const signOutChecked = () => {
     const waiting = outbox.length;
     if (
@@ -332,9 +336,9 @@ function ShellBody({ token, session, onSession, onSignOut, onSignedOut }: ShellP
           <p className="adm-bar__brand">
             INFINITE TECHFEST’26<span className="adm-bar__brand-rest"> · On-site Registration Portal</span>
           </p>
-          <h1 className="adm-bar__title">{isConsole(session) ? 'Web assist console' : session.department ? deptTitle(session.department) : 'All departments'}</h1>
+          <h1 className="adm-bar__title">{isConsole(session) ? 'Web assist console' : session.role === 'NONTECH' ? 'Non-technical events' : session.department ? deptTitle(session.department) : 'All departments'}</h1>
           {/* Coordinators work at their events whatever the registration phase */}
-          {session.role !== 'COORDINATOR' && (
+          {session.role !== 'COORDINATOR' && session.role !== 'NONTECH' && (
             <p className="adm-muted adm-bar__phase">
               <Badge tone={session.phase === 'closed' ? 'bad' : session.phase === 'between' ? 'warn' : 'good'}>{PHASE_LABEL[session.phase]}</Badge>
               {session.phase === 'online' && session.schedule.onlineClosesAt && <> until {formatIst(parseEventStart(session.schedule.onlineClosesAt)!)}</>}

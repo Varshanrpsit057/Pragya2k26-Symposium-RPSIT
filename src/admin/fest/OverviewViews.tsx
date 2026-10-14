@@ -9,14 +9,14 @@
  *   college ranking (medal table) filtered by participations and prizes
  */
 import { useMemo, useState } from 'react';
-import { DESKS, awaitingCheck, collegeSummary, deptShort, eventLabel, eventOf, feePaid, isActive, medalOrder, participantProblems, readParticipant, rupees, showId, totalsOf, type CollegeRow, type FestEvent, type FestParticipant, type FestRegistration } from '../../lib/fest';
+import { DESKS, awaitingCheck, collegeSummary, deskMoney, deptShort, eventLabel, eventOf, feePaid, isActive, medalOrder, participantProblems, readParticipant, rupees, showId, totalsOf, type CollegeRow, type FestEvent, type FestParticipant, type FestRegistration } from '../../lib/fest';
 import { hasPermission } from '../../lib/staff';
-import { Badge, when } from '../ui';
+import { Badge, messageOf, when } from '../ui';
 import { filterNote, saveTable, today } from './excel';
-import { exportRows, howRegistered, rankingRows, winnerRows } from './exports';
-import { ordinal } from './EventWindow';
+import { certificateRows, exportRows, howRegistered, rankingRows, winnerRows } from './exports';
+import { WinnerTable } from './EventWindow';
 import { NO_FILTERS, useFest, type FestFilters } from './FestData';
-import { FilterBar, NO_PAYMENT, PaymentChoice, ShortList, Stat, applyFilters, deptName, paymentBody, paymentReady, stampNow, type PaymentDraft } from './festUi';
+import { FilterBar, NO_PAYMENT, PaymentChoice, ShortList, Stat, applyFilters, deptName, handOverGap, latestHandOvers, paymentBody, paymentReady, stampNow, useHandOvers, type PaymentDraft } from './festUi';
 
 
 /** The detail drawer's labels for each field a correction may change. */
@@ -41,22 +41,6 @@ function useFiltered() {
 }
 
 // ------------------------------------------------------------------------------------------ Overview
-
-/** Entry fees each desk took (cash and UPI), by department. */
-function deskTotals(registrations: Iterable<FestRegistration>, dept: string, desk: number) {
-  let count = 0;
-  let cash = 0;
-  let upi = 0;
-  for (const item of registrations) {
-    if (item.dept !== dept || !isActive(item)) continue;
-    const payment = item.entry.payment;
-    if (!payment || payment.voided || payment.desk !== desk) continue;
-    count += 1;
-    if (payment.method === 'CASH') cash += payment.amount;
-    else if (payment.method === 'UPI') upi += payment.amount;
-  }
-  return { count, cash, upi };
-}
 
 /** One department's events: how many joined, paid and came, and whether the results are in. */
 function EventProgress({ dept }: { dept: string }) {
@@ -110,6 +94,8 @@ export function FestOverview() {
   const { catalog, registrations, filters, results, setFilters } = useFest();
   const { viewAll } = useFiltered();
   const all = useMemo(() => [...registrations.values()], [registrations]);
+  const handOvers = useHandOvers();
+  const latest = latestHandOvers(handOvers.list);
   if (!catalog) return <p className="adm-loading">Loading the live data…</p>;
   // Only the department narrows the overview (the Students list's filters do not).
   const inScope = (dept: string) => applyFilters(all, { ...NO_FILTERS, dept }, catalog);
@@ -195,7 +181,7 @@ export function FestOverview() {
 
       <section className="adm-card adm-pad">
         <h3 className="adm-h3">Desk totals</h3>
-        <p className="adm-muted">Entry fees each desk took. Hand-over at the end of the day should match these.</p>
+        <p className="adm-muted">Entry fees each desk took, and the cash each desk counted when it handed over (with any difference from the system’s figure then).</p>
         <div className="adm-table-wrap">
           <table className="adm-table adm-table--static fest-table">
             <thead>
@@ -205,22 +191,36 @@ export function FestOverview() {
                 <th scope="col">Cash</th>
                 <th scope="col">UPI</th>
                 <th scope="col">Total</th>
+                <th scope="col">Last hand-over</th>
               </tr>
             </thead>
             <tbody>
               {depts.flatMap((dept) =>
-                Array.from({ length: DESKS }, (_, index) => index + 1).map((desk) => {
-                  const { count, cash, upi } = deskTotals(all, dept.code, desk);
+                // The department's desks, then what was taken away from them (a department admin or the web assist team), if anything.
+                [...Array.from({ length: DESKS }, (_, index): number | null => index + 1), null].map((desk) => {
+                  const { count, cash, upi } = deskMoney(all, dept.code, desk);
+                  if (desk === null && !count) return null;
+                  const last = desk === null ? undefined : latest.get(`${dept.code}-${desk}`);
                   return (
-                    <tr key={`${dept.code}-${desk}`}>
+                    <tr key={`${dept.code}-${desk ?? 'other'}`}>
                       <th scope="row">
-                        {deptShort(dept.code)} · Desk {desk}
+                        {deptShort(dept.code)} · {desk === null ? 'Not at a desk' : `Desk ${desk}`}
                       </th>
                       <td>{count}</td>
                       <td>{rupees(cash)}</td>
                       <td>{rupees(upi)}</td>
                       <td>
                         <strong>{rupees(cash + upi)}</strong>
+                      </td>
+                      <td>
+                        {last ? (
+                          <>
+                            {rupees(last.counted)} <Badge tone={last.counted === last.system ? 'good' : 'bad'}>{handOverGap(last)}</Badge>
+                            <span className="adm-muted"> · {when(last.at)}</span>
+                          </>
+                        ) : (
+                          <span className="adm-muted">—</span>
+                        )}
                       </td>
                     </tr>
                   );
@@ -333,14 +333,44 @@ export function FestRegistrations() {
   );
 }
 
+/** The entry fee as it stands: paid (how, when, by whom), sent and waiting for the desk, or not paid. */
+function EntryStatus({ registration }: { registration: FestRegistration }) {
+  const { entry } = registration;
+  if (entry.status === 'PAID' && entry.payment) {
+    const payment = entry.payment;
+    const how = payment.method === 'CASH' ? 'cash' : payment.method === 'UPI' ? `UPI · UTR ${payment.txn ?? ''}` : 'online';
+    return (
+      <>
+        <Badge tone="good">Paid and verified</Badge> {rupees(payment.amount)} · {how} · {payment.by}
+        {payment.desk ? ` (desk ${payment.desk})` : ''} · {when(payment.at)}
+      </>
+    );
+  }
+  if (entry.claim && entry.rejected)
+    return (
+      <>
+        <Badge tone="bad">Payment not found</Badge> UTR ending {entry.claim.txn.slice(-4)}: {entry.rejected.reason} ({entry.rejected.by})
+      </>
+    );
+  if (entry.claim)
+    return (
+      <>
+        <Badge tone="warn">Sent, not verified yet</Badge> {rupees(entry.claim.amount)} · UTR ending {entry.claim.txn.slice(-4)} · {when(entry.claim.at)}: waiting for the {deptShort(registration.dept)} desk
+      </>
+    );
+  return <Badge tone="plain">Not paid</Badge>;
+}
+
 function RegistrationDetail({ id, onClose }: { id: string; onClose: () => void }) {
-  const { registrations, catalog, session, change } = useFest();
+  const { registrations, catalog, session, change, send } = useFest();
   const registration = registrations.get(id);
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState<FestParticipant | null>(null);
   const [reason, setReason] = useState('');
   const [paying, setPaying] = useState(false);
   const [payment, setPayment] = useState<PaymentDraft>(NO_PAYMENT);
+  const [moneyBusy, setMoneyBusy] = useState(false);
+  const [moneyError, setMoneyError] = useState('');
   if (!registration || !catalog) return null;
   const can = (permission: Parameters<typeof hasPermission>[1]) => hasPermission(session.role, permission);
   const path = `/api/admin/fest/registrations/${registration.id}` as const;
@@ -394,9 +424,7 @@ function RegistrationDetail({ id, onClose }: { id: string; onClose: () => void }
           </dd>
           <dt>Entry fee</dt>
           <dd>
-            {registration.entry.status === 'PAID' && registration.entry.payment
-              ? `${rupees(registration.entry.payment.amount)} · ${registration.entry.payment.method}${registration.entry.payment.txn ? ` ${registration.entry.payment.txn}` : ''} · ${registration.entry.payment.by}`
-              : 'Due'}
+            <EntryStatus registration={registration} />
           </dd>
           {registration.source === 'ONLINE' && (
             <>
@@ -451,20 +479,36 @@ function RegistrationDetail({ id, onClose }: { id: string; onClose: () => void }
 
         {can('fest.register') && isActive(registration) && registration.entry.status === 'DUE' && (
           <section>
-            {paying ? (
+            {awaitingCheck(registration) ? (
+              <p className="adm-note">They sent a UPI transaction ID: verify it on the Desk screen, which checks it against the payment.</p>
+            ) : paying ? (
               <>
                 <PaymentChoice amount={catalog.entryFee} value={payment} onChange={setPayment} name="detail-entry" forId={registration.id} />
                 <button
                   className="adm-button adm-button--primary"
                   type="button"
-                  disabled={!paymentReady(payment)}
-                  onClick={() => {
-                    act('entry', { payment: paymentBody(payment) }, 'Entry fee');
-                    setPaying(false);
+                  disabled={!paymentReady(payment) || moneyBusy}
+                  onClick={async () => {
+                    setMoneyBusy(true);
+                    setMoneyError('');
+                    try {
+                      await send(path, { action: 'entry', payment: paymentBody(payment) });
+                      setPaying(false);
+                      setPayment(NO_PAYMENT);
+                    } catch (failure) {
+                      setMoneyError(`${messageOf(failure)} Nothing was saved.`);
+                    } finally {
+                      setMoneyBusy(false);
+                    }
                   }}
                 >
-                  Save the entry fee
+                  {moneyBusy ? 'Saving…' : 'Save the entry fee'}
                 </button>
+                {moneyError && (
+                  <p className="adm-error" role="alert">
+                    {moneyError}
+                  </p>
+                )}
               </>
             ) : (
               <button className="adm-button adm-button--primary" type="button" onClick={() => setPaying(true)}>
@@ -711,11 +755,12 @@ function EventWinners() {
   const { viewAll, canDownload } = useFiltered();
   if (!catalog) return <p className="adm-loading">Loading the live data…</p>;
   const events = catalog.events.filter((event) => (!filters.dept || event.dept === filters.dept) && (!filters.eventId || event.id === filters.eventId) && (!filters.venue || event.venue === filters.venue));
-  const submitted = events.filter((event) => results.get(event.id)?.submitted);
-  const person = (id: string) => registrations.get(id);
+  const submitted = events.filter((event) => event.active && results.get(event.id)?.submitted);
+  const open = events.filter((event) => event.active);
   const canReopen = hasPermission(session.role, 'fest.correct');
 
   const download = () => saveTable(`techfest-winners-${filters.dept || 'all'}-${today()}.xlsx`, 'Winners', filterNote(filters, session.displayName), winnerRows(catalog, events, results, registrations));
+  const certificates = () => saveTable(`techfest-certificates-${filters.dept || 'all'}-${today()}.xlsx`, 'Certificates', filterNote(filters, session.displayName), certificateRows(catalog, events, results, registrations));
 
   return (
     <main className="adm-page">
@@ -723,12 +768,17 @@ function EventWinners() {
         <FilterBar showDept={viewAll} fields={['event']} />
         <div className="adm-toolbar">
           <strong>
-            {submitted.length} of {events.length} events submitted
+            {submitted.length} of {open.length} events submitted
           </strong>
           {canDownload && (
-            <button className="adm-button adm-button--small" type="button" disabled={!submitted.length} onClick={download}>
-              Download winners (Excel)
-            </button>
+            <span className="adm-inline adm-inline--wrap">
+              <button className="adm-button adm-button--small" type="button" disabled={!submitted.length} onClick={download}>
+                Download winners (Excel)
+              </button>
+              <button className="adm-button adm-button--small" type="button" onClick={certificates}>
+                Certificate list (Excel)
+              </button>
+            </span>
           )}
         </div>
       </section>
@@ -750,16 +800,7 @@ function EventWinners() {
               <p className="adm-muted">
                 {[event.venue, event.time, `${part.registered} registered`, `${part.present} present`].filter(Boolean).join(' · ')}
               </p>
-              {result && result.places.length > 0 && (
-                <ol className="fest-winners">
-                  {result.places.map((place) => (
-                    <li key={place.place}>
-                      <strong>{ordinal(place.place)}</strong> {place.team && <>Team {place.team} · </>}
-                      {place.ids.map((id) => `${person(id)?.name ?? showId(id)} (${showId(id)}, ${person(id)?.college ?? ''})`).join('; ')}
-                    </li>
-                  ))}
-                </ol>
-              )}
+              {result && result.places.length > 0 && <WinnerTable places={result.places} byId={registrations} />}
               {result?.submitted && <p className="adm-muted">Submitted by {result.submitted.by}.</p>}
               {canReopen && result?.submitted && (
                 <button

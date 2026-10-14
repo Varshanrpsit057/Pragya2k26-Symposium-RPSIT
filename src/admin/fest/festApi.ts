@@ -1,5 +1,5 @@
 /** The fest's API calls (server/fest.ts). */
-import type { FestCatalog, FestRegistration, FestResult, UtrHolder } from '../../lib/fest';
+import type { FestCatalog, FestRegistration, FestResult, GateStudent, HandOver, UtrHolder } from '../../lib/fest';
 import type { BackupStatus, PortalSettings } from '../../lib/portal';
 import { request } from '../adminApi';
 
@@ -74,6 +74,12 @@ export interface PortalView {
 }
 export const fetchPortal = (token: string) => request<PortalView>('/api/admin/portal', { token });
 export const savePortal = (token: string, portal: Partial<PortalSettings>) => request<PortalView>('/api/admin/portal', { method: 'POST', body: { portal }, token });
+/** A desk's cash hand-over (desks: their own desk; others name it). */
+export const handOverCash = (token: string, body: { dept?: string; desk?: number; counted: number; note: string }) =>
+  request<{ handOver: HandOver }>('/api/admin/fest/handover', { method: 'POST', body, token }).then((data) => data.handOver);
+export const listHandOvers = (token: string) => request<{ handOvers?: HandOver[] }>('/api/admin/fest/handovers', { token }).then((data) => data.handOvers ?? []);
+/** The gate pass check (non-technical events): every department's students, view only. */
+export const gateList = (token: string) => request<{ students: GateStudent[]; serverTime: string }>('/api/admin/fest/gate', { token });
 /** Backs up now (the private copy and the Google Sheet) and answers how it went. */
 export const backupNow = (token: string) => request<{ backup: BackupStatus | null }>('/api/admin/fest/backup', { method: 'POST', body: {}, token }).then((data) => data.backup);
 export const saveQr = (token: string, image: string | null) => request<PortalView>('/api/admin/portal/qr', { method: 'POST', body: image ? { image } : { remove: true }, token });

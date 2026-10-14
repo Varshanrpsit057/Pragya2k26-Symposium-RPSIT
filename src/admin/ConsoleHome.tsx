@@ -10,13 +10,14 @@
  */
 import { useCallback, useEffect, useState, type ReactNode } from 'react';
 import { formatIst, parseEventStart } from '../lib/countdown';
-import { awaitingCheck, isActive } from '../lib/fest';
+import { awaitingCheck, deptShort, isActive } from '../lib/fest';
 import { LOGIN_LABELS, LOGIN_ROLES, SWITCH_INFO, type BackupStatus, type PortalSettings, type SwitchName } from '../lib/portal';
 import { NOTICE_MAX } from '../lib/testTools';
 import type { SessionInfo } from '../lib/staff';
 import { SignedOut, currentAdmin, listHelp, setRegistrationWindow, setSiteNotice, signedInNow, staffSignInFailures, type WindowRequest } from './adminApi';
 import { NO_FILTERS, useFest } from './fest/FestData';
 import { fetchPortal, savePortal, type PortalView } from './fest/festApi';
+import { handOverGap, latestHandOvers, useHandOvers } from './fest/festUi';
 import { istInput } from './RegistrationWindowPanel';
 import { BackupButtons, BackupLines, CHECKS, check, checkLabel, checkTone, type Check } from './SystemPanel';
 import { ErrorNote, useLiveData, when } from './ui';
@@ -51,6 +52,7 @@ const PHASE: Record<SessionInfo['phase'], string> = {
 
 export function ConsoleHome({ token, session, onSignedOut, onSession, onGo }: HomeProps) {
   const { registrations, results, catalog, online, outbox, setFilters } = useFest();
+  const handOvers = useHandOvers();
   const portal = useLiveData(useCallback(() => fetchPortal(token), [token]), onSignedOut, 30_000);
   const help = useLiveData(useCallback(() => listHelp(token), [token]), onSignedOut, 30_000);
   const people = useLiveData(useCallback(() => signedInNow(token), [token]), onSignedOut, 30_000);
@@ -112,6 +114,7 @@ export function ConsoleHome({ token, session, onSignedOut, onSession, onGo }: Ho
   for (const person of people.data ?? []) byRole.set(person.role, (byRole.get(person.role) ?? 0) + 1);
   const noticeText = notice ?? session.testing?.notice ?? '';
   const lastBackup = backup !== undefined ? backup : portal.data?.backup;
+  const mismatched = [...latestHandOvers(handOvers.list).values()].filter((item) => item.counted !== item.system);
 
   return (
     <main className="adm-page adm-home">
@@ -213,11 +216,17 @@ export function ConsoleHome({ token, session, onSignedOut, onSession, onGo }: Ho
               onGo('registrations');
             }}
           />
+          <Attention
+            count={mismatched.length}
+            label={`${mismatched.length} desk cash hand-over${mismatched.length === 1 ? '' : 's'} not matching the system (${mismatched.map((item) => `${deptShort(item.dept)} desk ${item.desk}: ${handOverGap(item)}`).join(', ')})`}
+            button="Desk totals"
+            onClick={() => onGo('overview')}
+          />
           <Attention count={lastHour.length} label={`${lastHour.length} failed sign-in${lastHour.length === 1 ? '' : 's'} in the last hour (${[...new Set(lastHour.map((item) => item.username))].slice(0, 4).join(', ')})`} button="Sign-in problems" onClick={() => onGo('staff')} />
           <Attention count={session.testing?.session ? 1 : 0} label={`A test session is on (${session.testing?.session ?? ''}): new registrations are marked TEST`} button="Testing" onClick={() => onGo('testing')} />
           <Attention count={session.phase === 'closed' && submitted < activeEvents.length ? activeEvents.length - submitted : 0} label={`${activeEvents.length - submitted} event${activeEvents.length - submitted === 1 ? '' : 's'} without submitted results`} button="Results" onClick={() => onGo('results')} />
         </ul>
-        {waiting.length + lastHour.length === 0 && !session.testing?.session && <p className="fest-match is-good">✓ Nothing needs attention.</p>}
+        {waiting.length + lastHour.length + mismatched.length === 0 && !session.testing?.session && <p className="fest-match is-good">✓ Nothing needs attention.</p>}
       </section>
 
       <section className="adm-card adm-pad" aria-label="Emergency controls">

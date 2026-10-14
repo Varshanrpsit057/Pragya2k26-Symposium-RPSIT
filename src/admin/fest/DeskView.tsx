@@ -20,6 +20,8 @@ import { SearchSelect } from '../../components/ui/SearchSelect';
 import { formatIst } from '../../lib/countdown';
 import {
   awaitingCheck,
+  DESKS,
+  deskMoney,
   deptShort,
   eventLabel,
   eventOf,
@@ -41,8 +43,8 @@ import { Badge, messageOf, when } from '../ui';
 import { PORTAL, today } from './excel';
 import { downloadStudents, howRegistered } from './exports';
 import { useFest } from './FestData';
-import { lookupUtr } from './festApi';
-import { NO_PAYMENT, PaymentChoice, RegistrationCard, ShortList, Stat, matches, paymentBody, paymentReady, txnHolders, type PaymentDraft } from './festUi';
+import { handOverCash, lookupUtr } from './festApi';
+import { NO_PAYMENT, PaymentChoice, RegistrationCard, ShortList, Stat, handOverGap, matches, paymentBody, paymentReady, txnHolders, useHandOvers, type PaymentDraft } from './festUi';
 
 const EMPTY: FestParticipant = { name: '', phone: '', email: '', college: '', collegeCode: '', branch: '', year: '', team: '' };
 
@@ -247,6 +249,7 @@ function StudentDetail({ id, onBack }: { id: string; onBack: () => void }) {
           <Fact label="Mobile">{registration.phone}</Fact>
           <Fact label="Email">{registration.email}</Fact>
           <Fact label="College">{registration.college}</Fact>
+          <Fact label="College code">{registration.collegeCode ?? ''}</Fact>
           <Fact label="Department / course">{registration.branch}</Fact>
           <Fact label="Year">{registration.year}</Fact>
           {registration.team && <Fact label="Team">{registration.team}</Fact>}
@@ -795,6 +798,11 @@ function RegisterForStudent({ dept, onOpen }: { dept: string; onOpen: (id: strin
           {field('college')}
         </label>
       )}
+      <label className="adm-field">
+        <span>College code</span>
+        <input value={form.collegeCode} maxLength={12} autoComplete="off" autoCapitalize="characters" spellCheck={false} placeholder="e.g. 2639" onChange={(event) => setForm({ ...form, collegeCode: event.target.value })} />
+        {field('collegeCode')}
+      </label>
       <div className="fest-form__row">
         <div className="adm-field">
           <span id="desk-stream-label">Stream</span>
@@ -851,6 +859,98 @@ function RegisterForStudent({ dept, onOpen }: { dept: string; onOpen: (id: strin
 
 // ------------------------------------------------------------------------------------------ totals
 
+/**
+ * The cash hand-over at closing: the desk counts its cash and records it; the overall coordinator
+ * sees it beside what the system says the desk took. Department admins and the web assist team
+ * choose the desk (e.g. collecting a desk's cash).
+ */
+function HandOverCash({ dept }: { dept: string }) {
+  const { session, registrations, token } = useFest();
+  const fixed = session.role === 'DESK' ? session.deskNumber : null;
+  const [chosen, setChosen] = useState(1);
+  const desk = fixed ?? chosen;
+  const money = deskMoney(registrations.values(), dept, desk);
+  const handOvers = useHandOvers();
+  const history = handOvers.list.filter((item) => item.dept === dept && item.desk === desk);
+  const [counted, setCounted] = useState('');
+  const [note, setNote] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+  const [done, setDone] = useState('');
+  const amount = /^\d{1,7}$/.test(counted.trim()) ? Number(counted.trim()) : null;
+  const gap = amount === null ? null : amount - money.cash;
+  const save = async () => {
+    if (amount === null) return;
+    if (gap !== 0 && !window.confirm(`You counted ${rupees(amount)}; the system says desk ${desk} took ${rupees(money.cash)} in cash (${gap! < 0 ? 'short' : 'over'} by ${rupees(Math.abs(gap!))}).\n\nRecord it anyway? Count again first if you can.`)) return;
+    setBusy(true);
+    setError('');
+    setDone('');
+    try {
+      const entry = await handOverCash(token, { dept, desk, counted: amount, note: note.trim() });
+      handOvers.added(entry);
+      setCounted('');
+      setNote('');
+      setDone(`Recorded: ${rupees(entry.counted)} handed over (${handOverGap(entry)}).`);
+    } catch (failure) {
+      setError(failure instanceof ApiFailure ? failure.message : `${messageOf(failure)} Nothing was saved: try again when the connection is back.`);
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <section className="fest-handover" aria-label="Cash hand-over">
+      <h3 className="adm-h3">Cash hand-over · {deptShort(dept)} desk {desk}</h3>
+      {!fixed && (
+        <div className="fest-chips" role="group" aria-label="Desk">
+          {Array.from({ length: DESKS }, (_, index) => index + 1).map((number) => (
+            <button key={number} type="button" className={`fest-chip-button${desk === number ? ' is-on' : ''}`} aria-pressed={desk === number} onClick={() => setChosen(number)}>
+              Desk {number}
+            </button>
+          ))}
+        </div>
+      )}
+      <p>
+        The system says desk {desk} took <strong>{rupees(money.cash)}</strong> in cash
+        {money.upi ? ` (and ${rupees(money.upi)} by UPI, already in the account)` : ''}. Count the cash, type it, and hand it over.
+      </p>
+      <div className="fest-form__row">
+        <label className="adm-field">
+          <span>Cash counted (₹)</span>
+          <input value={counted} inputMode="numeric" autoComplete="off" placeholder={String(money.cash)} onChange={(event) => setCounted(event.target.value.replace(/[^\d]/g, ''))} />
+        </label>
+        <label className="adm-field">
+          <span>Handed to, or a note (optional)</span>
+          <input value={note} maxLength={200} autoComplete="off" onChange={(event) => setNote(event.target.value)} />
+        </label>
+      </div>
+      {gap !== null && <p className={`fest-match ${gap === 0 ? 'is-good' : 'is-bad'}`}>{gap === 0 ? '✓ Matches the system.' : gap < 0 ? `Short by ${rupees(-gap)}.` : `Over by ${rupees(gap)}.`}</p>}
+      <button className="adm-button adm-button--primary" type="button" disabled={busy || amount === null} onClick={() => void save()}>
+        {busy ? 'Recording…' : 'Record the hand-over'}
+      </button>
+      {error && (
+        <p className="adm-error" role="alert">
+          {error}
+        </p>
+      )}
+      {done && (
+        <p className="adm-note" role="status">
+          {done}
+        </p>
+      )}
+      {history.length > 0 && (
+        <ul className="adm-list">
+          {history.map((item) => (
+            <li key={item.at}>
+              {when(item.at)}: {rupees(item.counted)} counted, system {rupees(item.system)} · {handOverGap(item)} · by {item.by}
+              {item.note ? ` · ${item.note}` : ''}
+            </li>
+          ))}
+        </ul>
+      )}
+    </section>
+  );
+}
+
 function DeskTotals({ dept }: { dept: string }) {
   const { registrations, session, catalog } = useFest();
   const mine = useMemo(() => [...registrations.values()].filter((item) => item.dept === dept && isActive(item)), [registrations, dept]);
@@ -880,16 +980,7 @@ function DeskTotals({ dept }: { dept: string }) {
         <Stat label="Cash collected" value={rupees(cash)} />
         <Stat label="UPI collected" value={rupees(upi)} />
       </div>
-      <p className="adm-note">
-        Hand over <strong>{rupees(cash)}</strong> in cash at the end of your shift
-        {upi ? (
-          <>
-            {' '}
-            (<strong>{rupees(upi)}</strong> came by UPI: already in the account)
-          </>
-        ) : null}
-        .
-      </p>
+      <HandOverCash dept={dept} />
       <h3 className="adm-h3">Yours</h3>
       <ShortList items={recent} empty="None yet." render={(registration) => <RegistrationCard key={registration.id} registration={registration} compact />} />
       {catalog && <p className="adm-muted">Entry fee {rupees(catalog.entryFee)} per student.</p>}

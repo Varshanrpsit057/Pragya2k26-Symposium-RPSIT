@@ -7,15 +7,16 @@
  * Types only and plain data: nothing here reaches the public site's bundle.
  */
 
-export const STAFF_ROLES = ['ADMIN', 'OVERALL', 'HOD', 'DEPT_ADMIN', 'DESK', 'COORDINATOR', 'CERTIFICATE', 'SUPPORT'] as const;
+export const STAFF_ROLES = ['ADMIN', 'OVERALL', 'HOD', 'DEPT_ADMIN', 'DESK', 'COORDINATOR', 'NONTECH', 'CERTIFICATE', 'SUPPORT'] as const;
 export type StaffRole = (typeof STAFF_ROLES)[number];
 
 /**
  * The roles new accounts are made with: the web assist team (Admin), the overall coordinator (the
- * HOD, one account for every department), and in each department its admin, desks and event
- * coordinators. (Department HOD accounts made earlier still work, view only.)
+ * HOD, one account for every department), in each department its admin, desks and event
+ * coordinators, and the non-technical events' view-only gate-pass check. (Department HOD accounts
+ * made earlier still work, view only.)
  */
-export const CREATABLE_ROLES: readonly StaffRole[] = ['ADMIN', 'OVERALL', 'DEPT_ADMIN', 'DESK', 'COORDINATOR'];
+export const CREATABLE_ROLES: readonly StaffRole[] = ['ADMIN', 'OVERALL', 'DEPT_ADMIN', 'DESK', 'COORDINATOR', 'NONTECH'];
 
 /** Roles that belong to one department: they see and work on that department only. */
 export const DEPARTMENT_ROLES: readonly StaffRole[] = ['HOD', 'DEPT_ADMIN', 'DESK', 'COORDINATOR'];
@@ -54,7 +55,8 @@ export type Permission =
   | 'fest.delete'
   | 'fest.event'
   | 'fest.correct'
-  | 'fest.catalog';
+  | 'fest.catalog'
+  | 'fest.gate';
 
 /** What each permission allows, as the dashboard explains it. */
 export const PERMISSION_LABELS: Record<Permission, string> = {
@@ -89,6 +91,7 @@ export const PERMISSION_LABELS: Record<Permission, string> = {
   'fest.delete': 'Delete a registration (it can be restored), and restore it',
   'fest.event': 'Event window: every student of the department, added to the event at its venue; take the event fee, mark attendance, enter and submit winners (coordinators: their own events)',
   'fest.correct': 'Corrections: cancel an event fee recorded by mistake, reopen submitted results',
+  'fest.gate': 'Gate pass check (view only): every department’s student IDs and names with whether their ₹100 entry fee is paid and verified, for the non-technical events',
   'fest.catalog': 'Edit departments and events: names, venues, times, fees and team sizes (every department has two desks)',
 };
 
@@ -104,6 +107,7 @@ export const CURRENT_PERMISSIONS: readonly Permission[] = [
   'fest.event',
   'fest.correct',
   'fest.catalog',
+  'fest.gate',
   'staff.manage',
   'registration.window',
   'site.notice',
@@ -147,6 +151,7 @@ export const ROLE_PERMISSIONS: Record<StaffRole, readonly Permission[]> = {
     'fest.event',
     'fest.correct',
     'fest.catalog',
+    'fest.gate',
   ],
   // The overall coordinator: every department's live data and results, and the corrections.
   OVERALL: ['fest.view', 'fest.viewAll', 'fest.correct'],
@@ -155,6 +160,8 @@ export const ROLE_PERMISSIONS: Record<StaffRole, readonly Permission[]> = {
   // Passes are the students' own (Student login): the desk and the web team do not download them.
   DESK: ['registrations.list', 'registrations.approve', 'registrations.onsite', 'registrations.events', 'registrations.edit', 'fest.view', 'fest.register', 'fest.edit'],
   COORDINATOR: ['registrations.approve', 'events.operate', 'results.view', 'fest.view', 'fest.event'],
+  // Non-technical events: only whether a student's entry fee is paid (no phone numbers, no changes).
+  NONTECH: ['fest.gate'],
   CERTIFICATE: ['results.view'],
   SUPPORT: ['registrations.list', 'registrations.edit', 'registrations.retry', 'registrations.delete', 'portal.manage', 'help.manage', 'system.view', 'map.edit', 'fest.view', 'fest.viewAll'],
 };
@@ -187,6 +194,10 @@ export const ROLE_INFO: Record<StaffRole, { label: string; summary: string }> = 
   COORDINATOR: {
     label: 'Event coordinator',
     summary: 'One per event. Every student of the department: find them by their Registration ID, check them, add them to the event (individual or team), take the event fee, mark attendance, enter the 1st, 2nd and 3rd places and submit the results. Downloads the event’s and the department’s lists as Excel.',
+  },
+  NONTECH: {
+    label: 'Non-technical events (view only)',
+    summary: 'One shared login for the non-technical events. Every department’s students: type or find the Registration ID and see the name, department, college and whether the ₹100 entry fee is paid and verified. View only: nothing can be changed, and no phone numbers are shown.',
   },
   CERTIFICATE: {
     label: 'Certificate team',

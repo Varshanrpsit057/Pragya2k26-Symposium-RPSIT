@@ -216,6 +216,11 @@ export const STAFF_ROUTES: readonly StaffRoute[] = [
   { method: 'GET', path: route_('/portal'), permission: 'site.switches', run: (s) => s.fest.portalView() },
   { method: 'POST', path: route_('/portal'), permission: 'site.switches', run: (s, { actor, body }) => s.fest.savePortal(actor, body) },
   { method: 'POST', path: route_('/portal/qr'), permission: 'site.switches', run: (s, { actor, body }) => s.fest.saveQr(actor, body) },
+  // A desk's cash hand-over at closing, and every hand-over the account can see.
+  { method: 'POST', path: route_('/fest/handover'), permission: 'fest.register', run: (s, { actor, body }) => s.fest.handOver(actor, body) },
+  { method: 'GET', path: route_('/fest/handovers'), permission: 'fest.view', run: (s, { actor }) => s.fest.handOvers(actor) },
+  // The gate pass check (non-technical events): view only.
+  { method: 'GET', path: route_('/fest/gate'), permission: 'fest.gate', run: (s) => s.fest.gateList() },
   // A backup now (the private copy and the Google Sheet), as the schedule makes every 10 minutes.
   { method: 'POST', path: route_('/fest/backup'), permission: 'site.switches', run: (s, { actor }) => s.fest.backupNow(actor) },
 ];

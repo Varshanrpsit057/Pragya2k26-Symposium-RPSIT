@@ -6,11 +6,11 @@
  */
 import { useMemo, useState } from 'react';
 import { formatIst } from '../../lib/countdown';
-import { canJoin, deptShort, entryOf, eventLabel, eventOf, eventsOf, feePaid, isActive, parseIdList, rupees, showId, teamRule, totalsOf, type FestEvent, type FestRegistration } from '../../lib/fest';
+import { canJoin, deptShort, entryOf, eventLabel, eventsOf, feePaid, isActive, rupees, showId, teamRule, totalsOf, type FestEvent, type FestPlace, type FestRegistration } from '../../lib/fest';
 import { Badge, when } from '../ui';
 import { DeptPicker, useWorkDept } from './DeskView';
-import { PORTAL, today } from './excel';
-import { downloadStudents } from './exports';
+import { PORTAL, saveTable, today } from './excel';
+import { certificateRows, downloadStudents } from './exports';
 import { useFest } from './FestData';
 import { NO_PAYMENT, PaymentChoice, RegistrationCard, ShortList, Stat, matches, paymentBody, paymentReady, stampNow, type PaymentDraft } from './festUi';
 
@@ -94,6 +94,11 @@ function EventPanel({ event }: { event: FestEvent }) {
       ...current,
       events: [...current.events, { eventId: event.id, added: stampNow(session.username) }],
     }));
+  const removeFromEvent = (registration: FestRegistration) =>
+    change(registration.id, path(registration.id), { action: 'remove' }, `Remove ${registration.id} from ${event.name}`, (current) => ({
+      ...current,
+      events: current.events.filter((item) => item.eventId !== event.id),
+    }));
   const note = (what: string) => `${PORTAL} · ${eventLabel(event)} · ${what} · downloaded by ${session.displayName} ${formatIst(Date.now())}`;
 
   return (
@@ -118,6 +123,14 @@ function EventPanel({ event }: { event: FestEvent }) {
               onClick={() => downloadStudents(`techfest-${event.dept.toLowerCase()}-students-${today()}.xlsx`, `${deptShort(event.dept)} students`, note(`every ${deptShort(event.dept)} student`), inDept, catalog)}
             >
               Download all {deptShort(event.dept)} students (Excel)
+            </button>
+            <button
+              className="adm-button adm-button--small"
+              type="button"
+              disabled={!totals.present}
+              onClick={() => saveTable(`techfest-${event.id}-certificates-${today()}.xlsx`, `${event.name} certificates`, note('certificates: winners, then everyone present'), certificateRows(catalog, [event], results, registrations))}
+            >
+              Certificate list (Excel)
             </button>
           </span>
         )}
@@ -174,6 +187,10 @@ function EventPanel({ event }: { event: FestEvent }) {
                         <dd>{registration.college}</dd>
                       </div>
                       <div className="fest-fact">
+                        <dt>College code</dt>
+                        <dd>{registration.collegeCode || '—'}</dd>
+                      </div>
+                      <div className="fest-fact">
                         <dt>Course · year</dt>
                         <dd>{[registration.branch, registration.year].filter(Boolean).join(' · ') || '—'}</dd>
                       </div>
@@ -219,6 +236,11 @@ function EventPanel({ event }: { event: FestEvent }) {
                         Undo present
                       </button>
                     )}
+                    {!locked && entry && !entry.present && !feePaid(entry) && (
+                      <button className="adm-button adm-button--small adm-button--danger-outline" type="button" onClick={() => removeFromEvent(registration)}>
+                        Remove from {event.name}
+                      </button>
+                    )}
                     <button className="adm-button adm-button--small" type="button" onClick={() => setOpen(null)}>
                       Close
                     </button>
@@ -235,28 +257,43 @@ function EventPanel({ event }: { event: FestEvent }) {
   );
 }
 
+interface PlaceDraft {
+  place: number;
+  ids: string[];
+  team: string;
+}
+
+/**
+ * The winners: 1st, 2nd and 3rd, each a student (or, for a team event, a team: its name and a row
+ * for each member). Students are found in this event's own participants marked present, by ID or
+ * name, so the certificates carry the right names.
+ */
 function Winners({ event, registered }: { event: FestEvent; registered: FestRegistration[] }) {
-  const { results, change, catalog, pending, switches, session } = useFest();
+  const { results, change, pending, switches, session } = useFest();
   const result = results.get(event.id) ?? null;
   const resultsOff = !switches.results && session.role !== 'ADMIN';
   const locked = Boolean(result?.submitted);
-  const initial = () =>
+  const isTeam = event.teamMax > 1;
+  const initial = (): PlaceDraft[] =>
     [1, 2, 3].map((place) => {
       const saved = result?.places.find((item) => item.place === place);
-      return { place, ids: saved ? saved.ids.map(showId).join(', ') : '', team: saved?.team ?? '' };
+      return { place, ids: saved ? [...saved.ids] : [], team: saved?.team ?? '' };
     });
   const [rows, setRows] = useState(initial);
   const [message, setMessage] = useState('');
-  const presentIds = new Set(registered.filter((item) => entryOf(item, event.id)?.present).map((item) => item.id));
-  const parsed = rows.map((row) => ({ ...row, list: parseIdList(row.ids) }));
-  const problems = parsed.flatMap((row) => row.list.filter((id) => !presentIds.has(id)).map((id) => `${showId(id)} (place ${row.place}) is not marked present here`));
-  const places = parsed.filter((row) => row.list.length).map((row) => ({ place: row.place, ids: row.list, ...(row.team.trim() && { team: row.team.trim() }) }));
+  const byId = new Map(registered.map((item) => [item.id, item]));
+  const present = registered.filter((item) => entryOf(item, event.id)?.present);
+  const presentIds = new Set(present.map((item) => item.id));
+  const placed = new Set(rows.flatMap((row) => row.ids));
+  // A winner whose attendance was undone since: they cannot win until marked present again.
+  const problems = rows.flatMap((row) => row.ids.filter((id) => !presentIds.has(id)).map((id) => `${showId(id)} (${ordinal(row.place)}) is no longer marked present`));
+  const places = rows.filter((row) => row.ids.length).map((row) => ({ place: row.place, ids: row.ids, ...(row.team.trim() && { team: row.team.trim() }) }));
+  const setRow = (place: number, next: Partial<PlaceDraft>) => setRows((current) => current.map((row) => (row.place === place ? { ...row, ...next } : row)));
   const send = (action: 'save' | 'submit') => {
     if (action === 'submit' && !window.confirm(`Submit the results of ${event.name}?\n\nThe event closes: no more fees, attendance or changes. The overall coordinator receives the winners.`)) return;
     change(`results:${event.id}`, `/api/admin/fest/events/${event.id}/results`, { action, places }, `${action === 'submit' ? 'Submit' : 'Save'} ${event.name} results`);
     setMessage(action === 'submit' ? 'Submitted: the overall coordinator receives the winners.' : 'Winners saved.');
   };
-  const nameOf = (id: string) => registered.find((item) => item.id === id)?.name ?? '';
 
   return (
     <section className="adm-card adm-pad" aria-label="Winners">
@@ -264,30 +301,15 @@ function Winners({ event, registered }: { event: FestEvent; registered: FestRegi
       {resultsOff && !locked ? (
         <p className="adm-note">Results entry is switched off by the web assist team.</p>
       ) : locked ? (
-        <ol className="fest-winners">
-          {result!.places.map((place) => (
-            <li key={place.place}>
-              <strong>{ordinal(place.place)}</strong> {place.team && <>Team {place.team} · </>}
-              {place.ids.map((id) => `${showId(id)} ${nameOf(id)}`).join(', ')}
-            </li>
-          ))}
-        </ol>
+        <WinnerTable places={result!.places} byId={byId} />
       ) : (
         <>
-          <p className="adm-muted">Type the Registration IDs of the winners (for a team, every member’s ID, separated by commas). Only students marked present can win.</p>
-          {rows.map((row, index) => (
-            <div key={row.place} className="fest-form__row">
-              <label className="adm-field">
-                <span>{ordinal(row.place)} place</span>
-                <input value={row.ids} placeholder={`${deptShort(event.dept)}-2001`} onChange={(change_) => setRows(rows.map((item, at) => (at === index ? { ...item, ids: change_.target.value } : item)))} />
-              </label>
-              {event.teamMax > 1 && (
-                <label className="adm-field">
-                  <span>Team name</span>
-                  <input value={row.team} onChange={(change_) => setRows(rows.map((item, at) => (at === index ? { ...item, team: change_.target.value } : item)))} />
-                </label>
-              )}
-            </div>
+          <p className="adm-muted">
+            Find each winner in this event’s participants marked present ({present.length}), by Registration ID or name.
+            {isTeam ? ` For a team, add every member (up to ${event.teamMax}): each gets a row, and a certificate.` : ''}
+          </p>
+          {rows.map((row) => (
+            <PlaceEditor key={row.place} row={row} event={event} present={present} placed={placed} byId={byId} onChange={(next) => setRow(row.place, next)} />
           ))}
           {problems.length > 0 && <p className="adm-field__error">{problems.join('; ')}.</p>}
           <div className="adm-inline adm-inline--wrap">
@@ -301,13 +323,143 @@ function Winners({ event, registered }: { event: FestEvent; registered: FestRegi
         </>
       )}
       {pending.has(`results:${event.id}`) && <Badge tone="warn">Waiting to send</Badge>}
-      {message && <p className="adm-note" role="status">{message}</p>}
-      {catalog && result?.saved && !locked && (
+      {message && (
+        <p className="adm-note" role="status">
+          {message}
+        </p>
+      )}
+      {result?.saved && !locked && (
         <p className="adm-muted">
-          Last saved by {result.saved.by} {when(result.saved.at)} · {eventOf(catalog, event.id)?.name}
+          Last saved by {result.saved.by} {when(result.saved.at)}
         </p>
       )}
     </section>
+  );
+}
+
+/** One place: its team name (team events), a row per student, and the search that adds one. */
+function PlaceEditor({
+  row,
+  event,
+  present,
+  placed,
+  byId,
+  onChange,
+}: {
+  row: PlaceDraft;
+  event: FestEvent;
+  present: FestRegistration[];
+  placed: Set<string>;
+  byId: Map<string, FestRegistration>;
+  onChange: (next: Partial<PlaceDraft>) => void;
+}) {
+  const [query, setQuery] = useState('');
+  const isTeam = event.teamMax > 1;
+  const full = row.ids.length >= event.teamMax;
+  const q = query.trim();
+  const found = q ? present.filter((item) => !placed.has(item.id) && matches(item, q)).slice(0, 6) : [];
+  const add = (id: string) => {
+    const who = byId.get(id);
+    onChange({ ids: [...row.ids, id], team: row.team || (isTeam ? (who?.team ?? '') : '') });
+    setQuery('');
+  };
+  // Their teammates (same team name, present, not placed yet): added in one tap.
+  const teamName = row.team.trim().toLowerCase();
+  const mates = isTeam && teamName && !full ? present.filter((item) => !placed.has(item.id) && item.team.trim().toLowerCase() === teamName).slice(0, event.teamMax - row.ids.length) : [];
+  const label = `${ordinal(row.place)} place`;
+
+  return (
+    <fieldset className="fest-place">
+      <legend>{label}</legend>
+      {isTeam && (
+        <label className="adm-field">
+          <span>Team name</span>
+          <input value={row.team} maxLength={60} onChange={(change_) => onChange({ team: change_.target.value })} />
+        </label>
+      )}
+      {row.ids.length > 0 && (
+        <ul className="fest-place__list">
+          {row.ids.map((id) => {
+            const who = byId.get(id);
+            return (
+              <li key={id}>
+                <span className="fest-card__id">{showId(id)}</span> <strong>{who?.name ?? ''}</strong>
+                <span className="adm-muted">
+                  {' '}
+                  · {who?.college ?? ''}
+                  {who?.collegeCode ? ` (${who.collegeCode})` : ''}
+                </span>
+                <button className="adm-button adm-button--small" type="button" aria-label={`Remove ${showId(id)} from the ${label}`} onClick={() => onChange({ ids: row.ids.filter((item) => item !== id) })}>
+                  Remove
+                </button>
+              </li>
+            );
+          })}
+        </ul>
+      )}
+      {mates.length > 0 && (
+        <button className="adm-button adm-button--small" type="button" onClick={() => onChange({ ids: [...row.ids, ...mates.map((item) => item.id)] })}>
+          Add the rest of team {row.team.trim()}: {mates.map((item) => showId(item.id)).join(', ')}
+        </button>
+      )}
+      {!full && (
+        <label className="adm-field">
+          <span>{row.ids.length ? `Add a member to the ${label}` : `Find the ${label} winner`}</span>
+          <input type="search" value={query} placeholder={`ID (${deptShort(event.dept)}-2001) or name`} autoComplete="off" onChange={(change_) => setQuery(change_.target.value)} />
+        </label>
+      )}
+      {q && (
+        <div className="fest-place__found" role="group" aria-label={`Participants found for the ${label}`}>
+          {found.length ? (
+            found.map((item) => (
+              <button key={item.id} className="adm-button adm-button--small" type="button" onClick={() => add(item.id)}>
+                {showId(item.id)} {item.name}
+              </button>
+            ))
+          ) : (
+            <span className="adm-muted">Nobody present in this event matches (a winner must be marked present, and in one place only).</span>
+          )}
+        </div>
+      )}
+    </fieldset>
+  );
+}
+
+/** The submitted winners: a row per student, the team's name on each of its rows. */
+export function WinnerTable({ places, byId }: { places: FestPlace[]; byId: ReadonlyMap<string, FestRegistration> }) {
+  return (
+    <div className="adm-table-wrap">
+      <table className="adm-table adm-table--static fest-table">
+        <thead>
+          <tr>
+            <th scope="col">Place</th>
+            <th scope="col">Team</th>
+            <th scope="col">Registration ID</th>
+            <th scope="col">Name</th>
+            <th scope="col">College</th>
+          </tr>
+        </thead>
+        <tbody>
+          {places.flatMap((place) =>
+            place.ids.map((id) => {
+              const who = byId.get(id);
+              return (
+                <tr key={`${place.place}-${id}`}>
+                  <th scope="row">{ordinal(place.place)}</th>
+                  <td>{place.team ?? '—'}</td>
+                  <td className="adm-mono">{showId(id)}</td>
+                  <td>{who?.name ?? ''}</td>
+                  <td>
+                    {who?.college ?? ''}
+                    {who?.collegeCode ? ` (${who.collegeCode})` : ''}
+                  </td>
+                </tr>
+              );
+            }),
+          )}
+        </tbody>
+      </table>
+    </div>
   );
 }
 
