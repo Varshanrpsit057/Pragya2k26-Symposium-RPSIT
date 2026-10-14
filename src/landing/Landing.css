@@ -419,3 +419,84 @@
   background: rgb(140 108 255 / 0.16);
   outline: none;
 }
+
+/* Explore the events: every department, each opening the events website in a new tab */
+.landing-explore {
+  max-width: none;
+}
+
+.landing-explore > p {
+  max-width: var(--l-measure);
+}
+
+.landing-depts {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(13.5rem, 1fr));
+  gap: 0.6rem;
+  margin: 0.25rem 0 1.25rem;
+  padding: 0;
+  list-style: none;
+}
+
+.landing-block .landing-depts a {
+  display: grid;
+  grid-template-rows: auto 1fr auto;
+  gap: 0.15rem;
+  height: 100%;
+  padding: 0.8rem 0.95rem;
+  border: 1px solid var(--l-line-strong);
+  border-radius: 0.8rem;
+  color: inherit;
+  text-decoration: none;
+  background: rgb(255 255 255 / 0.03);
+  transition:
+    border-color 0.15s ease,
+    background-color 0.15s ease;
+}
+
+.landing-block .landing-depts a:hover,
+.landing-block .landing-depts a:focus-visible {
+  border-color: var(--l-accent);
+  background: rgb(140 108 255 / 0.16);
+  outline: none;
+}
+
+.landing-depts__code {
+  font-weight: 800;
+  font-stretch: 120%;
+}
+
+.landing-depts__name {
+  color: #c4c8ec;
+  line-height: 1.35;
+}
+
+.landing-depts__count {
+  margin-top: 0.2rem;
+  color: var(--l-muted);
+  font-size: 0.85rem;
+}
+
+.landing-button__out {
+  margin-left: 0.45rem;
+}
+
+/* A solid button inside a section keeps its dark text (the section's links are light) */
+.landing-block .landing-button {
+  color: #05061a;
+}
+
+@media (max-width: 40rem) {
+  .landing-depts {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.5rem;
+  }
+
+  .landing-block .landing-depts a {
+    padding: 0.7rem 0.75rem;
+  }
+
+  .landing-depts__name {
+    font-size: 0.9rem;
+  }
+}

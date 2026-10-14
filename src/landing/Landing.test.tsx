@@ -25,8 +25,22 @@ describe('the front door (pragya2k26.online)', () => {
     expect(steps).toHaveTextContent('Register on your phone');
     expect(steps).toHaveTextContent('by UPI right after registering (scan the QR code and send the UTR), or in cash at your department’s registration desk');
     expect(steps).toHaveTextContent('your mobile number and email find it');
-    expect(steps).toHaveTextContent('Register for events at each event’s venue, in any department');
-    expect(screen.queryByRole('link', { name: 'Events and route map' })).toBeNull();
+    expect(steps).toHaveTextContent('Register for events at each event’s venue, in your department');
+  });
+
+  it('lets students explore every department’s events on the events website, in a new tab', () => {
+    render(<Landing />);
+    const explore = screen.getByRole('region', { name: 'Explore the events' });
+    const links = within(explore).getAllByRole('link');
+    // A card for each of the 8 departments, then Explore all events.
+    expect(links).toHaveLength(9);
+    for (const link of [...links, screen.getByRole('link', { name: 'Explore events' })]) {
+      expect(link).toHaveAttribute('href', 'https://infinite-techfest-2026.vercel.app');
+      expect(link).toHaveAttribute('target', '_blank');
+      expect(link).toHaveAttribute('rel', 'noopener noreferrer');
+    }
+    expect(within(explore).getByRole('link', { name: /^CSE\s*Computer Science and Engineering\s*6 events$/ })).toBeInTheDocument();
+    expect(within(explore).getByRole('link', { name: /Explore all events.*opens in a new tab/ })).toBeInTheDocument();
   });
 
   it('ends with PRAGYA’s contact and Dev Crew (no map), coordinated by the AI&DS department', () => {

@@ -18,10 +18,12 @@ const FOOTER_LINKS: readonly FooterLink[] = [
 ];
 
 /**
- * The students' website (every department's events and the route map), run separately. Set it
- * to its address (e.g. 'https://events.example.com') to show the button; null hides it.
+ * The events website (every department's events), run separately: it opens in a new tab.
+ * null hides the links to it.
  */
-export const EVENTS_SITE_URL: string | null = null;
+export const EVENTS_SITE_URL: string | null = 'https://infinite-techfest-2026.vercel.app';
+/** Opens the events website in a new tab, without giving it this page. */
+const NEW_TAB = { target: '_blank', rel: 'noopener noreferrer' } as const;
 
 const departments = DEFAULT_CATALOG.departments;
 const eventCount = DEFAULT_CATALOG.events.length;
@@ -201,12 +203,39 @@ export function Landing() {
               My registration ID
             </a>
             {EVENTS_SITE_URL && (
-              <a className="landing-button landing-button--ghost" href={EVENTS_SITE_URL}>
-                Events and route map
+              <a className="landing-button landing-button--ghost" href={EVENTS_SITE_URL} {...NEW_TAB}>
+                Explore events
               </a>
             )}
           </div>
         </section>
+
+        {EVENTS_SITE_URL && (
+          <section className="landing-block landing-explore" aria-labelledby="landing-explore">
+            <h2 id="landing-explore">Explore the events</h2>
+            <p>
+              {eventCount} events across {departments.length} departments: what each one is, its rules, venue and time. They open on the events website.
+            </p>
+            <ul className="landing-depts">
+              {departments.map((dept) => (
+                <li key={dept.code}>
+                  <a href={EVENTS_SITE_URL} {...NEW_TAB}>
+                    <span className="landing-depts__code">{deptShort(dept.code)}</span>
+                    <span className="landing-depts__name">{dept.name}</span>
+                    <span className="landing-depts__count">{DEFAULT_CATALOG.events.filter((event) => event.dept === dept.code).length} events</span>
+                  </a>
+                </li>
+              ))}
+            </ul>
+            <a className="landing-button" href={EVENTS_SITE_URL} {...NEW_TAB}>
+              Explore all events
+              <span className="landing-button__out" aria-hidden="true">
+                ↗
+              </span>
+              <span className="sr-only"> (opens in a new tab)</span>
+            </a>
+          </section>
+        )}
 
         <section className="landing-block" aria-labelledby="landing-students">
           <h2 id="landing-students">Taking part?</h2>
@@ -221,12 +250,16 @@ export function Landing() {
               Pay the ₹{DEFAULT_CATALOG.entryFee} entry fee: by UPI right after registering (scan the QR code and send the UTR), or in cash at your department’s registration desk. Show
               your ID at the desk: it verifies your payment.
             </li>
-            <li>Register for events at each event’s venue, in any department, on {festDay}.</li>
+            <li>Register for events at each event’s venue, in your department, on {festDay}.</li>
           </ol>
           <p>Lost your ID? Open My registration ID: on the phone you registered with it shows at once; on another phone, your mobile number and email find it.</p>
           {EVENTS_SITE_URL && (
             <p>
-              Every department’s events, and the way to each venue, are on the <a href={EVENTS_SITE_URL}>events and route map website</a>.
+              Every department’s events are on the{' '}
+              <a href={EVENTS_SITE_URL} {...NEW_TAB}>
+                events website
+              </a>
+              .
             </p>
           )}
         </section>
