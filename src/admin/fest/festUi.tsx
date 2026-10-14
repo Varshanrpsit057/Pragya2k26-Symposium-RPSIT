@@ -252,11 +252,27 @@ export function PaymentChoice({ amount, value, onChange, name, forId = '' }: { a
 }
 
 /** One registration, compact: for searches, desks and event windows (works on a phone). */
-export function RegistrationCard({ registration, children, showDept = false, eventFocus }: { registration: FestRegistration; children?: ReactNode; showDept?: boolean; eventFocus?: FestEvent }) {
+/**
+ * One student in a list. `compact`: one line with the action on the right (a desk's or an event's
+ * list on a phone); the events they joined are left out, except the one `eventFocus` names.
+ */
+export function RegistrationCard({
+  registration,
+  children,
+  showDept = false,
+  eventFocus,
+  compact = false,
+}: {
+  registration: FestRegistration;
+  children?: ReactNode;
+  showDept?: boolean;
+  eventFocus?: FestEvent;
+  compact?: boolean;
+}) {
   const { catalog, pending } = useFest();
   const entry = eventFocus ? entryOf(registration, eventFocus.id) : null;
   return (
-    <article className={`fest-card${isActive(registration) ? '' : ' is-inactive'}`}>
+    <article className={`fest-card${compact ? ' fest-card--compact' : ''}${isActive(registration) ? '' : ' is-inactive'}`}>
       <header className="fest-card__head">
         <span className="fest-card__id">{showId(registration.id)}</span>
         <strong className="fest-card__name">{registration.name}</strong>
@@ -273,7 +289,6 @@ export function RegistrationCard({ registration, children, showDept = false, eve
       </header>
       <p className="fest-card__meta">
         {showDept && <>{deptShort(registration.dept)} · </>}
-        {registration.source === 'SELF' && <>{registration.created.by === 'student' ? 'Registered on their phone' : 'Registered at the desk'} · </>}
         {registration.phone} · {registration.college}
         {registration.team && <> · Team {registration.team}</>}
       </p>
@@ -288,7 +303,7 @@ export function RegistrationCard({ registration, children, showDept = false, eve
             <Badge tone="plain">Not registered for {eventFocus.name}</Badge>
           )}
         </p>
-      ) : (
+      ) : compact ? null : (
         <p className="fest-card__events">
           {registration.events.length === 0 && <span className="adm-muted">No events yet</span>}
           {registration.events.map((item) => {

@@ -55,22 +55,30 @@ const sections = async () => {
 
 describe('dashboard of the student coordinators', () => {
   it.each([
-    ['ADMIN', {}, ['Overview', 'Students', 'Results', 'Desk', 'Event windows', 'Online import', 'Departments & events', 'Website controls', 'Accounts', 'Event-day controls', 'Help requests', 'System status', 'Testing', 'Roles']],
-    ['OVERALL', {}, ['Overview', 'Students', 'Results', 'Roles']],
-    ['HOD', { department: 'CSE' }, ['Overview', 'Students', 'Results', 'Roles']],
-    ['DEPT_ADMIN', { department: 'CSE' }, ['Overview', 'Students', 'Results', 'Desk', 'Event windows', 'Online import', 'Roles']],
-    ['DESK', { department: 'CSE', deskNumber: 2 }, ['Registration desk', 'Roles']],
-    ['COORDINATOR', { department: 'CSE', eventIds: ['cse-hackathon'] }, ['My events', 'Roles']],
+    [
+      'ADMIN',
+      {},
+      ['Home', 'Overview', 'Students', 'Results', 'Desk', 'Event windows', 'Online import', 'Switches & payment', 'Times & notice', 'Departments & events', 'Accounts', 'Help requests', 'Health & backups', 'Testing'],
+    ],
+    ['OVERALL', {}, ['Overview', 'Students', 'Results']],
+    ['HOD', { department: 'CSE' }, ['Overview', 'Students', 'Results']],
+    ['DEPT_ADMIN', { department: 'CSE' }, ['Overview', 'Students', 'Results', 'Desk', 'Event windows', 'Online import']],
+    // One section: no tabs at all.
+    ['DESK', { department: 'CSE', deskNumber: 2 }, []],
+    ['COORDINATOR', { department: 'CSE', eventIds: ['cse-hackathon'] }, []],
   ] as const)('shows %s only its own sections', async (role, extra, expected) => {
     signedInAs(session(role, extra as Partial<SessionInfo>));
     render(<AdminApp />);
-    expect(await sections()).toEqual(expected);
-    expect(screen.getByText(/On-site registration open/)).toBeInTheDocument();
-    const title = 'department' in extra ? 'CSE · Computer Science and Engineering' : 'All departments';
-    expect(screen.getByRole('heading', { name: title })).toBeInTheDocument();
     // Everyone can reach the web assist team, and sees whether the phone is live.
-    expect(screen.getByRole('button', { name: /Contact admin/ })).toBeInTheDocument();
     expect(await screen.findByRole('region', { name: 'Connection' })).toHaveTextContent('Live');
+    expect(screen.getByRole('button', { name: /Contact admin/ })).toBeInTheDocument();
+    if (expected.length) expect(await sections()).toEqual(expected);
+    else expect(screen.queryByRole('navigation', { name: 'Sections' })).toBeNull();
+    // Coordinators work at their events whatever the registration phase: they do not see it.
+    if (role === 'COORDINATOR') expect(screen.queryByText(/On-site registration open/)).toBeNull();
+    else expect(screen.getAllByText(/On-site registration open/).length).toBeGreaterThan(0);
+    const title = role === 'ADMIN' ? 'Web assist console' : 'department' in extra ? 'CSE · Computer Science and Engineering' : 'All departments';
+    expect(screen.getByRole('heading', { name: title })).toBeInTheDocument();
   });
 
   it('names the department on its own sign-in page, and says so when an account opens another department’s page', async () => {
@@ -100,10 +108,11 @@ describe('dashboard of the student coordinators', () => {
     expect(screen.queryByRole('navigation', { name: 'Department staff pages' })).toBeNull();
   });
 
-  it('documents what every role may do, marking the signed-in role', async () => {
-    signedInAs(session('COORDINATOR', { department: 'CSE', eventIds: ['cse-hackathon'] }));
+  it('documents what every role may do (Accounts, Roles), marking the signed-in role', async () => {
+    signedInAs(session('ADMIN'));
     render(<AdminApp />);
-    fireEvent.click(within(await screen.findByRole('navigation', { name: 'Sections' })).getByRole('button', { name: 'Roles' }));
+    fireEvent.click(within(await screen.findByRole('navigation', { name: 'Sections' })).getByRole('button', { name: 'Accounts' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Roles' }));
     const heading = screen.getByRole('heading', { name: 'Roles and permissions' });
     const panel = heading.closest('section') as HTMLElement;
     for (const role of ['Web assist team', 'Overall coordinator (HOD)', 'Department admin', 'Registration desk', 'Event coordinator']) {
@@ -112,9 +121,9 @@ describe('dashboard of the student coordinators', () => {
     // One HOD for every department (the overall coordinator): no HOD account per department.
     expect(within(panel).queryByRole('heading', { name: /Department HOD/ })).toBeNull();
     expect(within(panel).queryByRole('heading', { name: 'Certificate team' })).toBeNull();
+    expect(within(panel).getByRole('heading', { name: 'Web assist team' }).closest('article')).toHaveClass('is-mine');
     const coordinator = within(panel).getByRole('heading', { name: 'Event coordinator' }).closest('article') as HTMLElement;
-    expect(coordinator).toHaveClass('is-mine');
     expect(within(coordinator).getByText(/Event window: every student of the department, added to the event at its venue.*\(assigned events only\)/)).toBeInTheDocument();
-    expect(within(panel).getByText(/IDs carry the department \(CSE-0147\)/)).toBeInTheDocument();
+    expect(within(panel).getByText(/IDs carry the department \(CSE-2001\)/)).toBeInTheDocument();
   });
 });

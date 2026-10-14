@@ -423,7 +423,7 @@ describe('Website controls', () => {
     vi.spyOn(window, 'confirm').mockReturnValue(true);
     signIn(token);
     render(<AdminApp />);
-    fireEvent.click(within(await screen.findByRole('navigation', { name: 'Sections' })).getByRole('button', { name: 'Website controls' }));
+    fireEvent.click(within(await screen.findByRole('navigation', { name: 'Sections' })).getByRole('button', { name: 'Switches & payment' }));
 
     const phones = await screen.findByRole('switch', { name: 'Student registration on phones' });
     expect(phones).toHaveAttribute('aria-checked', 'true');
@@ -439,6 +439,45 @@ describe('Website controls', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Remove the QR code' }));
     await waitFor(() => expect(screen.getByText('No QR code uploaded')).toBeInTheDocument());
     expect((await h.call('GET', '/api/fest/payment')).body.qr).toBeNull();
+  });
+});
+
+describe('the web assist console', () => {
+  it('opens on Home: pauses and resumes the portal, turns one part back on, backs up now and saves the full copy', async () => {
+    const h = setup({ at: TIMES.eventDay });
+    const desk = await h.staff('DESK', [], 'cse-desk1', { department: 'CSE', deskNumber: 1 });
+    await collect(h, desk.token, await onPhone(h, 'CSE', 1, { name: 'Kavin R' }));
+    await onPhone(h, 'CSE', 2, { name: 'Asha K', utr: '612345678901' });
+    const token = await h.login();
+    backend(h);
+    const files = downloads();
+    vi.spyOn(window, 'confirm').mockReturnValue(true);
+    signIn(token);
+    render(<AdminApp />);
+    expect(await screen.findByRole('heading', { name: 'Web assist console' })).toBeInTheDocument();
+    const nav = await screen.findByRole('navigation', { name: 'Sections' });
+    expect(within(nav).getByRole('button', { name: 'Home' })).toHaveAttribute('aria-current', 'page');
+
+    // A payment waits for a desk: Home says so.
+    const attention = await screen.findByRole('region', { name: 'Needs attention' });
+    expect(await within(attention).findByText(/1 payment sent by students, waiting for a desk to check/)).toBeInTheDocument();
+
+    const off = screen.getByRole('region', { name: 'Switched off right now' });
+    await within(off).findByText(/Every part of the portal is on/);
+    fireEvent.click(screen.getByRole('button', { name: 'Pause everything' }));
+    expect(await within(off).findByText('Student registration on phones')).toBeInTheDocument();
+    expect((await h.call('GET', '/api/fest/info')).body.selfRegistration).toBe(false);
+    fireEvent.click(within(off).getAllByRole('button', { name: 'Turn on' })[0]);
+    await waitFor(() => expect(within(off).queryByText('Student registration on phones')).toBeNull());
+    fireEvent.click(screen.getByRole('button', { name: 'Resume everything' }));
+    expect(await within(off).findByText(/Every part of the portal is on/)).toBeInTheDocument();
+
+    const controls = screen.getByRole('region', { name: 'Emergency controls' });
+    fireEvent.click(within(controls).getByRole('button', { name: 'Back up now' }));
+    expect(await within(controls).findByText('Backed up just now.')).toBeInTheDocument();
+    fireEvent.click(within(controls).getByRole('button', { name: 'Download a full copy (Excel)' }));
+    const sheet = await xlsxText(files.at(-1)!);
+    for (const text of ['Students', 'Winners', 'College ranking', 'Money', 'Kavin R', 'Asha K', 'TO CHECK']) expect(sheet).toContain(text);
   });
 });
 
@@ -461,7 +500,7 @@ describe('the event window and the department rule', () => {
 
     signIn(await h.login());
     render(<AdminApp />);
-    fireEvent.click(within(await screen.findByRole('navigation', { name: 'Sections' })).getByRole('button', { name: 'Website controls' }));
+    fireEvent.click(within(await screen.findByRole('navigation', { name: 'Sections' })).getByRole('button', { name: 'Switches & payment' }));
     expect(await screen.findByRole('switch', { name: 'Event entry at the venues' })).toBeInTheDocument();
     expect(screen.queryByRole('switch', { name: /own department’s events/ })).toBeNull();
   });

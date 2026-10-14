@@ -1273,6 +1273,13 @@ export class FestService {
     return { at: this.iso(), catalog, registrations: parts.flatMap((part) => part.registrations), results: parts.flatMap((part) => part.results) };
   }
 
+  /** "Back up now" (web assist team): the same copies the schedule makes, with how they went. */
+  async backupNow(actor: Actor) {
+    const saved = await this.backup();
+    this.deps.log('Fest backup made by hand', { by: actor.username, ...saved });
+    return { success: true as const, ...saved, backup: await this.backupStatus() };
+  }
+
   /**
    * Run by the schedule (every 10 minutes): every department's data to a private file (S3 keeps
    * each earlier version), and to the Google Sheet's fest tabs when anything changed. Each copy is

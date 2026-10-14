@@ -216,6 +216,8 @@ export const STAFF_ROUTES: readonly StaffRoute[] = [
   { method: 'GET', path: route_('/portal'), permission: 'site.switches', run: (s) => s.fest.portalView() },
   { method: 'POST', path: route_('/portal'), permission: 'site.switches', run: (s, { actor, body }) => s.fest.savePortal(actor, body) },
   { method: 'POST', path: route_('/portal/qr'), permission: 'site.switches', run: (s, { actor, body }) => s.fest.saveQr(actor, body) },
+  // A backup now (the private copy and the Google Sheet), as the schedule makes every 10 minutes.
+  { method: 'POST', path: route_('/fest/backup'), permission: 'site.switches', run: (s, { actor }) => s.fest.backupNow(actor) },
 ];
 
 const isObject = (value: unknown): value is Record<string, unknown> => typeof value === 'object' && value !== null && !Array.isArray(value);

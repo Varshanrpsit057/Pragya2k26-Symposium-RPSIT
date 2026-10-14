@@ -89,6 +89,7 @@ describe('the desk number of each desk sign-in', () => {
     );
     render(<AdminApp />);
     fireEvent.click(within(await screen.findByRole('navigation', { name: 'Sections' })).getByRole('button', { name: 'Accounts' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Signed in now' }));
     const signedIn = await screen.findByRole('region', { name: 'Signed in now' });
     await waitFor(() => expect(within(signedIn).getAllByRole('row')).toHaveLength(4));
     const rows = within(signedIn).getAllByRole('row').map((row) => row.textContent);

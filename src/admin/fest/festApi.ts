@@ -74,4 +74,6 @@ export interface PortalView {
 }
 export const fetchPortal = (token: string) => request<PortalView>('/api/admin/portal', { token });
 export const savePortal = (token: string, portal: Partial<PortalSettings>) => request<PortalView>('/api/admin/portal', { method: 'POST', body: { portal }, token });
+/** Backs up now (the private copy and the Google Sheet) and answers how it went. */
+export const backupNow = (token: string) => request<{ backup: BackupStatus | null }>('/api/admin/fest/backup', { method: 'POST', body: {}, token }).then((data) => data.backup);
 export const saveQr = (token: string, image: string | null) => request<PortalView>('/api/admin/portal/qr', { method: 'POST', body: image ? { image } : { remove: true }, token });

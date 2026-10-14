@@ -37,8 +37,8 @@ export function RolesPanel({ session }: { session: SessionInfo }) {
         </div>
         <h3 className="adm-h3">Rules that apply to everyone</h3>
         <ul className="adm-rules">
-          <li>Each department registers its own students: IDs carry the department (CSE-0147), and one phone number is registered once per department.</li>
-          <li>The ₹100 entry fee is taken at the desk (or was paid online); each event’s fee is taken by its coordinators at the venue.</li>
+          <li>Students register on their phones under their department: IDs carry the department (CSE-2001), and one phone number is registered once per department.</li>
+          <li>The ₹100 entry fee is paid by UPI on the phone (the department’s desk checks the UTR) or at the desk; each event’s fee is taken by its coordinators at the venue.</li>
           <li>Money counts as received only when the staff member confirms it: cash in hand, or the UPI payment seen with its transaction ID.</li>
           <li>Attendance can be marked only after the entry fee is paid, the student is registered for the event and its fee is taken.</li>
           <li>Once a coordinator submits an event’s results, the event is locked; only the overall coordinator (or the web assist team) can reopen it.</li>

@@ -6,7 +6,7 @@
  */
 import { useCallback, useEffect, useState, type ChangeEvent, type ReactNode } from 'react';
 import { UPI_ID } from '../lib/fest';
-import { LOGIN_LABELS, LOGIN_ROLES, QR_MAX_CHARS, SWITCH_INFO, type BackupStatus, type LoginRole, type PortalSettings, type SwitchName } from '../lib/portal';
+import { LOGIN_LABELS, LOGIN_ROLES, QR_MAX_CHARS, SWITCH_INFO, type LoginRole, type PortalSettings, type SwitchName } from '../lib/portal';
 import type { SessionInfo } from '../lib/staff';
 import { SignedOut, signedInNow } from './adminApi';
 import { fetchPortal, savePortal, saveQr, type PortalView } from './fest/festApi';
@@ -139,7 +139,7 @@ export function PortalPanel({ token, onSignedOut }: PanelProps) {
   return (
     <main className="adm-page adm-controls">
       <section className="adm-card adm-pad">
-        <h2 className="adm-h2">Website controls</h2>
+        <h2 className="adm-h2">Switches & payment</h2>
         <p className="adm-muted">
           Switch any part of the portal off and on again. Each change applies at once: the students’ page and every dashboard follow within seconds, and the server refuses what is off (the web
           assist team can still fix things).
@@ -245,54 +245,7 @@ export function PortalPanel({ token, onSignedOut }: PanelProps) {
         ))}
       </section>
 
-      <Backups status={view.backup ?? null} />
-
-      <section className="adm-card adm-pad">
-        <h3 className="adm-h3">Elsewhere in the dashboard</h3>
-        <ul className="adm-list">
-          <li>Registration times (open, extend, close now) and the website notice: Event-day controls.</li>
-          <li>Each department and event on or off, names, venues, fees: Departments & events.</li>
-          <li>Each account (create, sign out, deactivate, delete, new password) and who is signed in: Accounts.</li>
-        </ul>
-      </section>
     </main>
-  );
-}
-
-/** How the scheduled copies went (every 10 minutes): the private copy and the Google Sheet. */
-function Backups({ status }: { status: BackupStatus | null }) {
-  return (
-    <section className="adm-card adm-pad" aria-labelledby="adm-backups">
-      <h3 className="adm-h3" id="adm-backups">
-        Backups
-      </h3>
-      <p className="adm-muted">
-        Every 10 minutes the server copies every department’s registrations and results to a private file (each earlier version kept) and to the Google Sheet. A failed copy loses
-        nothing: the live data stays in the database, and the next run writes the whole copy again. The Excel downloads work at any time.
-      </p>
-      {!status ? (
-        <p className="adm-muted">No backup has run yet.</p>
-      ) : (
-        <ul className="adm-list">
-          <li>
-            Last run {when(status.at)}: private copy <Badge tone={status.file === 'saved' ? 'good' : 'bad'}>{status.file === 'saved' ? 'saved' : 'failed'}</Badge>
-            {status.file !== 'saved' && status.lastFileAt && <> (last saved {when(status.lastFileAt)})</>}
-          </li>
-          <li>
-            Google Sheet{' '}
-            <Badge tone={status.sheet === 'failed' ? 'bad' : status.sheet === 'off' ? 'plain' : 'good'}>
-              {status.sheet === 'written' ? 'updated' : status.sheet === 'unchanged' ? 'up to date' : status.sheet === 'off' ? 'not set up' : 'failed'}
-            </Badge>
-            {status.sheet === 'failed' && (
-              <>
-                {' '}
-                {status.lastSheetAt ? `Last good copy ${when(status.lastSheetAt)}.` : 'No good copy yet.'} Tried again at the next run{status.sheetError ? `: ${status.sheetError}` : ''}.
-              </>
-            )}
-          </li>
-        </ul>
-      )}
-    </section>
   );
 }
 

@@ -40,7 +40,7 @@ const TIMES = [
 
 const shown = (value: string | null) => (value ? formatIst(parseEventStart(value)!) : 'not set');
 /** A moment as a datetime-local value in IST ('2026-10-17T14:00'), whatever the laptop's time zone. */
-const istInput = (ms: number) => new Date(ms + 330 * MINUTE).toISOString().slice(0, 16);
+export const istInput = (ms: number) => new Date(ms + 330 * MINUTE).toISOString().slice(0, 16);
 const inputValue = (value: string | null) => (value ? value.slice(0, 16) : '');
 /** Now plus `minutes`, rounded up to the next 5 minutes. */
 const fromNow = (now: number, minutes: number) => Math.ceil((now + minutes * MINUTE) / (5 * MINUTE)) * 5 * MINUTE;
