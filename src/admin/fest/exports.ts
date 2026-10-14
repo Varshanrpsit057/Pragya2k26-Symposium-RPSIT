@@ -106,6 +106,29 @@ export function winnerRows(catalog: FestCatalog, events: readonly { id: string }
   return rows;
 }
 
+/**
+ * The certificate list: every student marked present at each event, its winners first (1st, 2nd,
+ * 3rd, a row per team member), then the participants, with what goes on the certificate.
+ */
+export function certificateRows(catalog: FestCatalog, events: readonly { id: string }[], results: ReadonlyMap<string, FestResult>, registrations: ReadonlyMap<string, FestRegistration>) {
+  const rows: (string | number)[][] = [['Event', 'Department', 'Certificate', 'Place', 'Team', 'Registration ID', 'Name', 'College', 'College code', 'Department / course', 'Year']];
+  const everyone = [...registrations.values()].filter(isActive);
+  for (const { id } of events) {
+    const event = eventOf(catalog, id);
+    if (!event) continue;
+    const places = new Map<string, { place: number; team: string }>();
+    for (const place of results.get(id)?.places ?? []) for (const person of place.ids) places.set(person, { place: place.place, team: place.team ?? '' });
+    const present = everyone
+      .filter((item) => item.events.some((entry) => entry.eventId === id && entry.present))
+      .sort((a, b) => (places.get(a.id)?.place ?? 9) - (places.get(b.id)?.place ?? 9) || a.id.localeCompare(b.id));
+    for (const item of present) {
+      const won = places.get(item.id);
+      rows.push([eventLabel(event), deptShort(event.dept), won ? 'Winner' : 'Participation', won ? ordinalOf(won.place) : '', won?.team || item.team, showId(item.id), item.name, item.college, item.collegeCode ?? '', item.branch, item.year]);
+    }
+  }
+  return rows;
+}
+
 /** The college ranking (medal table), in the order given. */
 export function rankingRows(rows: CollegeRow[]) {
   return [

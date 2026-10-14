@@ -58,7 +58,7 @@ describe('dashboard of the student coordinators', () => {
     [
       'ADMIN',
       {},
-      ['Home', 'Overview', 'Students', 'Results', 'Desk', 'Event windows', 'Online import', 'Switches & payment', 'Times & notice', 'Departments & events', 'Accounts', 'Help requests', 'Health & backups', 'Testing'],
+      ['Home', 'Overview', 'Students', 'Results', 'Desk', 'Event windows', 'Gate pass check', 'Online import', 'Switches & payment', 'Times & notice', 'Departments & events', 'Accounts', 'Help requests', 'Health & backups', 'Testing'],
     ],
     ['OVERALL', {}, ['Overview', 'Students', 'Results']],
     ['HOD', { department: 'CSE' }, ['Overview', 'Students', 'Results']],

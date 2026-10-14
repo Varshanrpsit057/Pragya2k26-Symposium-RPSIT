@@ -702,3 +702,91 @@
   min-height: 2.9rem;
   font-size: 1.05rem;
 }
+
+/* Gate pass check: the answer for the ID typed, big enough to read at arm's length */
+.fest-gate__answer {
+  display: grid;
+  gap: 0.25rem;
+  margin-top: 0.75rem;
+  padding: 0.9rem 1rem;
+  border: 2px solid var(--adm-line);
+  border-radius: 12px;
+}
+
+.fest-gate__answer.is-good {
+  border-color: var(--adm-green);
+  background: var(--adm-green-soft);
+}
+
+.fest-gate__answer.is-warn {
+  border-color: #d08a00;
+  background: var(--adm-amber-soft);
+}
+
+.fest-gate__answer.is-bad {
+  border-color: var(--adm-red);
+  background: var(--adm-red-soft);
+}
+
+.fest-gate__status {
+  font-size: 1.5rem;
+  font-weight: 800;
+}
+
+/* Winners: each place, a row per student, found among the event's participants */
+.fest-place {
+  display: grid;
+  gap: 0.5rem;
+  margin: 0 0 0.75rem;
+  padding: 0.6rem 0.75rem 0.75rem;
+  border: 1px solid var(--adm-line);
+  border-radius: 10px;
+}
+
+.fest-place legend {
+  padding: 0 0.3rem;
+  font-weight: 700;
+}
+
+.fest-place__list {
+  display: grid;
+  gap: 0.35rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.fest-place__list li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.25rem 0.5rem;
+  padding: 0.35rem 0.5rem;
+  border-radius: 8px;
+  background: var(--adm-select);
+}
+
+.fest-place__list .adm-button {
+  margin-left: auto;
+}
+
+.fest-place__found {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+
+/* The desk's cash hand-over */
+.fest-handover {
+  display: grid;
+  gap: 0.5rem;
+  margin: 0.75rem 0;
+  padding: 0.75rem 0.85rem;
+  border: 1px solid var(--adm-line);
+  border-radius: 10px;
+  background: #fafbff;
+}
+
+.fest-handover .adm-h3 {
+  margin: 0;
+}

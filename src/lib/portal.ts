@@ -7,7 +7,7 @@
 import { DEFAULT_UPI, UPI_ID } from './fest';
 
 /** The staff roles whose sign-in can be switched off all at once. */
-export const LOGIN_ROLES = ['OVERALL', 'DEPT_ADMIN', 'DESK', 'COORDINATOR'] as const;
+export const LOGIN_ROLES = ['OVERALL', 'DEPT_ADMIN', 'DESK', 'COORDINATOR', 'NONTECH'] as const;
 export type LoginRole = (typeof LOGIN_ROLES)[number];
 
 export interface PortalSwitches {
@@ -49,7 +49,7 @@ export const DEFAULT_PORTAL: PortalSettings = {
   eventEntry: true,
   results: true,
   downloads: true,
-  logins: { OVERALL: true, DEPT_ADMIN: true, DESK: true, COORDINATOR: true },
+  logins: { OVERALL: true, DEPT_ADMIN: true, DESK: true, COORDINATOR: true, NONTECH: true },
   upiId: DEFAULT_UPI.upiId,
   upiPayee: DEFAULT_UPI.upiPayee,
   qrAt: null,
@@ -101,6 +101,7 @@ export const LOGIN_LABELS: Record<LoginRole, string> = {
   DEPT_ADMIN: 'Department admins',
   DESK: 'Registration desks',
   COORDINATOR: 'Event coordinators',
+  NONTECH: 'Non-technical events (view only)',
 };
 
 const isObject = (value: unknown): value is Record<string, unknown> => typeof value === 'object' && value !== null && !Array.isArray(value);

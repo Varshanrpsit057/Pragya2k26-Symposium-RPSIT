@@ -12,7 +12,7 @@
  *
  * Every rule is checked here; the dashboards only hide what a role cannot use.
  */
-import { canJoin, catalogProblem, DEFAULT_CATALOG, DESKS, departmentOf, deptShort, entryOf, eventOf, feePaid, formatFestId, ID_RANGES, isActive, matchEvents, normaliseFestId, parseFestId, participantProblems, readParticipant, selfRegistrationProblems, showId, toStudentView, TXN, type FestCatalog, type FestDepartment, type FestEvent, type FestMethod, type FestParticipant, type FestPayment, type FestPlace, type FestRegistration, type FestResult, type FestSource, type FestStamp, type UtrChange } from '../src/lib/fest';
+import { canJoin, catalogProblem, DEFAULT_CATALOG, DESKS, deskMoney, departmentOf, deptShort, entryOf, eventOf, feePaid, formatFestId, gateStudent, type HandOver, ID_RANGES, isActive, matchEvents, normaliseFestId, parseFestId, participantProblems, readParticipant, selfRegistrationProblems, showId, toStudentView, TXN, type FestCatalog, type FestDepartment, type FestEvent, type FestMethod, type FestParticipant, type FestPayment, type FestPlace, type FestRegistration, type FestResult, type FestSource, type FestStamp, type UtrChange } from '../src/lib/fest';
 import { timingSafeEqual } from 'node:crypto';
 import { formatIst, parseEventStart } from '../src/lib/countdown';
 import { DEFAULT_PORTAL, portalProblem, QR_IMAGE, QR_MAX_CHARS, readPortal, tidyUtr, UTR, type BackupStatus, type PortalSettings, type SwitchName } from '../src/lib/portal';
@@ -79,6 +79,8 @@ const sameSecret = (a: string, b: string) => {
 
 const isObject = (value: unknown): value is Record<string, unknown> => typeof value === 'object' && value !== null && !Array.isArray(value);
 const text = (value: unknown, max = 200) => (typeof value === 'string' ? value.replace(/\s+/g, ' ').trim().slice(0, max) : '');
+/** Where a desk's hand-overs are kept (a list each, so two desks never write over each other). */
+const handOverKey = (dept: string, desk: number) => `fest-handover-${dept}-${desk}`;
 const int = (value: unknown, fallback: number) => (typeof value === 'number' && Number.isInteger(value) ? value : typeof value === 'string' && /^\d{1,6}$/.test(value) ? Number(value) : fallback);
 
 export class FestService {
@@ -420,23 +422,29 @@ export class FestService {
     if (replay) return { registration: await this.required(dept, replay), replayed: true };
     const catalog = await this.catalog();
     const mark = await this.deps.testMark();
-    const duplicate = (existingId: string | null) => {
-      // A student is never told whose ID it is; a desk is (it then opens that registration).
+    const duplicate = (existingId: string | null, where = dept) => {
+      // A student is never told whose ID it is; a desk is (it then opens that registration, when it is its department's).
       const desk = stamp.by !== STUDENT;
+      const elsewhere = where !== dept;
       return new ApiError(
         409,
         'DUPLICATE_PHONE',
         desk
-          ? `This mobile number is already registered in ${deptShort(dept)} as ${showId(existingId ?? '')}. Open that registration instead.`
-          : `This mobile number is already registered in ${deptShort(dept)}. Open "My registration ID", or go to a ${deptShort(dept)} registration desk.`,
+          ? elsewhere
+            ? `This mobile number is already registered under ${deptShort(where)} as ${showId(existingId ?? '')}: a student registers under one department only.`
+            : `This mobile number is already registered in ${deptShort(dept)} as ${showId(existingId ?? '')}. Open that registration instead.`
+          : elsewhere
+            ? `This mobile number is already registered under ${deptShort(where)}: a student registers under one department only. Open "My registration ID", or go to a ${deptShort(where)} registration desk.`
+            : `This mobile number is already registered in ${deptShort(dept)}. Open "My registration ID", or go to a ${deptShort(dept)} registration desk.`,
         undefined,
         undefined,
-        desk ? { existingId: existingId ?? '' } : undefined,
+        desk && !elsewhere ? { existingId: existingId ?? '' } : undefined,
       );
     };
-    // Checked before an ID is taken, so a refused number leaves no gap in the IDs.
-    const holder = await this.deps.store.findPhone(dept, participant.phone);
-    if (holder) throw duplicate(holder);
+    // Checked before an ID is taken, so a refused number leaves no gap in the IDs: in every
+    // department, as a student registers under one department only.
+    const holder = await this.phoneHolder(participant.phone);
+    if (holder) throw duplicate(holder.id, holder.dept);
     for (let attempt = 0; attempt < 5; attempt += 1) {
       const number = await this.deps.store.takeNumbers(dept, 'SELF', 1);
       if (number > ID_RANGES.SELF.last) throw new ApiError(409, 'IDS_EXHAUSTED', `${deptShort(dept)} has used every registration ID. Ask the web assist team.`);
@@ -480,6 +488,26 @@ export class FestService {
   private async releaseUnlessKept(payment: FestPayment, registration: FestRegistration) {
     const kept = registration.entry.status === 'PAID' && sameUtr(registration.entry.payment?.txn, payment.txn);
     if (!kept) await this.releasePayment(payment, registration.id);
+  }
+
+  /**
+   * Who has this mobile number, in any department: a student registers under one department only
+   * (the per-department claim keeps two at once out of one department; every department is read here).
+   */
+  private async phoneHolder(phone: string, except = ''): Promise<{ dept: string; id: string } | null> {
+    if (!phone) return null;
+    const catalog = await this.catalog();
+    const found = await Promise.all(catalog.departments.map(async (department) => ({ dept: department.code, id: await this.deps.store.findPhone(department.code, phone) })));
+    const holder = found.find((item) => item.id && item.id !== except);
+    return holder?.id ? { dept: holder.dept, id: holder.id } : null;
+  }
+
+  /** Refuses a number another department's student has (an edit, or restoring a deleted one). */
+  private async phoneFree(phone: string, dept: string, id: string) {
+    const holder = await this.phoneHolder(phone, id);
+    if (holder && holder.dept !== dept) {
+      throw new ApiError(409, 'DUPLICATE_PHONE', `That mobile number is registered under ${deptShort(holder.dept)} as ${showId(holder.id)}: a student registers under one department only.`);
+    }
   }
 
   private async required(dept: string, id: string) {
@@ -550,6 +578,10 @@ export class FestService {
     };
 
     if (action === 'events') return this.changeEvents(catalog, dept, id, input, stamp);
+    if (action === 'edit' && isObject(input.participant) && typeof input.participant.phone === 'string') {
+      await this.phoneFree(readParticipant({ ...input.participant }).phone, dept, id);
+    }
+    if (action === 'restore') await this.phoneFree((await this.required(dept, id)).phone, dept, id);
 
     if (action === 'collect' || action === 'checkin' || action === 'entry') {
       // The entry fee taken at the desk: cash, or UPI with its UTR (accepted once across the fest).
@@ -957,12 +989,12 @@ export class FestService {
     return event;
   }
 
-  /** The event window: add a student, take the fee, mark attendance; corrections cancel a fee. */
+  /** The event window: add a student (or take one added by mistake out), take the fee, mark attendance; corrections cancel a fee. */
   async eventAct(actor: Actor, rawId: string, eventId: string, body: unknown) {
     const { id, dept } = this.target(rawId);
     const event = await this.festEvent(eventId);
     const action = isObject(body) ? body.action : null;
-    if (!['add', 'fee', 'present', 'absent', 'void-fee'].includes(String(action))) throw new ApiError(400, 'INVALID', 'Choose what to do.');
+    if (!['add', 'remove', 'fee', 'present', 'absent', 'void-fee'].includes(String(action))) throw new ApiError(400, 'INVALID', 'Choose what to do.');
     requirePermission(actor, action === 'void-fee' ? 'fest.correct' : 'fest.event');
     if (action !== 'void-fee') this.eventAccess(actor, event);
     // A student takes part only in their own department's events.
@@ -983,6 +1015,13 @@ export class FestService {
         if (entry) return null;
         if (!event.active) throw new ApiError(400, 'INVALID', `${event.name} is closed for registration.`);
         return { next: { events: [...registration.events, { eventId: event.id, added: stamp }] } };
+      }
+      if (action === 'remove') {
+        // Added by mistake: taken out again, as long as nothing was recorded for them there.
+        if (!entry) return null;
+        if (entry.present) throw new ApiError(409, 'PRESENT', 'They are marked present: undo that first.');
+        if (feePaid(entry)) throw new ApiError(409, 'FEE_PAID', 'Their event fee is taken: ask the overall coordinator to cancel it first.');
+        return { next: { events: registration.events.filter((item) => item.eventId !== event.id) } };
       }
       if (!entry) throw new ApiError(409, 'NOT_IN_EVENT', `${showId(id)} is not registered for ${event.name}. Add them first.`);
       switch (action) {
@@ -1061,6 +1100,8 @@ export class FestService {
       const ids = [...new Set((Array.isArray(item.ids) ? item.ids : []).map((id) => normaliseFestId(String(id))).filter(Boolean))];
       if (!ids.length) continue;
       if (ids.length > event.teamMax) throw new ApiError(400, 'INVALID', `${event.name} allows teams of up to ${event.teamMax}.`);
+      const twice = ids.find((id) => places.some((other) => other.ids.includes(id)));
+      if (twice) throw new ApiError(400, 'INVALID', `${showId(twice)} is in two places: a student wins one place only.`);
       for (const id of ids) {
         const owner = parseFestId(id);
         const registration = owner ? await this.deps.store.getRegistration(owner.dept, id) : null;
@@ -1112,9 +1153,9 @@ export class FestService {
         continue;
       }
       phones.set(participant.phone, row);
-      const existing = await this.deps.store.findPhone(dept, participant.phone);
+      const existing = await this.phoneHolder(participant.phone);
       if (existing) {
-        outcomes.push({ row, status: 'duplicate', id: existing, message: `Already registered as ${existing}.` });
+        outcomes.push({ row, status: 'duplicate', id: existing.id, message: existing.dept === dept ? `Already registered as ${existing.id}.` : `Already registered under ${deptShort(existing.dept)} as ${existing.id} (one department per student).` });
         continue;
       }
       ready.push({ row, participant, eventIds: ids, ref: text(isObject(raw) ? raw.ref : '', 80) });
@@ -1271,6 +1312,57 @@ export class FestService {
     const catalog = await this.catalog();
     const parts = await Promise.all(catalog.departments.map((dept) => this.deps.store.changes(dept.code, '')));
     return { at: this.iso(), catalog, registrations: parts.flatMap((part) => part.registrations), results: parts.flatMap((part) => part.results) };
+  }
+
+  /**
+   * A desk hands over its cash: what it counted, kept beside what the system says that desk took
+   * (desks: their own; department admins and the web assist team choose the desk).
+   */
+  async handOver(actor: Actor, body: unknown) {
+    const input = isObject(body) ? body : {};
+    const department = await this.workDepartment(actor, input.dept);
+    const desk = actor.role === 'DESK' ? (actor.deskNumber ?? 0) : int(input.desk, 0);
+    if (desk < 1 || desk > DESKS) throw new ApiError(400, 'INVALID', `Choose the desk: 1 to ${DESKS}.`);
+    const counted = int(input.counted, -1);
+    if (counted < 0 || counted > 10_000_000) throw new ApiError(400, 'INVALID', 'Type the cash counted, in rupees.');
+    const { registrations } = await this.deps.store.changes(department.code, '');
+    const money = deskMoney(registrations, department.code, desk);
+    const entry: HandOver = { dept: department.code, desk, at: this.iso(), by: actor.username, counted, system: money.cash, upi: money.upi, note: text(input.note, 200) };
+    const key = handOverKey(department.code, desk);
+    const list = [...(await this.storedHandOvers(key)), entry].slice(-50);
+    await this.deps.settings.putSetting(key, JSON.stringify(list));
+    this.deps.log('Desk cash handed over', { dept: department.code, desk, counted, system: money.cash, by: actor.username });
+    return { success: true as const, handOver: entry };
+  }
+
+  /** The hand-overs of the departments this account sees, newest first. */
+  async handOvers(actor: Actor) {
+    const departments = await this.viewDepartments(actor, undefined);
+    const lists = await Promise.all(departments.flatMap((dept) => Array.from({ length: DESKS }, (_, index) => this.storedHandOvers(handOverKey(dept, index + 1)))));
+    // Each list is kept oldest first: reversed, then sorted (stable), the newest comes first even within a second.
+    return { success: true as const, handOvers: lists.flatMap((list) => [...list].reverse()).sort((a, b) => b.at.localeCompare(a.at)) };
+  }
+
+  private async storedHandOvers(key: string): Promise<HandOver[]> {
+    try {
+      const raw = await this.deps.settings.getSetting(key);
+      const parsed: unknown = raw ? JSON.parse(raw) : [];
+      return Array.isArray(parsed) ? (parsed as HandOver[]) : [];
+    } catch {
+      return [];
+    }
+  }
+
+  /** The gate pass check (non-technical events): every department's active students, paid or not; nothing else. */
+  async gateList() {
+    const catalog = await this.catalog();
+    const parts = await Promise.all(catalog.departments.map((dept) => this.deps.store.changes(dept.code, '')));
+    const students = parts
+      .flatMap((part) => part.registrations)
+      .filter(isActive)
+      .map(gateStudent)
+      .sort((a, b) => a.id.localeCompare(b.id));
+    return { success: true as const, students, serverTime: this.iso() };
   }
 
   /** "Back up now" (web assist team): the same copies the schedule makes, with how they went. */

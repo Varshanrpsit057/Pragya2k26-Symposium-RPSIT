@@ -482,6 +482,57 @@ export const TXN = /^[A-Za-z0-9]{6,35}$/;
 export const canJoin = (registration: Pick<FestRegistration, 'dept'>, event: Pick<FestEvent, 'dept'>) => registration.dept === event.dept;
 /** A self-registered student whose transaction ID waits for a desk. */
 export const awaitingCheck = (registration: FestRegistration) => registration.entry.status === 'DUE' && Boolean(registration.entry.claim) && !registration.entry.rejected;
+
+/**
+ * A desk's cash hand-over: the cash it counted at closing, beside what the system says it took in
+ * cash (and by UPI, already in the account) at that moment.
+ */
+export interface HandOver {
+  dept: string;
+  desk: number;
+  at: string;
+  by: string;
+  counted: number;
+  system: number;
+  upi: number;
+  note: string;
+}
+
+/** Cash and UPI entry fees a desk took (active registrations, payments not voided). */
+export function deskMoney(registrations: Iterable<FestRegistration>, dept: string, desk: number | null) {
+  let count = 0;
+  let cash = 0;
+  let upi = 0;
+  for (const item of registrations) {
+    if (item.dept !== dept || !isActive(item)) continue;
+    const payment = item.entry.payment;
+    if (!payment || payment.voided || (payment.desk ?? null) !== desk) continue;
+    count += 1;
+    if (payment.method === 'CASH') cash += payment.amount;
+    else if (payment.method === 'UPI') upi += payment.amount;
+  }
+  return { count, cash, upi };
+}
+
+/** A student as the gate pass check sees them (non-technical events): no phone, no email, view only. */
+export interface GateStudent {
+  id: string;
+  dept: string;
+  name: string;
+  college: string;
+  collegeCode: string;
+  /** PAID: paid and verified by a desk; TO_CHECK: they sent a UPI transaction ID the desk has not checked yet; DUE: not paid. */
+  status: 'PAID' | 'TO_CHECK' | 'DUE';
+}
+
+export const gateStudent = (registration: FestRegistration): GateStudent => ({
+  id: registration.id,
+  dept: registration.dept,
+  name: registration.name,
+  college: registration.college,
+  collegeCode: registration.collegeCode ?? '',
+  status: registration.entry.status === 'PAID' ? 'PAID' : awaitingCheck(registration) ? 'TO_CHECK' : 'DUE',
+});
 /** The department's name, or what a self-registered student's "department" is called. */
 export const deptLabel = (catalog: FestCatalog | null, code: string) => (catalog && departmentOf(catalog, code)?.name) || deptShort(code);
 

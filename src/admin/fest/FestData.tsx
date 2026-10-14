@@ -97,6 +97,11 @@ export function useFestCatalog(): FestCatalog {
   return useContext(FestContext)?.catalog ?? DEFAULT_CATALOG;
 }
 
+/** The live data when this account has it (null for roles that see no registrations). */
+export function useFestMaybe(): FestContextValue | null {
+  return useContext(FestContext);
+}
+
 export function useFest(): FestContextValue {
   const value = useContext(FestContext);
   if (!value) throw new Error('useFest outside FestProvider');

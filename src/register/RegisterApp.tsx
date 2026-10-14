@@ -209,7 +209,7 @@ function ChooseDepartment({ info, onChoose, onFind }: { info: PublicInfo; onChoo
   return (
     <section className="reg-panel">
       <h1 className="reg-h1">Choose your department</h1>
-      <p className="reg-lead">You register for one department and take part in its events. Its registration desk checks your payment.</p>
+      <p className="reg-lead">You register under one department only, and take part in its events. Its registration desk checks your payment.</p>
       <ul className="reg-depts">
         {info.departments.map((item) => (
           <li key={item.code}>
