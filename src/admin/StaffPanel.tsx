@@ -5,8 +5,9 @@ import { deptShort, eventLabel, type FestCatalog } from '../lib/fest';
 import { CREATABLE_ROLES, DEPARTMENT_ROLES, ROLE_INFO, type SessionInfo, type StaffAccountView, type StaffRole } from '../lib/staff';
 import { ApiFailure, SignedOut, createStaff, deleteStaff, listStaff, signOutStaff, signedInNow, updateStaff, type StaffChange } from './adminApi';
 import { PORTAL, saveTable } from './fest/excel';
+import { buildLoginsDoc, DOCX_TYPE } from './loginsDoc';
 import { useFestCatalog } from './fest/FestData';
-import { Badge, ErrorNote, LiveStatus, useLiveData, when } from './ui';
+import { Badge, ErrorNote, LiveStatus, saveFile, useLiveData, when } from './ui';
 
 interface PanelProps {
   token: string;
@@ -453,7 +454,8 @@ interface PlannedAccount {
   deskNumber?: number;
   eventIds: string[];
   password: string;
-  status?: 'created' | 'exists' | 'failed';
+  /** created now; exists (left as it is); reset: an existing account given this new password. */
+  status?: 'created' | 'exists' | 'reset' | 'failed';
   message?: string;
 }
 
@@ -495,9 +497,14 @@ export function planFor(catalog: FestCatalog, code: string): PlannedAccount[] {
   return plan;
 }
 
-/** Already there: the same username, or (a coordinator) an account that already has that event. */
-export const planExists = (item: PlannedAccount, existing: readonly StaffAccountView[]) =>
-  existing.some((account) => account.username === item.username || (item.role === 'COORDINATOR' && account.role === 'COORDINATOR' && item.eventIds.every((id) => account.eventIds.includes(id))));
+/** The account already there for it: the same username, or (a coordinator) one that already has that event. */
+export const existingFor = (item: PlannedAccount, existing: readonly StaffAccountView[]) =>
+  existing.find((account) => account.username === item.username) ??
+  existing.find((account) => item.role === 'COORDINATOR' && account.role === 'COORDINATOR' && item.eventIds.every((id) => account.eventIds.includes(id)));
+export const planExists = (item: PlannedAccount, existing: readonly StaffAccountView[]) => Boolean(existingFor(item, existing));
+
+/** Every department at once (the department list's first choice). */
+const ALL = '*';
 
 /**
  * Makes a department's accounts in one go (those that do not exist yet), with strong
@@ -510,7 +517,16 @@ function DepartmentAccounts({ token, existing, onCreated, onSignedOut }: { token
   const [busy, setBusy] = useState(false);
   const choose = (next: string) => {
     setCode(next);
-    setPlan(next ? planFor(catalog, next).map((item) => (planExists(item, existing) ? { ...item, status: 'exists' as const } : item)) : []);
+    const codes = next === ALL ? catalog.departments.map((dept) => dept.code) : next ? [next] : [];
+    setPlan(
+      codes
+        .flatMap((dept) => planFor(catalog, dept))
+        .map((item) => {
+          // An account already there keeps its own username (a coordinator may have been made by hand).
+          const found = existingFor(item, existing);
+          return found ? { ...item, username: found.username, status: 'exists' as const } : item;
+        }),
+    );
   };
   const hods = existing.filter((account) => account.role === 'HOD');
   const create = async () => {
@@ -533,8 +549,54 @@ function DepartmentAccounts({ token, existing, onCreated, onSignedOut }: { token
     }
     setBusy(false);
   };
-  const created = plan.filter((item) => item.status === 'created');
+  /**
+   * Passwords are shown once and only their hash is kept, so the logins of accounts made earlier
+   * cannot be downloaded again: they get new passwords (and are signed out) instead.
+   */
+  const resetExisting = async () => {
+    const targets = plan.filter((item) => item.status === 'exists');
+    if (
+      !window.confirm(
+        `Give the ${targets.length} existing account${targets.length === 1 ? '' : 's'} new passwords?\n\nTheir old passwords stop working at once and anyone signed in with them is signed out. Then download the new logins and hand them out again.`,
+      )
+    )
+      return;
+    setBusy(true);
+    const next = [...plan];
+    for (const [index, item] of next.entries()) {
+      if (item.status !== 'exists') continue;
+      const password = generatePassword();
+      try {
+        await updateStaff(token, item.username, { password });
+        next[index] = { ...item, password, status: 'reset', message: '' };
+      } catch (failure) {
+        if (failure instanceof SignedOut) {
+          onSignedOut();
+          return;
+        }
+        next[index] = { ...item, status: 'failed', message: failure instanceof Error ? failure.message : '' };
+      }
+      setPlan([...next]);
+    }
+    setBusy(false);
+  };
+  const created = plan.filter((item) => item.status === 'created' || item.status === 'reset');
   const toCreate = plan.filter((item) => !item.status).length;
+  const toReset = plan.filter((item) => item.status === 'exists').length;
+  const fileName = code === ALL ? 'all-departments' : code.toLowerCase();
+  const scopeName = code === ALL ? 'every department' : deptShort(code);
+  const forWhat = (item: PlannedAccount) => (item.role === 'DESK' ? `Desk ${item.deskNumber}` : item.eventIds.length ? item.eventIds.map((id) => eventName(catalog, id)).join(', ') : `${deptShort(item.department)} department`);
+  const downloadWord = () => {
+    const groups = catalog.departments
+      .map((dept) => ({
+        title: `${deptShort(dept.code)} · ${dept.name}`,
+        signInAt: `${window.location.origin}/landing/${dept.code.toLowerCase()}/admin/`,
+        rows: created.filter((item) => item.department === dept.code).map((item) => ({ role: ROLE_INFO[item.role].label, for: forWhat(item), username: item.username, password: item.password })),
+      }))
+      .filter((group) => group.rows.length);
+    const made = new Intl.DateTimeFormat('en-IN', { timeZone: 'Asia/Kolkata', dateStyle: 'medium', timeStyle: 'short' }).format(new Date());
+    saveFile(`${fileName}-logins.docx`, buildLoginsDoc(groups, `R P Sarathy Institute of Technology, Salem · logins for ${scopeName}, made ${made}`), DOCX_TYPE);
+  };
 
   return (
     <section className="adm-card adm-pad">
@@ -552,6 +614,7 @@ function DepartmentAccounts({ token, existing, onCreated, onSignedOut }: { token
         <span>Department</span>
         <select value={code} onChange={(event) => choose(event.target.value)} disabled={busy}>
           <option value="">Choose…</option>
+          <option value={ALL}>All {catalog.departments.length} departments</option>
           {catalog.departments.map((dept) => (
             <option key={dept.code} value={dept.code}>
               {deptShort(dept.code)} · {dept.name}
@@ -582,6 +645,7 @@ function DepartmentAccounts({ token, existing, onCreated, onSignedOut }: { token
                     </td>
                     <td>
                       {item.status === 'created' && <Badge tone="good">Created</Badge>}
+                      {item.status === 'reset' && <Badge tone="good">New password</Badge>}
                       {item.status === 'exists' && <Badge tone="plain">Already exists</Badge>}
                       {item.status === 'failed' && <Badge tone="bad">{item.message || 'Failed'}</Badge>}
                     </td>
@@ -592,14 +656,22 @@ function DepartmentAccounts({ token, existing, onCreated, onSignedOut }: { token
           </div>
           <div className="adm-inline adm-inline--wrap">
             <button className="adm-button adm-button--primary" type="button" disabled={busy || toCreate === 0} onClick={() => void create()}>
-              {busy ? 'Creating…' : `Create ${toCreate} accounts`}
+              {busy ? 'Working…' : `Create ${toCreate} accounts`}
+            </button>
+            {toReset > 0 && (
+              <button className="adm-button adm-button--danger-outline" type="button" disabled={busy} onClick={() => void resetExisting()}>
+                New passwords for the {toReset} existing account{toReset === 1 ? '' : 's'}
+              </button>
+            )}
+            <button className="adm-button" type="button" disabled={!created.length} onClick={downloadWord}>
+              Download the logins (Word)
             </button>
             <button
               className="adm-button"
               type="button"
               disabled={!created.length}
               onClick={() =>
-                saveTable(`${code}-accounts.xlsx`, `${deptShort(code)} logins`, `${PORTAL} · new logins for ${deptShort(code)}: give each person their own, privately`, [
+                saveTable(`${fileName}-logins.xlsx`, 'Staff logins', `${PORTAL} · logins for ${scopeName}: give each person their own, privately`, [
                   ['Department', 'Role', 'Name', 'Username', 'Password', 'Desk', 'Events', 'Sign in at'],
                   ...created.map((item) => [
                     deptShort(item.department),
@@ -614,9 +686,15 @@ function DepartmentAccounts({ token, existing, onCreated, onSignedOut }: { token
                 ])
               }
             >
-              Download the new logins (Excel)
+              Download the logins (Excel)
             </button>
           </div>
+          {!created.length && toReset > 0 && !busy && (
+            <p className="adm-muted">
+              These accounts were made earlier: their passwords were shown only then and cannot be read again. To download the logins, give them new passwords (they are signed out until
+              they use the new one).
+            </p>
+          )}
           {created.length > 0 && <p className="adm-note">Download the logins now: the passwords are not shown again. Give each person their own login privately.</p>}
         </>
       )}

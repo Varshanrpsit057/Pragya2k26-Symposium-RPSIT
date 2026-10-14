@@ -215,7 +215,12 @@ overall coordinator's **Venue** filter, so fill them in before the day.
 
 1. Main dashboard → **Accounts** → **Create a department's accounts** → choose the department →
    **Create**. It makes the department admin, **2 desks** and **1 coordinator per event** (9 accounts for CSE, 68 for all 8 departments) with strong passwords. There is **no HOD account per department**: the HOD is the overall coordinator.
-2. **Download the new logins (Excel) straight away.** The passwords are shown only once.
+2. **Download the logins (Word or Excel) straight away.** The Word file has a table per department
+   (role, what for, username, password). The passwords are shown only once. Choose **All 8
+   departments** to make (or download) everything in one go.
+   - **Accounts made earlier** show *Already exists*: their passwords cannot be read again. Press
+     **New passwords for the N existing accounts**: they get new passwords (the old ones stop
+     working and they are signed out), then download the logins and hand them out again.
 3. Repeat for all 8 departments.
 4. Create, by hand, in **Accounts → New account**:
    - the **overall coordinator, the HOD** (role *Overall coordinator (HOD)*), no department;
