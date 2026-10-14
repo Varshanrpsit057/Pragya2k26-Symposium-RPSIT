@@ -288,6 +288,13 @@ export interface UtrHolder {
   by: string | null;
 }
 
+/** A UTR corrected at a desk (a typo, or one that clashed with another student's). */
+export interface UtrChange extends FestStamp {
+  from: string;
+  to: string;
+  reason: string;
+}
+
 /** The UPI transaction ID a student typed when registering themselves, waiting for a desk to check it. */
 export interface FestClaim {
   txn: string;
@@ -304,6 +311,8 @@ export interface FestRegistration {
   phone: string;
   email: string;
   college: string;
+  /** The college's code; missing on registrations made before it was asked. */
+  collegeCode?: string;
   /** The student's own branch (e.g. 'B.E. CSE'). */
   branch: string;
   year: string;
@@ -326,6 +335,8 @@ export interface FestRegistration {
   test?: boolean;
   /** The desk's submission this came from (a retry finds it instead of registering twice). */
   sid?: string;
+  /** Every change of this student's UPI transaction ID (UTR), kept for the record: who, when, from what, to what, why. */
+  utrLog?: UtrChange[];
   /** Version (each change adds one) and change stamp (for the live updates). */
   v: number;
   u: string;
@@ -411,6 +422,7 @@ export interface StudentView {
   dept: string;
   name: string;
   college: string;
+  collegeCode: string;
   branch: string;
   year: string;
   team: string;
@@ -424,7 +436,10 @@ export interface StudentView {
   canChange: boolean;
   reason: string;
   entryFee: number;
-  events: { eventId: string; feePaid: boolean; present: boolean }[];
+  /** The entry fee as collected and verified at the desk: how much, how, when and at which desk. */
+  paid: { amount: number; method: FestMethod; at: string; desk: number | null } | null;
+  /** Each event, with its fee (paid at the venue) and attendance. */
+  events: { eventId: string; feePaid: boolean; feeAmount: number; present: boolean }[];
   createdAt: string;
 }
 
@@ -435,6 +450,7 @@ export function toStudentView(registration: FestRegistration, canChange = false)
     dept: registration.dept,
     name: registration.name,
     college: registration.college,
+    collegeCode: registration.collegeCode ?? '',
     branch: registration.branch,
     year: registration.year,
     team: registration.team,
@@ -444,7 +460,11 @@ export function toStudentView(registration: FestRegistration, canChange = false)
     canChange,
     reason: entry.rejected?.reason ?? '',
     entryFee: entry.claim?.amount ?? entry.payment?.amount ?? 0,
-    events: registration.events.map((item) => ({ eventId: item.eventId, feePaid: feePaid(item), present: Boolean(item.present) })),
+    paid:
+      entry.status === 'PAID' && entry.payment && !entry.payment.voided
+        ? { amount: entry.payment.amount, method: entry.payment.method, at: entry.payment.at, desk: entry.payment.desk ?? registration.checkedIn?.desk ?? null }
+        : null,
+    events: registration.events.map((item) => ({ eventId: item.eventId, feePaid: feePaid(item), feeAmount: feePaid(item) ? item.fee!.amount : 0, present: Boolean(item.present) })),
     createdAt: registration.created.at,
   };
 }
@@ -455,11 +475,8 @@ export const UPI_ID = /^[A-Za-z0-9._-]{2,64}@[A-Za-z0-9.-]{2,40}$/;
 /** A UPI transaction ID (UTR) or bank reference: letters and digits. */
 export const TXN = /^[A-Za-z0-9]{6,35}$/;
 
-/**
- * A student takes part in their own department's events (Website controls can open every
- * department's events to everyone: `ownDepartmentOnly` false).
- */
-export const canJoin = (registration: Pick<FestRegistration, 'dept'>, event: Pick<FestEvent, 'dept'>, ownDepartmentOnly = true) => !ownDepartmentOnly || registration.dept === event.dept;
+/** A student takes part only in the events of the department they registered under. */
+export const canJoin = (registration: Pick<FestRegistration, 'dept'>, event: Pick<FestEvent, 'dept'>) => registration.dept === event.dept;
 /** A self-registered student whose transaction ID waits for a desk. */
 export const awaitingCheck = (registration: FestRegistration) => registration.entry.status === 'DUE' && Boolean(registration.entry.claim) && !registration.entry.rejected;
 /** The department's name, or what a self-registered student's "department" is called. */
@@ -478,6 +495,8 @@ export interface FestParticipant {
   phone: string;
   email: string;
   college: string;
+  /** The college's code (e.g. its Anna University / TNEA code, 2639): letters and digits; '' when not given. */
+  collegeCode: string;
   branch: string;
   year: string;
   team: string;
@@ -488,6 +507,10 @@ export const YEARS = ['1st Year', '2nd Year', '3rd Year', '4th Year', 'PG'] as c
 const NAME = /^[\p{L}][\p{L}\p{M} .']{1,79}$/u;
 const PHONE = /^[6-9]\d{9}$/;
 const EMAIL = /^[^\s@]{1,64}@[^\s@]{1,190}\.[^\s@]{2,24}$/;
+/** A college code: 2 to 10 letters or digits (stored in capitals, without spaces). */
+export const COLLEGE_CODE = /^[A-Z0-9]{2,10}$/;
+/** ' tn 2639 ' → 'TN2639'. */
+export const tidyCollegeCode = (value: string) => value.replace(/[\s.-]+/g, '').toUpperCase();
 
 /** '+91 98765-43210' → '9876543210'. */
 export const tidyPhone = (value: string) => {
@@ -504,6 +527,7 @@ export function readParticipant(input: unknown): FestParticipant {
     phone: tidyPhone(tidy(value.phone, 30)),
     email: tidy(value.email, 254).toLowerCase(),
     college: tidy(value.college, 160),
+    collegeCode: tidyCollegeCode(tidy(value.collegeCode, 20)),
     branch: tidy(value.branch, 120),
     year: tidy(value.year, 20),
     team: tidy(value.team, 60),
@@ -517,6 +541,7 @@ export function participantProblems(participant: FestParticipant): Partial<Recor
   if (!PHONE.test(participant.phone)) problems.phone = 'Enter a 10-digit mobile number.';
   if (participant.email && !EMAIL.test(participant.email)) problems.email = 'Check the email address.';
   if (participant.college.length < 2) problems.college = 'Enter the college.';
+  if (participant.collegeCode && !COLLEGE_CODE.test(participant.collegeCode)) problems.collegeCode = 'Check the college code (2 to 10 letters or digits).';
   if (participant.team && participant.team.length < 2) problems.team = 'Team names have at least 2 letters.';
   return problems;
 }
@@ -590,6 +615,8 @@ export const IMPORT_FIELDS: { field: ImportField; label: string; required: boole
   { field: 'name', label: 'Name', required: true, hints: /^(full ?)?name|participant|student/i },
   { field: 'phone', label: 'Phone', required: true, hints: /phone|mobile|contact|whats ?app/i },
   { field: 'email', label: 'Email', required: false, hints: /e-?mail/i },
+  // Before College: a "College code" column is the code, not the name.
+  { field: 'collegeCode', label: 'College code', required: false, hints: /(college|institut\w*|inst)\.? ?code|^code$/i },
   { field: 'college', label: 'College', required: true, hints: /college|institut|university|school/i },
   { field: 'branch', label: 'Branch', required: false, hints: /branch|department|dept|course|stream/i },
   { field: 'year', label: 'Year', required: false, hints: /year|semester|sem\b/i },
@@ -637,7 +664,12 @@ export interface CollegeRow {
   key: string;
   /** As most of its students typed it. */
   name: string;
+  /** Its code, as most of its students typed it ('' when none). */
+  code: string;
   students: number;
+  /** Event registrations of its students, and how many of those they attended (marked present). */
+  registrations: number;
+  participations: number;
   /** Places won in submitted results (a team counts once for its college). */
   first: number;
   second: number;
@@ -645,15 +677,19 @@ export interface CollegeRow {
   places: number;
 }
 
-/** Students per college, and the 1st, 2nd and 3rd places its students won (submitted results only). */
+/**
+ * The college ranking: students per college, their event participations (attended), and the 1st,
+ * 2nd and 3rd places they won (submitted results only), in medal-table order: most 1st places, then
+ * 2nd, then 3rd, then participations, then students.
+ */
 export function collegeSummary(registrations: Iterable<FestRegistration>, results: Iterable<FestResult>): CollegeRow[] {
-  const rows = new Map<string, CollegeRow & { spellings: Map<string, number> }>();
+  const rows = new Map<string, CollegeRow & { spellings: Map<string, number>; codes: Map<string, number> }>();
   const byId = new Map<string, FestRegistration>();
   const rowOf = (college: string) => {
     const key = collegeKey(college);
     let row = rows.get(key);
     if (!row) {
-      row = { key, name: college || 'Not given', students: 0, first: 0, second: 0, third: 0, places: 0, spellings: new Map() };
+      row = { key, name: college || 'Not given', code: '', students: 0, registrations: 0, participations: 0, first: 0, second: 0, third: 0, places: 0, spellings: new Map(), codes: new Map() };
       rows.set(key, row);
     }
     return row;
@@ -663,7 +699,10 @@ export function collegeSummary(registrations: Iterable<FestRegistration>, result
     byId.set(registration.id, registration);
     const row = rowOf(registration.college);
     row.students += 1;
+    row.registrations += registration.events.length;
+    row.participations += registration.events.filter((entry) => entry.present).length;
     row.spellings.set(registration.college, (row.spellings.get(registration.college) ?? 0) + 1);
+    if (registration.collegeCode) row.codes.set(registration.collegeCode, (row.codes.get(registration.collegeCode) ?? 0) + 1);
   }
   for (const result of results) {
     if (!result.submitted) continue;
@@ -680,8 +719,17 @@ export function collegeSummary(registrations: Iterable<FestRegistration>, result
     }
   }
   return [...rows.values()]
-    .map(({ spellings, ...row }) => ({ ...row, name: [...spellings.entries()].sort((a, b) => b[1] - a[1])[0]?.[0] || 'Not given' }))
-    .sort((a, b) => b.places - a.places || b.first - a.first || b.second - a.second || b.students - a.students || a.name.localeCompare(b.name));
+    .map(({ spellings, codes, ...row }) => ({
+      ...row,
+      name: [...spellings.entries()].sort((a, b) => b[1] - a[1])[0]?.[0] || 'Not given',
+      code: [...codes.entries()].sort((a, b) => b[1] - a[1])[0]?.[0] ?? '',
+    }))
+    .sort(medalOrder);
+}
+
+/** The medal table's order: 1st places, then 2nd, then 3rd, then participations, then students. */
+export function medalOrder(a: CollegeRow, b: CollegeRow) {
+  return b.first - a.first || b.second - a.second || b.third - a.third || b.participations - a.participations || b.students - a.students || a.name.localeCompare(b.name);
 }
 
 // ------------------------------------------------------------------------------------------
@@ -692,8 +740,9 @@ export interface FestTotals {
   desk: number;
   online: number;
   paper: number;
-  /** Registered themselves on their phone; `awaiting`: their transaction ID not checked yet. */
+  /** Registered themselves on their phone; `forThem`: a desk registered them (same IDs); `awaiting`: their transaction ID not checked yet. */
   self: number;
+  forThem: number;
   awaiting: number;
   checkedIn: number;
   entryDue: number;
@@ -716,6 +765,7 @@ export function totalsOf(registrations: Iterable<FestRegistration>, eventId?: st
     online: 0,
     paper: 0,
     self: 0,
+    forThem: 0,
     awaiting: 0,
     checkedIn: 0,
     entryDue: 0,
@@ -734,7 +784,10 @@ export function totalsOf(registrations: Iterable<FestRegistration>, eventId?: st
     totals.registered += 1;
     if (registration.source === 'DESK') totals.desk += 1;
     else if (registration.source === 'ONLINE') totals.online += 1;
-    else if (registration.source === 'SELF') totals.self += 1;
+    else if (registration.source === 'SELF') {
+      if (registration.created.by === 'student') totals.self += 1;
+      else totals.forThem += 1;
+    }
     else totals.paper += 1;
     if (awaitingCheck(registration)) totals.awaiting += 1;
     if (registration.source === 'ONLINE' || registration.source === 'SELF' ? registration.checkedIn : true) totals.checkedIn += 1;

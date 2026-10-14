@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { collegeKey, collegeSummary, deptShort, normaliseFestId, parseFestId, showId, sourceOfNumber, type FestRegistration, type FestResult } from './fest';
+import { collegeKey, collegeSummary, deptShort, medalOrder, normaliseFestId, parseFestId, showId, sourceOfNumber, type CollegeRow, type FestRegistration, type FestResult } from './fest';
 
 const person = (id: string, college: string, extra: Partial<FestRegistration> = {}): FestRegistration => ({
   id,
@@ -47,9 +47,45 @@ describe('the college-wise view', () => {
       result('cse-cyber-hunt', [{ place: 3, ids: ['CSE-0003'] }], false), // not submitted: does not count
     ]);
     expect(rows).toEqual([
-      { key: collegeKey('Sona College of Technology, Salem'), name: 'Sona College of Technology, Salem', students: 3, first: 2, second: 0, third: 0, places: 2 },
-      { key: 'kongu engineering college', name: 'Kongu Engineering College', students: 1, first: 0, second: 1, third: 0, places: 1 },
+      { key: collegeKey('Sona College of Technology, Salem'), name: 'Sona College of Technology, Salem', code: '', students: 3, registrations: 0, participations: 0, first: 2, second: 0, third: 0, places: 2 },
+      { key: 'kongu engineering college', name: 'Kongu Engineering College', code: '', students: 1, registrations: 0, participations: 0, first: 0, second: 1, third: 0, places: 1 },
     ]);
+  });
+
+  it('counts each college’s event participations (attended) and registrations', () => {
+    const stamp = { at: '2026-10-17T05:00:00.000Z', by: 'c' };
+    const rows = collegeSummary(
+      [
+        person('CSE-2001', 'DGCT', { events: [{ eventId: 'cse-hackathon', added: stamp, present: stamp }, { eventId: 'cse-cyber-hunt', added: stamp }] }),
+        person('CSE-2002', 'DGCT', { events: [{ eventId: 'cse-hackathon', added: stamp, present: stamp }] }),
+      ],
+      [],
+    );
+    expect(rows).toEqual([expect.objectContaining({ name: 'DGCT', students: 2, registrations: 3, participations: 2 })]);
+  });
+
+  it('ranks colleges like a medal table: most 1st prizes, then 2nd, then 3rd, then participations, then students', () => {
+    const row = (name: string, students: number, participations: number, first: number, second: number, third: number): CollegeRow => ({
+      key: name.toLowerCase(),
+      name,
+      code: '',
+      students,
+      registrations: participations,
+      participations,
+      first,
+      second,
+      third,
+      places: first + second + third,
+    });
+    const dgct = row('DGCT', 74, 139, 20, 15, 10);
+    const ranked = [
+      row('More students, fewer 2nd', 120, 300, 20, 14, 30),
+      dgct,
+      row('Most 1st', 10, 12, 21, 0, 0),
+      row('Same prizes, more participations', 60, 140, 20, 15, 10),
+      row('Same prizes and participations, fewer students', 70, 139, 20, 15, 10),
+    ].sort(medalOrder);
+    expect(ranked.map((item) => item.name)).toEqual(['Most 1st', 'Same prizes, more participations', 'DGCT', 'Same prizes and participations, fewer students', 'More students, fewer 2nd']);
   });
 });
 

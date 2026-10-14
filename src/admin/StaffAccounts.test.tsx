@@ -1,14 +1,14 @@
 /**
- * Creating each department's accounts (the real API with in-memory stores): the logins download
- * as a Word document (and Excel) with their passwords; accounts made earlier get new passwords so
- * their logins can be downloaded again; every department at once.
+ * Accounts (the real API with in-memory stores): each login is made by hand and works at once;
+ * Copy copies exactly the password; "Check a password" says whether a password is right without
+ * signing in; refused sign-ins are listed with why; the owner deletes every staff account. The old
+ * bulk creator (and its "new passwords for every account") is gone.
  */
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { route } from '../../server/http';
-import { TIMES, setup } from '../../server/testing';
+import { STAFF_PASSWORD, TIMES, setup } from '../../server/testing';
 import { AdminApp } from './AdminApp';
-import { buildLoginsDoc } from './loginsDoc';
 
 type Harness = ReturnType<typeof setup>;
 
@@ -26,21 +26,6 @@ function backend(h: Harness) {
   });
 }
 
-/** Catches what the dashboard downloads (saveFile makes a Blob link and clicks it). */
-function downloads() {
-  const files: Blob[] = [];
-  Object.assign(URL, { createObjectURL: vi.fn((blob: Blob) => (files.push(blob), `blob:${files.length}`)), revokeObjectURL: vi.fn() });
-  vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {});
-  return files;
-}
-
-/** The password next to a username in the Word document's table (it is stored as plain XML). */
-async function passwordIn(file: Blob, username: string) {
-  const text = new TextDecoder().decode(await file.arrayBuffer());
-  const cells = [...text.matchAll(/<w:t xml:space="preserve">([^<]*)<\/w:t>/g)].map((match) => match[1]);
-  return cells[cells.indexOf(username) + 1];
-}
-
 afterEach(() => {
   sessionStorage.clear();
   localStorage.clear();
@@ -53,62 +38,78 @@ async function openAccounts(h: Harness) {
   sessionStorage.setItem('pragya-admin-session', token);
   render(<AdminApp />);
   fireEvent.click(within(await screen.findByRole('navigation', { name: 'Sections' })).getByRole('button', { name: 'Accounts' }));
-  return screen.findByRole('heading', { name: 'Create a department’s accounts' }).then((heading) => heading.closest('section') as HTMLElement);
+  await screen.findByRole('heading', { name: 'New staff account' });
 }
+const card = (name: string) => screen.getByRole('heading', { name }).closest('section') as HTMLElement;
 
-describe('the logins as a Word document', () => {
-  it('is a .docx with each department’s table of roles, usernames and passwords', () => {
-    const bytes = buildLoginsDoc([{ title: 'CSE · Computer Science and Engineering', signInAt: 'https://pragya2k26.online/landing/cse/admin/', rows: [{ role: 'Event coordinator', for: 'Tom & <Jerry>', username: 'cse-tom', password: 'Abc-Def-9' }] }], 'test');
-    const text = new TextDecoder().decode(bytes);
-    expect([...bytes.slice(0, 2)]).toEqual([0x50, 0x4b]); // a zip
-    for (const part of ['[Content_Types].xml', 'word/document.xml', 'word/styles.xml', 'word/header1.xml', 'word/footer1.xml']) expect(text).toContain(part);
-    expect(text).toContain('cse-tom');
-    expect(text).toContain('Abc-Def-9');
-    expect(text).toContain('Tom &amp; &lt;Jerry&gt;');
-  });
-});
-
-describe('creating a department’s accounts', () => {
-  it('downloads the new logins as Word, and gives accounts made earlier new passwords to download again', async () => {
+describe('Accounts', () => {
+  it('makes a login by hand, shows it once with Copy, and the login works at once', async () => {
     const h = setup({ at: TIMES.eventDay });
-    const files = downloads();
+    const copied: string[] = [];
+    Object.defineProperty(navigator, 'clipboard', { value: { writeText: vi.fn(async (text: string) => void copied.push(text)) }, configurable: true });
+    await openAccounts(h);
+    // No bulk creator any more.
+    expect(screen.queryByRole('heading', { name: 'Create a department’s accounts' })).toBeNull();
+
+    const form = card('New staff account');
+    fireEvent.change(within(form).getByLabelText('Username'), { target: { value: 'CSE-DeskX' } });
+    fireEvent.change(within(form).getByLabelText('Name'), { target: { value: 'CSE Desk X' } });
+    fireEvent.change(within(form).getByLabelText('Role'), { target: { value: 'DESK' } });
+    fireEvent.change(within(form).getByLabelText('Department'), { target: { value: 'CSE' } });
+    const password = within(form).getByLabelText('Password (at least 14 characters)') as HTMLInputElement;
+    // A phone keyboard cannot change it.
+    expect(password).toHaveAttribute('autocapitalize', 'none');
+    expect(password).toHaveAttribute('autocorrect', 'off');
+    expect(password).toHaveAttribute('spellcheck', 'false');
+    fireEvent.click(within(form).getByRole('button', { name: 'Generate' }));
+    const generated = password.value;
+    expect(generated).toMatch(/^[A-Za-z0-9]{7}-[A-Za-z0-9]{7}-9$/);
+    fireEvent.click(within(form).getByRole('button', { name: 'Create account' }));
+
+    const note = await within(form).findByRole('status');
+    expect(note).toHaveTextContent('cse-deskx');
+    expect(note).toHaveTextContent(generated);
+    await act(async () => fireEvent.click(within(note).getAllByRole('button', { name: 'Copy' })[1]));
+    expect(copied).toEqual([generated]);
+    await act(async () => fireEvent.click(within(note).getByRole('button', { name: 'Copy both' })));
+    expect(copied[1]).toBe(`Username: cse-deskx\nPassword: ${generated}`);
+    // Signs in at once (on any department page: the same API), with what was copied.
+    expect((await h.call('POST', '/api/admin/login', { username: 'cse-deskx', password: copied[0] }, { ip: '10.0.9.1' })).status).toBe(200);
+  });
+
+  it('checks a password without signing in, and lists refused sign-ins with why', async () => {
+    const h = setup({ at: TIMES.eventDay });
+    await h.staff('COORDINATOR', ['cse-hackathon'], 'cse-hackathon', { department: 'CSE' });
+    await h.call('POST', '/api/admin/login', { username: 'cse-hackathon', password: 'Event-Day-Staff-2025' }, { ip: '10.0.9.4' });
+    await openAccounts(h);
+
+    const checker = card('Check a password');
+    fireEvent.change(within(checker).getByLabelText('Username'), { target: { value: 'cse-hackathon' } });
+    fireEvent.change(within(checker).getByLabelText('Password'), { target: { value: 'Event-Day-Staff-2025' } });
+    fireEvent.click(within(checker).getByRole('button', { name: 'Check' }));
+    expect(await within(checker).findByText(/That is not cse-hackathon's password/)).toBeInTheDocument();
+    fireEvent.change(within(checker).getByLabelText('Password'), { target: { value: STAFF_PASSWORD } });
+    fireEvent.click(within(checker).getByRole('button', { name: 'Check' }));
+    expect(await within(checker).findByText(/The password is right and cse-hackathon can sign in/)).toBeInTheDocument();
+
+    const failures = await screen.findByRole('heading', { name: /Recent failed sign-ins \(1\)/ });
+    const table = failures.closest('section') as HTMLElement;
+    expect(within(table).getByText('cse-hackathon')).toBeInTheDocument();
+    expect(within(table).getByText('Wrong password')).toBeInTheDocument();
+  });
+
+  it('lets the owner delete every staff account after typing the confirmation', async () => {
+    const h = setup({ at: TIMES.eventDay });
+    await h.staff('DESK', [], 'cse-desk1', { department: 'CSE', deskNumber: 1 });
+    await h.staff('DEPT_ADMIN', [], 'cse-admin', { department: 'CSE' });
     vi.spyOn(window, 'confirm').mockReturnValue(true);
-    let card = await openAccounts(h);
-    fireEvent.change(within(card).getByLabelText('Department'), { target: { value: 'CSE' } });
-    fireEvent.click(within(card).getByRole('button', { name: 'Create 9 accounts' }));
-    await waitFor(() => expect(within(card).getAllByText('Created')).toHaveLength(9), { timeout: 30_000 });
-    fireEvent.click(within(card).getByRole('button', { name: 'Download the logins (Word)' }));
-    const first = files.at(-1)!;
-    expect(first.type).toBe('application/vnd.openxmlformats-officedocument.wordprocessingml.document');
-    const firstPassword = await passwordIn(first, 'cse-admin');
-    expect(firstPassword).toMatch(/^[A-Za-z0-9]{7}-[A-Za-z0-9]{7}-9$/);
-    expect((await h.call('POST', '/api/admin/login', { username: 'cse-admin', password: firstPassword }, { ip: '10.0.9.1' })).status).toBe(200);
-
-    // Later (the page opened again): they exist, so their logins cannot be downloaded…
-    card = await (async () => {
-      fireEvent.click(within(screen.getByRole('navigation', { name: 'Sections' })).getByRole('button', { name: 'Roles' }));
-      fireEvent.click(within(screen.getByRole('navigation', { name: 'Sections' })).getByRole('button', { name: 'Accounts' }));
-      return (await screen.findByRole('heading', { name: 'Create a department’s accounts' })).closest('section') as HTMLElement;
-    })();
-    fireEvent.change(within(card).getByLabelText('Department'), { target: { value: 'CSE' } });
-    expect(within(card).getAllByText('Already exists')).toHaveLength(9);
-    expect(within(card).getByRole('button', { name: 'Download the logins (Word)' })).toBeDisabled();
-    // …until they get new passwords: the old one stops working, the new one in the document works.
-    await act(async () => fireEvent.click(within(card).getByRole('button', { name: 'New passwords for the 9 existing accounts' })));
-    await waitFor(() => expect(within(card).getAllByText('New password')).toHaveLength(9), { timeout: 30_000 });
-    fireEvent.click(within(card).getByRole('button', { name: 'Download the logins (Word)' }));
-    const fresh = await passwordIn(files.at(-1)!, 'cse-admin');
-    expect(fresh).not.toBe(firstPassword);
-    expect((await h.call('POST', '/api/admin/login', { username: 'cse-admin', password: firstPassword }, { ip: '10.0.9.2' })).status).toBe(401);
-    expect((await h.call('POST', '/api/admin/login', { username: 'cse-admin', password: fresh }, { ip: '10.0.9.3' })).status).toBe(200);
-  });
-
-  it('plans every department at once: 68 accounts', async () => {
-    const h = setup({ at: TIMES.eventDay });
-    const card = await openAccounts(h);
-    fireEvent.change(within(card).getByLabelText('Department'), { target: { value: '*' } });
-    expect(within(card).getByRole('button', { name: 'Create 68 accounts' })).toBeInTheDocument();
-    expect(within(card).getByText('aids-admin')).toBeInTheDocument();
-    expect(within(card).getByText('sh-desk2')).toBeInTheDocument();
+    await openAccounts(h);
+    const danger = card('Delete every staff account');
+    const button = await within(danger).findByRole('button', { name: 'Delete all 2 accounts' });
+    expect(button).toBeDisabled();
+    fireEvent.change(within(danger).getByLabelText('Type DELETE ALL'), { target: { value: 'DELETE ALL' } });
+    await act(async () => fireEvent.click(button));
+    expect(await within(danger).findByText(/Deleted 2 accounts/)).toBeInTheDocument();
+    await waitFor(async () => expect((await h.asOwner('GET', '/api/admin/staff')).body.staff).toEqual([]));
   });
 });

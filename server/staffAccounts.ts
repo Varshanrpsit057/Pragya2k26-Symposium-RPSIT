@@ -34,6 +34,7 @@ export function staffView(account: StaffAccount): StaffAccountView {
     updatedAt: account.updatedAt,
     updatedBy: account.updatedBy,
     passwordChangedAt: account.passwordChangedAt,
+    lastSignInAt: account.lastSignInAt ?? null,
   };
 }
 
@@ -86,7 +87,8 @@ function readDisplayName(value: unknown): string {
 }
 
 async function readPassword(value: unknown): Promise<string> {
-  const password = typeof value === 'string' ? value.slice(0, 200) : '';
+  // Never with spaces at its ends: a password copied from a page often brings one along.
+  const password = typeof value === 'string' ? value.slice(0, 200).trim() : '';
   const problem = passwordProblem(password);
   if (problem) throw new ApiError(400, 'WEAK_PASSWORD', `Password: ${problem}`);
   return hashPassword(password);
@@ -119,7 +121,8 @@ export class StaffAccounts {
     if (!STAFF_USERNAME.test(username)) {
       throw new ApiError(400, 'INVALID', 'Usernames are 3–32 lower-case letters, digits, dots, dashes or underscores.');
     }
-    if (username === this.deps.ownerUsername.toLowerCase()) {
+    // 'delete-all' is the address of Delete every account, not a username.
+    if (username === this.deps.ownerUsername.toLowerCase() || username === 'delete-all') {
       throw new ApiError(409, 'USERNAME_TAKEN', 'That username is already in use.');
     }
     const role = readRole(body.role);

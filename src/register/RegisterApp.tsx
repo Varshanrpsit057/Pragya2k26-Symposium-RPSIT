@@ -9,8 +9,13 @@ import { useCallback, useEffect, useState, type FormEvent, type ReactNode } from
 import { COLLEGES, OTHER_COLLEGE } from '../content/colleges';
 import { COURSE_DEPARTMENTS, OTHER, STREAMS, courseText } from '../content/courses';
 import { SearchSelect } from '../components/ui/SearchSelect';
-import { deptShort, readParticipant, selfRegistrationProblems, showId, YEARS, type StudentView } from '../lib/fest';
+import { formatIst } from '../lib/countdown';
+import { deptShort, readParticipant, selfRegistrationProblems, showId, YEARS, type FestMethod, type StudentView } from '../lib/fest';
+
+/** How the entry fee was paid, as the student reads it. */
+const PAID_BY: Record<FestMethod, string> = { CASH: 'in cash', UPI: 'by UPI', ONLINE: 'online' };
 import { UTR, tidyUtr, upiLink } from '../lib/portal';
+import { isLocalCopy } from '../lib/localCopy';
 import {
   NO_CONNECTION,
   StudentApiError,
@@ -43,6 +48,8 @@ interface Draft {
   /** One of COLLEGES, or Other (then `collegeOther`). */
   college: string;
   collegeOther: string;
+  /** The college's code (e.g. its Anna University code). */
+  collegeCode?: string;
   /** B.E., B.Sc… */
   stream: string;
   /** One of COURSE_DEPARTMENTS, or Other (then `courseOther`). */
@@ -75,7 +82,7 @@ const newId = () => {
   const bytes = random.getRandomValues(new Uint8Array(16));
   return `s-${Array.from(bytes, (byte: number) => byte.toString(16).padStart(2, '0')).join('')}`;
 };
-const emptyDraft = (): Draft => ({ submissionId: newId(), name: '', phone: '', email: '', college: '', collegeOther: '', stream: '', course: '', courseOther: '', year: '', team: '' });
+const emptyDraft = (): Draft => ({ submissionId: newId(), name: '', phone: '', email: '', college: '', collegeOther: '', collegeCode: '', stream: '', course: '', courseOther: '', year: '', team: '' });
 /** A draft kept from before the college list (a typed college not in the list becomes Other). */
 const loadDraft = (): Draft => {
   const draft = { ...emptyDraft(), ...read<Draft>(DRAFT) };
@@ -127,6 +134,11 @@ export function RegisterApp() {
 
   return (
     <div className="reg">
+      {isLocalCopy() && (
+        <p role="note" style={{ margin: 0, padding: '0.55rem 1rem', background: '#b91c1c', color: '#fff', fontWeight: 700, textAlign: 'center' }}>
+          LOCAL TEST COPY on this computer: not the live site.
+        </p>
+      )}
       <header className="reg-top">
         <a className="reg-brand" href="/">
           <strong>INFINITE TECHFEST’26</strong>
@@ -243,6 +255,7 @@ function RegisterForm({
 
   const participant = readParticipant({ ...draft, college: collegeOf(draft), branch: courseText(draft.stream, draft.course, draft.courseOther) });
   const problems: Record<string, string> = { ...selfRegistrationProblems(participant) };
+  if (!participant.collegeCode) problems.collegeCode = 'Enter your college code.';
   if (!draft.college) problems.college = 'Choose your college.';
   else if (draft.college === OTHER_COLLEGE && draft.collegeOther.trim().length < 3) problems.college = 'Type the name of your college.';
   // The stream and department make up the "department / course" the desks see (B.E. CSE).
@@ -323,6 +336,16 @@ function RegisterForm({
             <input value={draft.collegeOther} maxLength={120} autoComplete="organization" onChange={(event) => set({ collegeOther: event.target.value })} />
           </Field>
         )}
+        <Field label="College code" error={fieldError('collegeCode')} hint="Your college’s code (for example 2639). Ask your faculty if you do not know it.">
+          <input
+            value={draft.collegeCode ?? ''}
+            maxLength={12}
+            autoComplete="off"
+            autoCapitalize="characters"
+            spellCheck={false}
+            onChange={(event) => set({ collegeCode: event.target.value })}
+          />
+        </Field>
         <PickField id="reg-stream" label="Stream" error={fieldError('stream')}>
           {(labelId, invalid) => (
             <SearchSelect
@@ -550,7 +573,12 @@ function MyRegistration({ saved, info, onForget }: { saved: Saved; info: PublicI
         <span className="reg-idcard__label">Your registration ID</span>
         <strong className="reg-idcard__id">{showId(saved.id)}</strong>
         {view && <span className="reg-idcard__name">{view.name}</span>}
-        {view && <span className="reg-idcard__college">{view.college}</span>}
+        {view && (
+          <span className="reg-idcard__college">
+            {view.college}
+            {view.collegeCode ? ` · code ${view.collegeCode}` : ''}
+          </span>
+        )}
         {view && <span className="reg-idcard__dept">{deptShort(view.dept)}</span>}
         {status && <span className={`reg-status reg-status--${status.tone}`}>{status.label}</span>}
       </div>
@@ -574,7 +602,21 @@ function MyRegistration({ saved, info, onForget }: { saved: Saved; info: PublicI
           </p>
         </div>
       )}
-      {view?.status === 'verified' && <p className="reg-next reg-next--good">You are verified. Go to any event and register at its venue with this ID.</p>}
+      {view?.status === 'verified' && (
+        <div className="reg-next reg-next--good">
+          <p>
+            <strong>Payment collected and verified.</strong>
+            {view.paid && (
+              <>
+                {' '}
+                {rupees(view.paid.amount)} {PAID_BY[view.paid.method]} · {formatIst(Date.parse(view.paid.at))}
+                {view.paid.desk ? ` · ${deptShort(view.dept)} desk ${view.paid.desk}` : ''}.
+              </>
+            )}
+          </p>
+          <p>Go to your {deptShort(view.dept)} events: register at each event’s venue with this ID (its fee is paid there).</p>
+        </div>
+      )}
       {view?.status === 'cancelled' && <p className="reg-next">This registration was cancelled. Please go to a registration desk.</p>}
 
       {view && view.events.length > 0 && (
@@ -587,6 +629,7 @@ function MyRegistration({ saved, info, onForget }: { saved: Saved; info: PublicI
                 <li key={item.eventId}>
                   <strong>{event ? `${deptShort(event.dept)} · ${event.name}` : item.eventId}</strong>
                   {event && <span className="reg-muted">{eventFacts(event)}</span>}
+                  {item.feePaid && <span className="reg-status reg-status--good">Fee paid · {rupees(item.feeAmount)}</span>}
                   {item.present && <span className="reg-status reg-status--good">Attended</span>}
                 </li>
               );

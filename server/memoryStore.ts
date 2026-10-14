@@ -187,6 +187,11 @@ export class MemoryStore implements Store {
     return true;
   }
 
+  async noteStaffSignIn(username: string, at: string) {
+    const account = this.staff.get(username);
+    if (account) this.staff.set(username, { ...account, lastSignInAt: at });
+  }
+
   async getEventResult(eventId: string) {
     const result = this.results.get(eventId);
     return result ? copy(result) : null;

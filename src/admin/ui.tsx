@@ -5,6 +5,7 @@ import { usePageVisible } from '../hooks/usePageVisible';
 import type { EventFeeView, PaymentMethod } from '../lib/admin';
 import { rupees, type RegistrationStatus } from '../lib/registration';
 import { ApiFailure, SignedOut, type ReceivedPayment } from './adminApi';
+import { isLocalCopy } from '../lib/localCopy';
 
 const istFormat = new Intl.DateTimeFormat('en-IN', { timeZone: 'Asia/Kolkata', dateStyle: 'medium', timeStyle: 'short' });
 const istTime = new Intl.DateTimeFormat('en-IN', { timeZone: 'Asia/Kolkata', timeStyle: 'medium' });
@@ -225,3 +226,12 @@ export function PaymentFields({ amount, value, onChange, name }: { amount: numbe
 
 /** The registration that already holds an email, phone or reference, when the server names one. */
 export const existingRegistrationOf = (error: unknown) => (error instanceof ApiFailure ? (error.details.registrationId ?? null) : null);
+
+export function LocalCopyBanner() {
+  if (!isLocalCopy()) return null;
+  return (
+    <p className="adm-local-copy" role="note">
+      LOCAL TEST COPY on this computer: not the live site. Its accounts and data are separate from pragya2k26.online.
+    </p>
+  );
+}

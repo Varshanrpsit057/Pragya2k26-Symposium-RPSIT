@@ -101,28 +101,26 @@ an **Events and route map** button.
    - **Pay at the desk**: cash (or UPI) at their department's registration desk.
    Either way they always have their ID, and the desk completes the payment. While **online
    payment** is switched off (Website controls), only the desk is offered.
-4. **That department's desks** open **Registration desk → Verify payments (n)**: the students who
-   sent a UTR, oldest first, showing only the **last 4 digits** of each student's UTR. The desk
-   **types the UTR of the payment it received** (from the receiving account, or the student's payment
-   screen). The screen says at once **✓ Matches** or **✗ Does not match**, and warns when **another
-   registration has the same UTR** (sent by two students: only one can be verified; already accepted:
-   *Duplicate*, cannot be verified). **Verify** needs a match and the tick *I have seen ₹100
-   received*. The server checks both again: a UTR is accepted **once across the whole fest**, for
-   UTRs sent by students and for UPI payments taken at a desk. **Not found…** (with a reason) tells
-   the student, who can send the right UTR. Tip: typing a received payment's UTR in **Find** shows
-   whose it is.
-   - **Whose UTR is it?** When a UTR is sent by two students, or was already accepted for someone,
-     **Who does this UTR belong to?** (on the card, or at the top of Verify payments with any UTR)
-     lists everyone with it **in every department**: name, department, college, phone, and whether
-     it was accepted for them or only sent. Check the payer's name and phone in the payment, tick
-     *I have seen this payment received*, then **It is CSE-2002's** (or give it to another student
-     by ID). That student is verified with it; whoever it was accepted for is back to *not paid*,
-     and anyone else who sent it is marked *not found*, each told *"UTR ending 8901 belongs to
-     CSE-2002"* on their page. A desk gives a UTR to its own department's students; the web assist
-     team to anyone. Needs the network.
-5. **The student's page** shows *Verified* (it checks by itself while waiting).
-6. **At the venue**, the student gives their ID: the event's coordinator adds them, takes the event
-   fee and marks them present. Attendance needs the entry fee verified.
+4. **At their department's desk** the student tells their ID. The desk's **Students** list holds every
+   student registered under the department (filters: *All*, *UTR sent · to verify*, *Fee due*, *Paid*;
+   search by ID, name, phone, college or UTR). The desk **opens the ID** and sees all their details to
+   check with the student, then:
+   - **They paid on their phone:** only the **last 4 digits** of the UTR they sent are shown. The desk
+     **types the UTR on the payment** (the student's payment screen, or the receiving account): ✓
+     *Matches* or ✗ *Not the UTR they sent*. If the student typed theirs wrong, the desk ticks *the UTR I
+     typed is the right one* (kept in the student's **UTR log**). **Verify** needs the tick *I have seen
+     ₹100 paid with this UTR*. **Payment not found…** (with a reason) tells the student.
+   - **They pay at the desk:** **Collect ₹100**: cash, or UPI/GPay with the UTR typed from their phone.
+   - A UTR counts **once across the whole fest**. If it is already on someone else's registration, the
+     desk sees **who has it** (in every department: ID, name, department, college, phone, paid or only
+     sent) and corrects the UTR of whichever student has the wrong one (**Change UTR…**, with a reason;
+     each change is kept in that student's UTR log, with who and when). A desk changes another
+     department's student's UTR only when it clashes with one of its own students'.
+5. **The student's page** shows **Payment collected and verified**: how much, cash or UPI, when, and at
+   which desk (it checks by itself while waiting).
+6. **At the venue**, the student gives their ID: the event's coordinator, who has **every student of
+   the department**, adds them to the event, takes the event fee and marks them present. Students do
+   not choose events when they register; they take part only in their own department's events.
 
 **My registration ID** (home page): on the phone that registered, the ID shows at once. On another
 phone the student types the **mobile number and email** they registered with (not the ID): it finds
@@ -135,13 +133,22 @@ department admin, the overall coordinator and the web assist team. Filters: **Re
 own phone**, **Entry fee → Waiting for a desk to check**. The overview has a **Payments to check**
 count.
 
+**A student who cannot register on a phone:** the desk's **Register for them** (online; Website
+controls can switch it off) types their details. They get the next ID of the department, as on a
+phone, and the desk collects the fee as for anyone.
+
 ### Colleges (overall coordinator, department admins, web assist)
 
-The **Colleges** tab: for each college, how many students came, and how many **1st, 2nd and 3rd
-places** its students won (submitted results only; a team counts once for its college). Tap a heading
-to sort, a college to see its students; **Download (Excel)**. The **College** filter (a list
-of every college with its number of students) also narrows every other view. College names typed
-differently (`Sona College of Technology, Salem` / `sona college of technology salem.`) count as one.
+The **Colleges** tab is the **college ranking**, a medal table: for each college, its **students**,
+their **event participations** (events attended), and the **1st, 2nd and 3rd places** they won
+(submitted results only; a team counts once for its college). Ranked by **1st places, then 2nd, then
+3rd, then participations, then students**: a college with 74 students, 139 participations and 20/15/10
+places is above one with more students but fewer 1st places. Filters: the **College** filter, **Event
+participations (at least)** and **Prizes won (at least)**, with every other filter (department,
+event…). Tap a heading to sort by it (**Back to the medal order** returns), a college to see its
+students; **Download (Excel)** saves the ranking in the order shown, with the rank. College names
+typed differently (`Sona College of Technology, Salem` / `sona college of technology salem.`) count
+as one.
 
 ### Event links
 
@@ -221,32 +228,37 @@ phone sees the change within 15 seconds.
 The venue and time appear in the event windows, the overview ("By event and venue") and the
 overall coordinator's **Venue** filter, so fill them in before the day.
 
-### 2.6 Create the accounts
+### 2.6 Create the accounts (each one by hand)
 
-1. Main dashboard → **Accounts** → **Create a department's accounts** → choose the department →
-   **Create**. It makes the department admin, **2 desks** and **1 coordinator per event** (9 accounts for CSE, 68 for all 8 departments) with strong passwords. There is **no HOD account per department**: the HOD is the overall coordinator.
-2. **Download the logins (Word or Excel) straight away.** The Word file has a table per department
-   (role, what for, username, password). The passwords are shown only once. Choose **All 8
-   departments** to make (or download) everything in one go.
-   - **Accounts made earlier** show *Already exists*: their passwords cannot be read again. Press
-     **New passwords for the N existing accounts**: they get new passwords (the old ones stop
-     working and they are signed out), then download the logins and hand them out again.
-3. Repeat for all 8 departments.
-4. Create, by hand, in **Accounts → New account**:
+1. **Start clean (owner only):** sign in with the owner account (the `ADMIN_USERNAME` from the Amplify
+   secrets) → **Accounts → Delete every staff account** → type `DELETE ALL` → delete. Every staff
+   account (including other web assist accounts) is deleted and signed out; registrations, payments
+   and results stay. Your own sign-in is never deleted.
+2. **Accounts → New staff account**, one person at a time: username (lower-case), name, role,
+   department (and desk number, or the coordinator's events), then **Generate** a password →
+   **Create account**. The login is shown once with **Copy** buttons (username, password, or both):
+   copy it exactly and send it to that person privately (WhatsApp to that person only, or a printed
+   slip). Suggested usernames are in [section 4](#4-every-account).
    - the **overall coordinator, the HOD** (role *Overall coordinator (HOD)*), no department;
-   - the **web assist team**'s account (role *Web assist team*).
-5. Hand each person their username, password and link privately (WhatsApp to that person only,
-   or a printed slip). Never post the Excel file in a group.
-6. Department HOD accounts made earlier (`<dept>-hod`) are no longer used: the account creator lists
-   them; deactivate or delete them.
-
-The usernames are listed in [section 4](#4-every-account). Accounts that already exist are skipped,
-so running it again is safe.
+   - the **web assist team**'s accounts (role *Web assist team*);
+   - per department: its **department admin**, **2 desks** and **1 coordinator per event**.
+3. **Check each login works** before handing it out: **Accounts → Check a password** (username and the
+   password you gave): it says *right*, *wrong password*, *no such account*, *deactivated* or *sign-in
+   switched off*, without signing in. Each account also shows its **Last sign-in**.
+4. **Someone cannot sign in?** **Accounts → Recent failed sign-ins** lists the username tried and why it
+   was refused (never the password). Typical causes, and what the sign-in page now helps with:
+   - the browser filled in another saved password and the new one was pasted after it: press **Show**
+     on the sign-in page and clear the box first;
+   - a typo in the username (it is not case-sensitive), or the account was made on a **local test
+     copy** (that copy says *LOCAL TEST COPY* in red at the top of every page; its accounts never exist
+     on pragya2k26.online);
+   - a space copied around the password is ignored, and phone keyboards cannot capitalise or
+     autocorrect the password boxes.
 
 ### 2.7 Upload the online registrations (each department, before the day)
 
 Each department admin downloads their department's registrations from the Netlify form as CSV and
-uploads it: department page → **Online & paper** → **Online registrations** (section 9). Ask for one
+uploads it: department page → **Online import** (section 9). Ask for one
 sample CSV first so the column matching can be checked.
 
 ### 2.8 Rehearse, then delete the test data
@@ -254,8 +266,10 @@ sample CSV first so the column matching can be checked.
 1. Main dashboard → **Testing** → **Start an event-day test**. Everything registered while the test
    session is on is marked **TEST**. Every dashboard shows a yellow banner.
 2. Get one desk, one coordinator and the overall coordinator on their own phones, **on mobile data**,
-   and run the whole flow: register, check in, take a fee, mark present, submit winners. Switch a
-   desk phone to airplane mode, register two students, switch it back and watch them send.
+   and run the whole flow: a student registers on their phone and pays by UPI (sends the UTR); another
+   pays at the desk; the desk verifies one and collects the other; the coordinator adds both to an
+   event, takes the fee, marks them present and submits winners; the overall coordinator checks the
+   college ranking and downloads it.
 3. **Testing → Delete the test data** (type `DELETE TEST DATA`), tick **end the session and go back
    to the real schedule**. Test records are saved to a private backup first, then deleted, and the
    ID counters start again from 0001 where nothing real was registered.
@@ -276,7 +290,7 @@ Note: a test timeline changes the public website's registration times for everyo
 
 - Two phones at each desk, on **different carriers** (Jio + Airtel, for example), charged, with
   power banks.
-- **Paper slips** printed for each department (section 9), in case every phone at a desk fails.
+- The gate **QR code** to the registration page printed, and the UPI QR at each desk.
 - Every desk, coordinator and the overall coordinator has signed in once on the phone they will use, before the day.
 - One web assist member per two or three departments, reachable by phone.
 
@@ -325,11 +339,11 @@ again, wait 15 minutes (each account may sign in 10 times per 15 minutes from on
 
 | Role | Signs in at | Sees these sections | Can do |
 | --- | --- | --- | --- |
-| **Owner** (the `ADMIN_USERNAME` account) and **web assist team** (role Admin) | `/landing/admin/` (or any department page) | Everything: Overview, Registrations, Results, Colleges, Register, Event windows, Online & paper, Departments & events, **Website controls**, Accounts, Event-day controls, Help requests, System status, Testing, Roles | Everything, in every department, on the spot; switches every part of the portal on or off; controls and watches every login |
-| **Overall coordinator (HOD)** | `/landing/admin/` | Overview, Registrations, Results, Colleges, Roles | Every department and every event live, filtered on every category; winners; college-wise places; **Excel downloads** of exactly what the filters show; reopen submitted results; cancel an event fee recorded by mistake |
-| **Department admin** | their department page | Overview, Registrations, Results, Colleges, Register, Event windows, Online & paper, Roles | Upload online registrations, paper slips, register, verify payments, correct details, change events, cancel, any event of the department |
-| **Registration desk** (2 per department) | their department page | Registration desk, Roles | **Verify payments**: type the UTR, which must match the student's and be unused; take the entry fee in cash or UPI; register walk-ins (works with no signal); find and check in; add events; desk totals |
-| **Event coordinator** (1 per event) | their department page (or their event link) | My events, Roles | Their event: students, event fee, attendance, add a department student, winners, submit |
+| **Owner** (the `ADMIN_USERNAME` account) and **web assist team** (role Admin) | `/landing/admin/` (or any department page) | Everything: Overview, Registrations, Results, Colleges, Desk, Event windows, Online import, Departments & events, **Website controls**, Accounts, Event-day controls, Help requests, System status, Testing, Roles | Everything, in every department, on the spot; switches every part of the portal on or off; controls and watches every login; only the owner deletes every staff account at once |
+| **Overall coordinator (HOD)** | `/landing/admin/` | Overview, Registrations, Results, Colleges, Roles | Every department and every event live, filtered on every category; winners; the **college ranking**; **Excel downloads** of exactly what the filters show; reopen submitted results; cancel an event fee recorded by mistake |
+| **Department admin** | their department page | Overview, Registrations, Results, Colleges, Desk, Event windows, Online import, Roles | All of their department's students and events; upload online registrations; work at the desk; correct details, change events, cancel; any event of the department; Excel downloads |
+| **Registration desk** (2 per department) | their department page | Registration desk, Roles | The department's **Students**: open an ID, check the details, **collect** the entry fee (cash or UPI) or **verify** the UTR the student sent; who has a UTR, and correct a clashing UTR; register a student for them (online, only when needed); desk totals; Excel download of the department |
+| **Event coordinator** (1 per event) | their department page (or their event link) | My events, Roles | **Every student of the department**: add them to the event, event fee, attendance, winners, submit; Excel downloads of the event and the department |
 
 - The **Roles** section in the dashboard shows the same list, read from the code the server enforces.
 - Department roles (department admin, desk, coordinator) only ever see their own department,
@@ -340,8 +354,8 @@ again, wait 15 minutes (each account may sign in 10 times per 15 minutes from on
 
 ## 4. Every account
 
-These are the usernames **Create a department's accounts** makes. Passwords are in the Excel file
-downloaded when they were created.
+Suggested usernames for the accounts you make by hand (2.6). Each password is shown once, when the
+account is made: copy it then.
 
 | Code | Department admin | Desks (desk number is fixed) |
 | --- | --- | --- |
@@ -481,118 +495,109 @@ Department page: https://pragya2k26.online/landing/sh/admin/
 | 4 | Math Puzzles & Logic Quiz (Maths) | `sh-math-puzzles` | https://pragya2k26.online/landing/sh/admin/?event=sh-math-puzzles | `sh-math-puzzles` |
 
 **An event added later** in **Departments & events** gets its link the same way:
-`https://pragya2k26.online/landing/<dept>/admin/?event=<event ID>`. Its coordinators are made by
-running **Create a department's accounts** again (only the missing accounts are made), or by hand in
-**Accounts → New account** (role *Event coordinator*, the department, tick the event).
+`https://pragya2k26.online/landing/<dept>/admin/?event=<event ID>`. Its coordinator is made by hand
+in **Accounts → New staff account** (role *Event coordinator*, the department, tick the event).
 
 ---
 
-## 6. Registration IDs, and what happens when a desk runs out
+## 6. Registration IDs
 
 Every student gets one ID in the department they register with. The ID tells you where it came from:
 
 | ID | Where it came from |
 | --- | --- |
-| `CSE-0001` … `CSE-1999` | Registered at a desk |
-| `CSE-2001` … `CSE-4999` | Registered on their own phone (chose the department in the pop-up) |
+| `CSE-2001` … `CSE-4999` | Registered on their own phone, or by a desk for them (the same numbers, given out by the server one after another) |
 | `CSE-5001` … `CSE-8999` | Online (Netlify form), uploaded by the department admin |
-| `CSE-9001` … `CSE-9999` | Paper slip (when the phones could not be used) |
+| `CSE-0001` … `CSE-1999`, `CSE-9001` … | Earlier ways (desk phones, paper slips): no longer used, but old records keep them |
 
 - **One mobile number is registered once per department.** Registering it again shows the existing
-  ID instead.
-- A student registers in one department and takes part in that department's events (no cross-
-  department entries).
-- IDs can be typed loosely anywhere: `cse 12`, `cse12` and `CSE-0012` are the same.
-
-### Will a desk run out of IDs?
-
-**No: a desk is never stuck.** Each desk phone holds its own small block of IDs so it can register
-with no signal:
-
-1. When a desk phone signs in it takes a block of **50 IDs** (for example `CSE-0051` to `CSE-0100`).
-2. When **15** are left, it takes the next 50 by itself the next time it has signal. You don't do
-   anything, and nobody else gets the same numbers.
-3. A department has **1,999 desk IDs** in total, far more than needed.
-
-So the gaps you may see (desk 1 used 0001–0037, desk 2 started at 0051) are normal: IDs are unique,
-not consecutive.
-
-The only time a desk could run out: a phone with **no signal at all** registers 50 students in a row
-(it cannot take a new block without signal). Then:
-
-- move to the second phone (other carrier) at the desk; it has its own block; or
-- use **paper slips** (`CSE-9001…`, printed beforehand) and the department admin types them in later.
-
-If the same ID is somehow used twice, the second one is moved to the next free ID automatically and
-the desk sees the new ID.
+  ID instead (a desk is told which ID it is and can open it).
+- A student registers in one department and takes part only in that department's events. They do not
+  choose events when they register: each event's coordinator adds them at the venue.
+- IDs can be typed loosely anywhere: `cse 2012`, `cse2012` and `CSE-2012` are the same.
+- IDs come from the server, so two people never get the same one, and a refused registration (for
+  example a mobile number already registered) never uses up an ID.
 
 ---
 
 ## 7. How to: registration desk
 
 Sign in on the department page with the desk's account (e.g. `cse-desk2`). The desk number is fixed
-to the account. Keep the page open all day; no need to refresh.
+to the account. Keep the page open all day; no need to refresh. The desk needs the network: nothing
+about money is ever "saved for later". If the connection drops, the desk is told at once that nothing
+was saved, and tries again.
 
-### Register a student (on-site)
+### A student comes to the desk
 
-1. **Registration desk → Register**.
-2. Fill in: name with initial, mobile number, college (branch, year, email and team name if known),
-   tick the events.
-3. Take the **entry fee (₹100)**: **Cash** (tick "I have received ₹100 in cash") or **UPI** (type the
-   UPI transaction ID from the student's payment screen and tick that you have seen it).
-4. **Register**. Tell the student their ID (e.g. `CSE-0057`); they give it at every event.
+1. **Students** lists every student registered under the department. Ask for their **Registration
+   ID** (it is on their phone) and type it in **Find** (or their name, phone or college), or use the
+   filters: **UTR sent · to verify**, **Fee due**, **Paid**.
+2. **Open** the ID. Check the details with the student: name, mobile, college, course, year.
+3. The **Entry fee ₹100** box says what to do:
+   - **They paid on their phone (UTR sent):** type the UTR shown on their payment screen. ✓ *Matches* →
+     tick *I have seen ₹100 paid with this UTR* → **Verify**. ✗ *Not the UTR they sent*: check the
+     digits; if they typed theirs wrong, tick that the UTR you typed is the right one (it is kept in
+     their UTR log). **Payment not found…** if the money is not there.
+   - **They pay at the desk:** **Cash** (tick *I have received ₹100 in cash*) or **UPI / GPay** (type
+     the UTR from their phone, tick you have seen it) → **Collect ₹100**. Someone who sent a UTR may
+     still pay at the desk: *They paid at the desk instead*.
+4. Done: the box says **Payment collected and verified** (how, when, which desk), and the student's own
+   page says the same. Send them to their department's events.
 
-The event fees (₹50 each) are taken by the event coordinators at the venue, not at the desk.
+### A UTR that is already used
 
-### With no signal
+The server accepts a UTR **once across the fest**. If it is already on another registration, the desk
+sees **Who has the UTR …**: every student with it, in every department (ID, name, department, college,
+phone, *paid with it* or *sent it*). Look at the payment (the payer's name and phone in the UPI app),
+then **Change UTR…** on whichever student has the wrong one: type the right UTR and why. Each change is
+kept in that student's **UTR changes** log (from, to, why, who, when). Then verify or collect as usual.
+**Who has a UTR? Look it up** (above the list) does the same for any UTR, for example a payment in the
+receiving account that nobody has claimed.
 
-Keep registering. The bar at the top shows **offline** and how many registrations are waiting. They
-are sent in order as soon as the signal is back, and a retry never registers anyone twice.
+### A student who cannot register on a phone
 
-**If the phone or laptop switches off** (battery, crash, restart), nothing is lost: each registration
-is saved on the device the moment you tap Register. Switch it on, open the same page in the same
-browser and sign in with the same account (signing in needs signal): the waiting ones are sent by
-themselves. Signing out or closing the tab with registrations waiting asks first; they stay saved
-either way. They are lost only if the device itself is lost or broken, the browser's data is
-cleared, or a private/incognito window was used, so never use one at a desk.
+Only then: **Register for them** → their details (no events) → **Register, then collect the fee**. They
+get the next ID of the department and open straight away for the fee. If their mobile number is
+already registered, the desk is told the ID and can open it.
 
 ### An online registrant arrives
 
-**Find & check in** → search by ID, name or mobile number → **Check in (paid online)**. Online
-registrants have already paid the entry fee. If one shows the entry fee as due, take it and check
-them in in the same step.
+Open their ID (`CSE-5001…`): they paid online. **Check in (already paid)**.
 
-### Add an event, or correct a mistake
+### Corrections
 
-**Find & check in** → find the student → add the event. A wrong name or mobile number, removing an
-event or cancelling a registration: call the department admin (they do it in **Registrations**).
+A wrong name or mobile number, or cancelling a registration: the department admin (**Registrations**).
+A cancelled registration's UTR is free again.
 
 ### Cash handover
 
-**Desk N totals** shows how many registered at this desk and the cash and UPI totals. Hand over the
-cash with this screen.
+**Desk N totals** shows the fees you collected, the UTRs you verified and the cash and UPI totals.
+Hand over the cash with this screen. **Download (Excel)** on the Students list saves the department's
+list as shown.
 
 ---
 
 ## 8. How to: event coordinator
 
 Sign in on the department page (or the event's link) with your coordinator account. **My events**
-opens on your event.
+opens on your event, with **every student of the department** (**All CSE students**); **In this
+event** shows only those you have added.
 
-1. The event's students are listed, with **Find a student** to search by ID, name or phone.
-2. **Take ₹50**: choose Cash or UPI, confirm, **Save the fee**.
-3. **Mark present** when the student is at the venue. Attendance needs the registration paid and the
-   event fee taken.
-4. **A student who came straight to the venue** but is registered in the department: search them
-   (under "In the department but not in this event") and **Add** them to the event, then take the fee.
-   Someone not registered at all is sent to the desk first.
+1. The student gives their **ID**: type it in **Find a student**, **Open** it, and check their name,
+   college and course with them. **Entry fee**: *Paid · verified at the desk*, or *Not paid: send them
+   to the desk*.
+2. **Add to …** (the event). Students do not choose events beforehand; you add them here.
+3. **Take ₹50**: choose Cash or UPI, confirm, **Save the fee**.
+4. **Mark present** when they are at the venue. Attendance needs the entry fee verified and the event
+   fee taken.
 5. **Winners**: type the IDs for 1st, 2nd and 3rd place (a team: several IDs separated by commas;
-   `cse 12` is fine). Winners must be marked present. **Save winners** keeps a draft; **Submit results**
-   when final. Submitted results go to the overall coordinator and are locked. To change them, ask
-   the overall coordinator or the web assist team to **Reopen**.
+   `cse 2012` is fine). Winners must be marked present. **Save winners** keeps a draft; **Submit
+   results** when final. Submitted results go to the overall coordinator and are locked. To change
+   them, ask the overall coordinator or the web assist team to **Reopen**.
 
-Mistake with a fee? Only the overall coordinator or the web assist team can cancel a fee recorded by
-mistake.
+Only students of the event's department take part in its events. **Download this event (Excel)** and
+**Download all CSE students (Excel)** save the lists. Mistake with a fee? Only the overall coordinator
+or the web assist team can cancel a fee recorded by mistake.
 
 ---
 
@@ -603,7 +608,7 @@ Sign in on the department page with `<dept>-admin`.
 ### Upload the online registrations (before the day)
 
 1. Download the department's registrations from the Netlify form as **CSV**.
-2. **Online & paper → Online registrations** → choose the file.
+2. **Online import** → choose the file.
 3. Check the **column matching**: Name, Phone, College and Events are needed; Email, Branch, Year,
    Team name and Reference are optional. Change a column if it guessed wrong.
 4. **Check the file**: it lists unknown event names and duplicates (same phone already registered)
@@ -614,19 +619,14 @@ Sign in on the department page with `<dept>-admin`.
 
 Every imported student counts as having paid the entry fee.
 
-### Paper slips (backup)
-
-**Online & paper → Paper slips** → **Get slip numbers** → **Download the slips to print (CSV)**.
-Print them before the day. When a desk used slips, type each one in here after the rush (the slip's
-ID, the details, events and payment), or upload them as CSV.
-
 ### Corrections
 
 **Registrations** → open a student → correct details, change events, cancel (with a reason) or undo
 a cancellation. Deleting a registration is for the web assist team.
 
-You can also register students yourself (**Register**) and run any event of the department
-(**Event windows**).
+You also see all of the department's students and events (**Overview**, **Registrations**,
+**Results**, **Colleges**, with **Excel** downloads), can work at the desk (**Desk**) and run any event
+of the department (**Event windows**).
 
 ---
 
@@ -645,7 +645,7 @@ Sign in at https://pragya2k26.online/landing/admin/. Read only, updated every 15
 | Department | All, or one of the 8 |
 | Event | The department's events |
 | Venue | From the event venues |
-| Registered | At a desk, On their own phone, Online, Paper slip |
+| Registered | On their own phone (or by a desk for them), Online; earlier: At a desk, Paper slip |
 | Desk | Desk 1, Desk 2 |
 | Entry fee | Paid, Waiting for a desk to check, Due |
 | College | Every college, with its number of students |
@@ -657,7 +657,9 @@ Sign in at https://pragya2k26.online/landing/admin/. Read only, updated every 15
   show, as an .xlsx file (title, the filters and who downloaded it, bold header, Excel filters on
   every column), including how each fee was paid, the UTR accepted, the UTR the student sent and who
   verified it.
-- **Colleges**: students and 1st/2nd/3rd places per college; **Download (Excel)**.
+- **Colleges**: the **college ranking** (medal table: 1st, then 2nd, then 3rd, then event
+  participations, then students), filtered by college, **participations** and **prizes** too;
+  **Download (Excel)** in the order shown (section 1).
 - **Results**: every event's winners with their details; **Download winners (Excel)**;
   **Reopen** a submitted event (with a reason) so its coordinator can correct it.
 - **Cancel this fee** (with a reason) for an event fee recorded by mistake: **Registrations** → the
@@ -678,9 +680,8 @@ fix things).
 | Student registration on phones | Students register on the website | The page says it is paused: register at a desk |
 | Students find their registration | My registration ID finds it by mobile number and email | Only the phone that registered shows the ID |
 | Online payment (UPI QR code) | After registering: pay by UPI here (and send the UTR) or at the desk | Pay at the desk only |
-| Desk registration of walk-ins | Desks register walk-ins | Desks only verify payments and check students in |
+| Desks register a student for them | Only for a student who cannot register on a phone (online) | Students register on their phones only; desks collect and verify |
 | Event entry at the venues | Coordinators enter students, take fees, mark attendance | Event windows are read-only |
-| Students join only their own department's events (on by default) | An AI&DS student takes part in AI&DS events only; each coordinator sees only their department's students | Any student can join any department's event; coordinators find students of every department |
 | Results entry | Coordinators enter and submit winners | Winners cannot be entered |
 | Excel downloads | The overall coordinator and department admins download | Download buttons hidden |
 | Sign-in by role: overall coordinator, department admins, desks, coordinators | Can sign in (with how many are signed in now) | Everyone of that role is signed out at once and cannot sign in |
@@ -692,7 +693,8 @@ The UPI ID and account holder's name shown under it are set there too.
 **Backups card:** when the last backup ran, and whether the private copy and the Google Sheet copy
 worked (with the last good copy's time and the reason when the Sheet failed).
 
-One account at a time (sign out, deactivate, delete, new password) and who is signed in: **Accounts**.
+One account at a time (sign out, deactivate, delete, new password), who is signed in, **Check a
+password** and **Recent failed sign-ins**: **Accounts**.
 
 Sign in at https://pragya2k26.online/landing/admin/ with an Admin account (or the owner). You can
 also open any department page and act as that department's admin, desk or coordinator.
@@ -705,7 +707,9 @@ also open any department page and act as that department's admin, desk or coordi
 | Show a line on the website (venue or time change) | **Event-day controls → Notice on the website** (up to 300 characters; every open page shows it within two minutes; take it down afterwards) |
 | Change a venue, time, fee or team size; close an event; add an event or a desk | **Departments & events** → change → **Save** (every phone within 15 s) |
 | A new person at a desk or event | **Accounts → New account** (role, department, desk number or events) |
-| A forgotten password | **Accounts** → the account → **New password** → save; tell them privately |
+| A forgotten password | **Accounts** → the account → **Edit** → **Generate** → **Save**; **Copy** it and tell them privately |
+| "Incorrect username or password" | **Accounts → Check a password** (is it right?), **Recent failed sign-ins** (why it was refused) and **Last sign-in** |
+| Start the accounts again (owner only) | **Accounts → Delete every staff account** (type `DELETE ALL`), then make each login by hand |
 | A lost or stolen phone | **Accounts → Signed in now → Sign out** (every device), then a new password |
 | Someone should stop entirely | **Accounts** → the account → untick **Active**, or **Delete** |
 | Move a coordinator to another event | **Accounts** → the account → tick the events |
@@ -723,19 +727,18 @@ Changing a password, deactivating or deleting an account signs that person out a
 
 | When | Who | What |
 | --- | --- | --- |
-| Day before | Web assist | Section 2 done: accounts handed out, online CSVs uploaded, venues and times filled in, test data deleted, registration times set, paper slips printed |
+| Day before | Web assist | Section 2 done: accounts made by hand and checked, online CSVs uploaded, venues and times filled in, test data deleted (test session ended), registration times set, gate QR printed |
 | Day before | Everyone | Sign in once on the phone they will use; open their link; check it shows their department |
 | Morning, before opening | Web assist | **System status** green; health check `ready`; the registration times right in **Event-day controls** |
 | Morning | Desks | Sign in, open **Registration desk**; check the bar says connected; second phone signed in too |
 | Morning | Whoever holds the receiving UPI account | At the verification point, the account's payments open, to check transaction IDs |
-| Opening | Desks | **Verify payments** of students who registered on their phones; register walk-ins; check in online registrants |
-| During | Coordinators | Fees, attendance at the venue |
+| Opening | Desks | **Students**: open each student's ID, verify their UTR or collect the fee; check in online registrants |
+| During | Coordinators | Add the department's students to the event, fees, attendance at the venue |
 | During | Overall coordinator (HOD) | Watch Overview; call the web assist team for anything odd |
 | Before the planned closing time | Web assist | Extend if the desks still have queues (one tap) |
-| Closing time | Desks | **Desk N totals** → hand over cash; make sure nothing is "waiting to send" |
-| After the closing time | Department admins | Type in any paper slips |
+| Closing time | Desks | **Desk N totals** → hand over cash |
 | After each event | Coordinators | Enter and **Submit results** |
-| End of day | Overall coordinator | **Results → Download winners**; **Registrations → Download** (all departments) |
+| End of day | Overall coordinator | **Results → Download winners**; **Colleges → Download** (the ranking); **Registrations → Download** (all departments) |
 
 ---
 
@@ -743,21 +746,18 @@ Changing a password, deactivating or deleting an account signs that person out a
 
 | Problem (students who register themselves) | What to do |
 | --- | --- |
-| **A student lost their ID** | Any desk: **Find & check in** by mobile number or name, or the student opens **Already registered?** on the students' page with their mobile number and ID. |
+| **A student lost their ID** | Their desk: **Students → Find** by mobile number or name, or the student opens **My registration ID** on the students' page with their mobile number and email. |
 | **"This mobile number is already registered"** | They registered before (on their phone, online or at a desk): find them at a desk by mobile number. |
 | **The payment is not in the account** | **Not found…** with a reason ("not received", "wrong amount"): the student sees it and can send the right transaction ID, or pays at the desk (the desk takes cash and checks them in). |
-| **"This transaction ID was already accepted for CSE-20xx"** | Two students typed the same payment. Ask for the student's own payment screen; correct the transaction ID in the box and verify. |
+| **"This UPI transaction ID was already accepted for CSE-20xx"** | The desk sees who has the UTR (any department). Look at both payment screens and **Change UTR…** on the one that is wrong (kept in their UTR log); then verify or collect. |
 | **"The entry fee is not verified yet" at a venue** | Send the student to a desk to verify their payment first. |
 | **Students' page says the server is busy** | Many students at once: try again in a moment. Check the Lambda limit (2.3). |
 
 | Problem | What to do |
 | --- | --- |
-| **No signal at a desk** | Keep registering: it is saved on the phone and sent later. Switch to the second phone (other carrier) if you need to look anything up. |
-| **"Waiting to send" does not go down** | Move to better signal. If it says a registration failed, open it: it says why (e.g. the mobile number is already registered, with that ID). Fix it or dismiss it. |
-| **Mobile number already registered** | The desk shows the existing ID. Use that ID; do not register again. |
-| **Phone or laptop switched off with registrations waiting** | Nothing is lost: each registration is saved on the device the moment it is made. Switch it on, open the same page **in the same browser**, sign in with the **same account**: they are sent by themselves. Never use a private/incognito window at a desk (its data is wiped when it closes), and never clear the browser's data. |
-| **Phone lost** | Web assist: **Accounts → Signed in now → Sign out** for that account, set a new password, sign in on another phone. Anything that was waiting on the lost phone is lost: re-register those students (their mobile number tells you if they are already in). |
-| **Every phone at a desk fails** | Paper slips (`<DEPT>-9001…`); the department admin types them in later. |
+| **No signal at a desk** | Nothing is saved without the network: the desk is told at once. Move to better signal or the second phone (other carrier), and try again. |
+| **Mobile number already registered** | The desk is told the existing ID: open it; do not register again. |
+| **Phone lost** | Web assist: **Accounts → Signed in now → Sign out** for that account, set a new password, sign in on another phone. Nothing is lost: everything is on the server. |
 | **"Registration is closed"** at a desk | The on-site closing time has passed. Web assist: **Event-day controls → Reopen or extend**. |
 | **Signed in on the wrong department's page** | The page says which is theirs; open that link. |
 | **Coordinator sees no event** | Web assist: **Accounts** → tick the event on their account. |
@@ -765,7 +765,8 @@ Changing a password, deactivating or deleting an account signs that person out a
 | **Signed out after many hours** | Sessions last 16 hours. Sign in again. |
 | **Wrong fee recorded** | Overall coordinator / web assist cancels it with a reason. |
 | **Results need a change after submitting** | Overall coordinator / web assist: **Results → Reopen**; the coordinator submits again. |
-| **The site is slow or errors for everyone** | Check the health link. If the Lambda limit was not raised (2.3), at most 10 requests run at once: raise it. Desks keep working offline meanwhile. |
+| **The site is slow or errors for everyone** | Check the health link. If the Lambda limit was not raised (2.3), at most 10 requests run at once: raise it. |
+| **"Incorrect username or password"** for a login you just made | **Accounts → Check a password**, **Recent failed sign-ins** (section 2.6): usually a password pasted after one the browser filled in (press **Show**), a typo in the username, or an account made on a local test copy. |
 | **The dashboard page shows the public site** | The slash at the end is missing: use `…/admin/`. |
 | **"Couldn't reach the server" when signing in, with signal** | You are probably on `www.pragya2k26.online`. Use `https://pragya2k26.online/…` (no www), or add the www address to `ALLOWED_ORIGINS` in Amplify and redeploy. |
 | **Anything else** | The **Contact admin** button on every screen sends the web assist team the screen and the error. |

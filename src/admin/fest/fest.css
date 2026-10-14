@@ -601,3 +601,56 @@
   border-radius: 8px;
   font: inherit;
 }
+
+/* The desk's list filters: big enough to tap on a phone */
+.fest-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin: 0.6rem 0;
+}
+
+.fest-chip-button {
+  min-height: 2.5rem;
+  padding: 0.35rem 0.8rem;
+  border: 1px solid var(--adm-line);
+  border-radius: 999px;
+  background: var(--adm-surface);
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+
+.fest-chip-button.is-on {
+  border-color: var(--adm-primary);
+  background: var(--adm-primary);
+  color: #fff;
+  font-weight: 600;
+}
+
+/* A student's details at the desk and in an event window (one tile per fact) */
+.fest-factgrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(12rem, 1fr));
+  gap: 0.5rem 1rem;
+  margin: 0.75rem 0 0;
+}
+
+.fest-fact dt {
+  color: var(--adm-muted);
+  font-size: 0.85rem;
+}
+
+.fest-fact dd {
+  margin: 0;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+/* A UTR log or event list: one line each */
+.fest-log {
+  display: grid;
+  gap: 0.4rem;
+  margin: 0.5rem 0;
+  padding-left: 1.1rem;
+}

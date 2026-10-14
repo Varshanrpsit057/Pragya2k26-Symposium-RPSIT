@@ -51,7 +51,7 @@ import type { AuditEntry, SystemProblem, SystemStatus } from '../src/lib/help';
 import { proofLabel } from '../src/lib/student';
 import { eventDayStarted, registrationPhase, scheduleOf, type RegistrationPhase, type RegistrationSchedule } from '../src/lib/schedule';
 import { LOGIN_LABELS, LOGIN_ROLES, type LoginRole } from '../src/lib/portal';
-import { MAX_DESK_NUMBER, readDeskNumber, ROLE_PERMISSIONS, type SessionInfo, type SignedInView, type StaffRole } from '../src/lib/staff';
+import { DELETE_ALL_STAFF, MAX_DESK_NUMBER, readDeskNumber, ROLE_PERMISSIONS, type SessionInfo, type SignedInView, type SignInFailure, type StaffRole } from '../src/lib/staff';
 import { SESSION_HOURS, bearerToken, hashPassword, newSessionToken, sameText, sha256, verifyPassword } from './auth';
 import { driveLink, type DriveStore, type StoredFile } from './drive';
 import { confirmationEmail } from './emailTemplate';
@@ -148,6 +148,20 @@ const MAX_AUTO_SYNC_ATTEMPTS = 50;
 const LOGIN_LIMIT = { max: 10, windowMs: 15 * 60_000 };
 const LOGIN_ADDRESS_LIMIT = { max: 1000, windowMs: 15 * 60_000 };
 const LOOKUP_LIMIT = { max: 120, windowMs: 10 * 60_000 };
+/** The refused sign-ins kept for Accounts (newest first). */
+const SIGN_IN_FAILURES = 'staff-sign-in-failures';
+const MAX_SIGN_IN_FAILURES = 40;
+
+/**
+ * The password as typed, or (when that does not match) without spaces at its ends: a password copied
+ * from a page often brings a space with it. Passwords never start or end with one (they are trimmed
+ * when they are set), so this never lets a different password in.
+ */
+async function matchesPassword(password: string, hash: string) {
+  if (await verifyPassword(password, hash)) return true;
+  const trimmed = password.trim();
+  return trimmed !== password && trimmed.length > 0 && verifyPassword(trimmed, hash);
+}
 /**
  * Students on their own phones (fest registration and their page). Many phones on one mobile
  * network can share an address, so the limits per address are generous.
@@ -478,7 +492,7 @@ export class Service {
       await this.limit(`student-id:${sha256(rawId.replace(/\s/g, '').toUpperCase()).slice(0, 24)}`, STUDENT_ID_LIMIT, 'Too many tries for this ID. Please wait 10 minutes, or ask at a registration desk.');
     }
     if (action === 'view') return this.fest.studentView(body);
-    if (action === 'events') return this.fest.studentEvents(body);
+    if (action === 'events') return this.fest.studentEvents();
     return this.fest.studentPayment(body);
   }
 
@@ -525,27 +539,32 @@ export class Service {
     await this.limit(`login:${ip}:${sha256(username.toLowerCase()).slice(0, 24)}`, LOGIN_LIMIT, message);
 
     let session: AdminSession | null = null;
+    // Why a sign-in was refused, kept for the web assist team (Accounts → Recent failed sign-ins).
+    let failure: SignInFailure['reason'] = 'no such account';
     if (sameText(username, this.deps.admin.username)) {
-      if (await verifyPassword(password, this.deps.admin.passwordHash)) {
+      if (await matchesPassword(password, this.deps.admin.passwordHash)) {
         session = { username: this.deps.admin.username, kind: 'owner', credential: this.credential(), createdAt: 0, expiresAt: 0 };
-      }
+      } else failure = 'wrong password';
     } else {
       // An unknown or inactive account takes as long to refuse as a wrong password.
       const account = await this.deps.store.getStaff(username.toLowerCase());
       const usable = account?.active ? account : null;
-      const matches = await verifyPassword(password, usable?.passwordHash ?? (await this.dummyPasswordHash()));
+      const matches = await matchesPassword(password, usable?.passwordHash ?? (await this.dummyPasswordHash()));
       if (usable && matches && (await this.loginOff(usable.role))) {
+        await this.noteSignInFailure(usable.username, 'sign-in switched off', ip);
         throw new ApiError(403, 'LOGIN_OFF', `Sign-in for ${LOGIN_LABELS[usable.role as LoginRole].toLowerCase()} is switched off by the web assist team.`);
       }
       if (usable && matches) {
         const desk = usable.role === 'DESK' ? (usable.deskNumber ?? readDeskNumber(isObject(body) ? body.deskNumber : undefined)) : null;
         session = { username: usable.username, kind: 'staff', credential: staffCredential(usable), createdAt: 0, expiresAt: 0, ...(desk && { deskNumber: desk }) };
-      }
+      } else if (account) failure = account.active ? 'wrong password' : 'account deactivated';
     }
     if (!session) {
-      this.log('Admin sign-in failed', { ip });
+      this.log('Admin sign-in failed', { ip, reason: failure });
+      await this.noteSignInFailure(username.toLowerCase(), failure, ip);
       throw new ApiError(401, 'INVALID_LOGIN', 'Incorrect username or password.');
     }
+    if (session.kind === 'staff') await this.deps.store.noteStaffSignIn(session.username, new Date(this.now()).toISOString()).catch(() => undefined);
     const token = newSessionToken();
     const now = this.now();
     const expiresAt = now + SESSION_HOURS * 3_600_000;
@@ -563,6 +582,64 @@ export class Service {
   private dummyPasswordHash() {
     this.dummyHash ??= hashPassword(randomBytes(18).toString('base64url'));
     return this.dummyHash;
+  }
+
+  /** Keeps the last few refused sign-ins (who was tried, why, when) for Accounts; never the password. */
+  private async noteSignInFailure(username: string, reason: SignInFailure['reason'], ip: string) {
+    try {
+      const raw = await this.deps.store.getSetting(SIGN_IN_FAILURES);
+      const list = raw ? (JSON.parse(raw) as SignInFailure[]) : [];
+      const entry: SignInFailure = { username: username.slice(0, 40), reason, at: new Date(this.now()).toISOString() };
+      await this.deps.store.putSetting(SIGN_IN_FAILURES, JSON.stringify([entry, ...list].slice(0, MAX_SIGN_IN_FAILURES)));
+    } catch (error) {
+      this.log('Could not keep the failed sign-in', { ip, error: error instanceof Error ? error.message : String(error) });
+    }
+  }
+
+  async signInFailures(): Promise<SignInFailure[]> {
+    try {
+      const raw = await this.deps.store.getSetting(SIGN_IN_FAILURES);
+      return raw ? (JSON.parse(raw) as SignInFailure[]) : [];
+    } catch {
+      return [];
+    }
+  }
+
+  /**
+   * "Check a password" (Accounts): whether this password is the account's, without signing in or
+   * making a session. Says why it would be refused, so a failing login can be told apart from a typo.
+   */
+  async checkStaffPassword(actor: Actor, rawUsername: string, body: unknown) {
+    const username = rawUsername.trim().toLowerCase();
+    await this.limit(`password-check:${actor.username}`, LOGIN_LIMIT, 'Too many checks. Please wait 15 minutes and try again.');
+    const password = field(body, 'password', 200);
+    const account = await this.deps.store.getStaff(username);
+    if (!account) return { success: true as const, username, exists: false, active: false, matches: false, signInOff: false };
+    const matches = await matchesPassword(password, account.passwordHash);
+    this.log('Staff password checked', { username, matches, by: actor.username });
+    return { success: true as const, username, exists: true, active: account.active, matches, signInOff: await this.loginOff(account.role) };
+  }
+
+  /**
+   * The owner only: deletes every staff account (the owner's own sign-in, from the Amplify secrets, is
+   * never one of them), so each login can be made again by hand. Their sessions end at once.
+   */
+  async deleteAllStaff(actor: Actor, body: unknown) {
+    if (actor.kind !== 'owner') throw new ApiError(403, 'FORBIDDEN', 'Only the main admin (the owner’s sign-in) can delete every account.');
+    if (field(body, 'confirm', 40).trim() !== DELETE_ALL_STAFF) throw new ApiError(400, 'INVALID', `Type ${DELETE_ALL_STAFF} to confirm.`);
+    const deleted: string[] = [];
+    for (const account of await this.deps.store.listStaff()) {
+      for (let attempt = 0; attempt < 3; attempt += 1) {
+        const current = attempt === 0 ? account : await this.deps.store.getStaff(account.username);
+        if (!current) break;
+        if (await this.deps.store.deleteStaff(current.username, current.revision)) {
+          deleted.push(current.username);
+          break;
+        }
+      }
+    }
+    this.log('Every staff account deleted', { count: deleted.length, by: actor.username });
+    return { success: true as const, deleted: deleted.length };
   }
 
   /** Changes whenever the owner's username or password changes. */
@@ -627,7 +704,8 @@ export class Service {
           return [{ username: session.username, displayName: 'Administrator', role: 'ADMIN', kind: 'owner', department: null, deskNumber: null, since: new Date(session.createdAt).toISOString(), until: new Date(session.expiresAt).toISOString() }];
         }
         const account = accounts.get(session.username);
-        if (!account?.active || signedOutSince(account, session)) return [];
+        // A new password (or a sign-out, or a deactivation) has ended this session already.
+        if (!account?.active || signedOutSince(account, session) || !sameText(session.credential, staffCredential(account))) return [];
         return [
           {
             username: account.username,

@@ -204,6 +204,8 @@ export interface StaffAccount {
   revision: number;
   /** An admin signed them out then: sessions made before it end. */
   signedOutAt?: string;
+  /** When they last signed in (kept apart from the revision: signing in never clashes with an edit). */
+  lastSignInAt?: string;
 }
 
 export interface ResultSubmission {
@@ -297,6 +299,8 @@ export interface Store {
   saveStaff(account: StaffAccount, expectedRevision: number): Promise<boolean>;
   /** Removes the account if its stored revision is still `expectedRevision`. */
   deleteStaff(username: string, expectedRevision: number): Promise<boolean>;
+  /** Records a sign-in on the account (no revision change); nothing when the account is gone. */
+  noteStaffSignIn(username: string, at: string): Promise<void>;
 
   getEventResult(eventId: string): Promise<EventResult | null>;
   /** Stores the result if its stored revision is still `expectedRevision` (0: must not exist yet). */
