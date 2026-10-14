@@ -66,7 +66,7 @@ async function onPhone(h: Harness, dept: string, n: number, extra: { name?: stri
     {
       submissionId,
       dept,
-      participant: { name: extra.name ?? `Student ${'ABCDEFGHIJKLMNOPQRSTUVWXYZ'[n % 26]}`, phone: `98${String(40000000 + n).padStart(8, '0')}`, college: extra.college ?? 'Sona College of Technology, Salem', branch: 'B.E. CSE', year: '2nd Year', email: `p${n}@example.com` },
+      participant: { name: extra.name ?? `Student ${'ABCDEFGHIJKLMNOPQRSTUVWXYZ'[n % 26]}`, phone: `98${String(40000000 + n).padStart(8, '0')}`, college: extra.college ?? 'Sona College of Technology, Salem', collegeCode: '2615', branch: 'B.E. CSE', year: '2nd Year', email: `p${n}@example.com` },
       events: extra.events ?? [],
     },
     { ip: '10.0.0.8' },
@@ -300,14 +300,16 @@ describe('the overall coordinator', () => {
     backend(h);
     signIn(overall.token);
     render(<AdminApp />);
-    const registered = async () => (await screen.findByText('Registered', { selector: '.fest-stat__label' })).parentElement!;
+    const registered = async () => (await screen.findByText('Students registered', { selector: '.fest-stat__label' })).parentElement!;
     await waitFor(async () => expect(await registered()).toHaveTextContent('3'));
     expect(screen.getByRole('heading', { name: 'By department' })).toBeInTheDocument();
     fireEvent.change(screen.getByLabelText('Department'), { target: { value: 'IT' } });
     await waitFor(async () => expect((await registered()).querySelector('.fest-stat__value')).toHaveTextContent('1'));
-    expect(screen.getByRole('heading', { name: 'IT desks' })).toBeInTheDocument();
-    fireEvent.click(within(screen.getByRole('navigation', { name: 'Sections' })).getByRole('button', { name: 'Registrations' }));
-    expect(await screen.findByText('1 registrations')).toBeInTheDocument();
+    // Two desks a department, nothing more.
+    expect(screen.getByRole('rowheader', { name: 'IT · Desk 2' })).toBeInTheDocument();
+    expect(screen.queryByRole('rowheader', { name: 'IT · Desk 3' })).toBeNull();
+    fireEvent.click(within(screen.getByRole('navigation', { name: 'Sections' })).getByRole('button', { name: 'Students' }));
+    expect(await screen.findByText('1 student')).toBeInTheDocument();
     expect(screen.getByText('IT-2001')).toBeInTheDocument();
   });
 
@@ -344,12 +346,13 @@ describe('the overall coordinator', () => {
     backend(h);
     signIn(overall.token);
     render(<AdminApp />);
-    fireEvent.click(within(await screen.findByRole('navigation', { name: 'Sections' })).getByRole('button', { name: 'Colleges' }));
+    fireEvent.click(within(await screen.findByRole('navigation', { name: 'Sections' })).getByRole('button', { name: 'Results' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'College ranking' }));
     const table = await screen.findByRole('table');
     await waitFor(() => expect(within(table).getAllByRole('row')).toHaveLength(4));
     const rows = () => within(table).getAllByRole('row').slice(1).map((row) => [...row.querySelectorAll('th, td')].map((cell) => cell.textContent));
-    // Rank, college, students, participations, 1st, 2nd, 3rd, total prizes.
-    expect(rows()).toEqual([
+    // Rank, college, code, students, participations, 1st, 2nd, 3rd, total prizes.
+    expect(rows().map((row) => row.filter((_, index) => index !== 2))).toEqual([
       ['1', 'DGCT', '3', '6', '2', '0', '0', '2'],
       ['2', 'KSR College', '4', '8', '0', '1', '1', '2'],
       ['3', 'Sona College', '1', '2', '0', '1', '0', '1'],
@@ -378,7 +381,7 @@ describe('deleting the test data', () => {
     backend(h);
     signIn(overall.token);
     render(<AdminApp />);
-    const registered = async () => (await screen.findByText('Registered', { selector: '.fest-stat__label' })).parentElement!;
+    const registered = async () => (await screen.findByText('Students registered', { selector: '.fest-stat__label' })).parentElement!;
     await waitFor(async () => expect((await registered()).querySelector('.fest-stat__value')).toHaveTextContent('2'));
 
     // Deleted elsewhere (e.g. from the Testing panel on another device): gone here at the next update.

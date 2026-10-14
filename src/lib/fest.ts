@@ -15,6 +15,9 @@ export interface FestContact {
   phone: string;
 }
 
+/** Every department has two registration desks (Desk 1 and Desk 2). */
+export const DESKS = 2;
+
 export interface FestDepartment {
   /** 'CSE': the prefix of its registration IDs (CSE-0147). Never changes once registrations exist. */
   code: string;
@@ -184,7 +187,7 @@ export const DEFAULT_CATALOG: FestCatalog = {
     hod: item.hod,
     staffCoordinator: item.staff,
     studentCoordinator: item.student,
-    desks: 4,
+    desks: DESKS,
     active: true,
   })),
   events: Object.entries(POSTER).flatMap(([code, item]) =>

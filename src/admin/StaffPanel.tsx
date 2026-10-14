@@ -1,7 +1,7 @@
 /** Staff accounts (admins): create, set roles, assign events, reset passwords, deactivate, delete. */
 import { useCallback, useState, type FormEvent } from 'react';
 import { events as allEvents } from '../content/events';
-import { deptShort, eventLabel, type FestCatalog } from '../lib/fest';
+import { DESKS, deptShort, eventLabel, type FestCatalog } from '../lib/fest';
 import { CREATABLE_ROLES, DELETE_ALL_STAFF, DEPARTMENT_ROLES, ROLE_INFO, type SessionInfo, type SignInFailure, type StaffAccountView, type StaffRole } from '../lib/staff';
 import { SignedOut, checkStaffPassword, createStaff, deleteAllStaff, deleteStaff, listStaff, signOutStaff, signedInNow, staffSignInFailures, updateStaff, type PasswordCheck, type StaffChange } from './adminApi';
 import { useFestCatalog } from './fest/FestData';
@@ -169,7 +169,7 @@ export function StaffPanel({ token, session, onSignedOut }: PanelProps) {
 function ScopeFields({ role, department, deskNumber, onChange }: { role: StaffRole; department: string; deskNumber: number; onChange: (next: { department: string; deskNumber: number }) => void }) {
   const catalog = useFestCatalog();
   if (!DEPARTMENT_ROLES.includes(role)) return null;
-  const desks = catalog.departments.find((dept) => dept.code === department)?.desks ?? 0;
+  const desks = catalog.departments.some((dept) => dept.code === department) ? DESKS : 0;
   return (
     <>
       <label className="adm-field">

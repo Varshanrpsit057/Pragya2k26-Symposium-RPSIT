@@ -4,7 +4,7 @@
  * never stored here. Passwords are kept only as scrypt hashes, made on the server.
  */
 import { eventCatalog } from '../src/content/eventCatalog';
-import { departmentOf, type FestCatalog } from '../src/lib/fest';
+import { DESKS, departmentOf, type FestCatalog } from '../src/lib/fest';
 import { DEPARTMENT_REQUIRED, DEPARTMENT_ROLES, STAFF_USERNAME, isStaffRole, type StaffAccountView, type StaffRole } from '../src/lib/staff';
 import { hashPassword, passwordProblem, sha256 } from './auth';
 import { ApiError } from './errors';
@@ -74,7 +74,8 @@ function readEvents(catalog: FestCatalog, value: unknown, role: StaffRole, depar
 /** A department's desk accounts are desks 1..its number of desks. */
 function readDesk(catalog: FestCatalog, value: unknown, role: StaffRole, department: string | null): number | undefined {
   if (role !== 'DESK' || !department) return undefined;
-  const desks = departmentOf(catalog, department)?.desks ?? 0;
+  // Every department has two desks, whatever an older catalog says.
+  const desks = departmentOf(catalog, department) ? DESKS : 0;
   const number = typeof value === 'number' ? value : Number(value);
   if (!Number.isInteger(number) || number < 1 || number > desks) throw new ApiError(400, 'INVALID', `Choose the desk: 1 to ${desks}.`);
   return number;

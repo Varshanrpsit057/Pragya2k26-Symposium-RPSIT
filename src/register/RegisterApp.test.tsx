@@ -49,6 +49,7 @@ async function fill() {
   fireEvent.change(await screen.findByLabelText('Name with initial'), { target: { value: 'Meena K' } });
   fireEvent.change(screen.getByLabelText(/^Mobile number/), { target: { value: '97900 11122' } });
   await pick('College', 'sona', /^Sona College of Technology, Salem$/);
+  fireEvent.change(screen.getByLabelText(/^College code/), { target: { value: '2615' } });
   await pick('Stream', 'b.e', /^B\.E\.$/);
   await pick('Department', 'cse', /\(CSE\)$/);
   fireEvent.change(screen.getByLabelText('Year'), { target: { value: '3rd Year' } });
@@ -207,7 +208,7 @@ describe('a student on their phone', () => {
 describe('“My registration ID” on another phone', () => {
   it('opens straight on finding it (/register/?my): the mobile number and email, never the ID', async () => {
     const h = setup({ at: TIMES.eventDay });
-    await h.call('POST', '/api/fest/register', { submissionId: 'self-test-key-0000000000001', dept: 'CSE', participant: { name: 'Divya R', phone: '9840011111', college: 'Sona', branch: 'B.E. CSE', year: '2nd Year', email: 'divya.r@example.com' }, events: [] }, { ip: '10.0.0.8' });
+    await h.call('POST', '/api/fest/register', { submissionId: 'self-test-key-0000000000001', dept: 'CSE', participant: { name: 'Divya R', phone: '9840011111', college: 'Sona', collegeCode: '2615', branch: 'B.E. CSE', year: '2nd Year', email: 'divya.r@example.com' }, events: [] }, { ip: '10.0.0.8' });
     backend(h);
     window.history.pushState({}, '', '/register/?my');
     render(<RegisterApp />);

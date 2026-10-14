@@ -64,10 +64,10 @@ describe('the desk number of each desk sign-in', () => {
     render(<AdminApp />);
     const ask = await screen.findByRole('region', { name: 'Choose your desk' });
     expect(ask).toHaveTextContent('Which registration desk are you at?');
-    fireEvent.click(within(ask).getByRole('button', { name: 'Desk 3' }));
-    expect(await screen.findByText('Desk 3')).toBeInTheDocument();
+    fireEvent.click(within(ask).getByRole('button', { name: 'Desk 2' }));
+    expect(await screen.findByText('Desk 2')).toBeInTheDocument();
     expect(screen.queryByRole('region', { name: 'Choose your desk' })).toBeNull();
-    expect(sent.find((call) => call.url.endsWith('/api/admin/session/desk'))?.body).toEqual({ deskNumber: 3 });
+    expect(sent.find((call) => call.url.endsWith('/api/admin/session/desk'))?.body).toEqual({ deskNumber: 2 });
   });
 
   it('shows admins who is signed in now, at which desk', async () => {

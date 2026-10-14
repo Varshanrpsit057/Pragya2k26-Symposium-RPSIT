@@ -1,22 +1,21 @@
 /**
  * The live views (overall coordinator and web assist team: every department; department HOD
- * and admin: their own), all driven by the same filters: department, event, venue, how they
- * registered, desk, entry fee, status and search.
+ * and admin: their own). Each screen shows only the filters it needs.
  *
- * - Overview: totals, then by department, by event (with venue and time) and by desk
- * - Registrations: the filtered list, each with its details and the corrections a role may make
- * - Results: every event's winners as submitted, reopened only by the overall coordinator
- * - Colleges: the college ranking (medal table): students, event participations and the 1st, 2nd
- *   and 3rd places each college won, filtered by participations and prizes
+ * - Overview: headline numbers, money and results by department, and what each of the two desks took
+ * - Students: the list (department, payment, college, event, search, show cancelled), each with its
+ *   details and the corrections a role may make
+ * - Results: every event's winners as submitted (reopened only by the overall coordinator), or the
+ *   college ranking (medal table) filtered by participations and prizes
  */
 import { useMemo, useState } from 'react';
-import { collegeSummary, deptShort, eventLabel, eventOf, feePaid, isActive, medalOrder, participantProblems, readParticipant, rupees, showId, totalsOf, type CollegeRow, type FestEvent, type FestParticipant } from '../../lib/fest';
+import { DESKS, awaitingCheck, collegeSummary, deptShort, eventLabel, eventOf, feePaid, isActive, medalOrder, participantProblems, readParticipant, rupees, showId, totalsOf, type CollegeRow, type FestEvent, type FestParticipant, type FestRegistration } from '../../lib/fest';
 import { hasPermission } from '../../lib/staff';
 import { Badge, when } from '../ui';
 import { filterNote, saveTable, today } from './excel';
 import { exportRows, howRegistered } from './exports';
 import { ordinal } from './EventWindow';
-import { useFest } from './FestData';
+import { NO_FILTERS, useFest, type FestFilters } from './FestData';
 import { FilterBar, NO_PAYMENT, PaymentChoice, ShortList, Stat, applyFilters, deptName, paymentBody, paymentReady, stampNow, type PaymentDraft } from './festUi';
 
 
@@ -43,159 +42,143 @@ function useFiltered() {
 
 // ------------------------------------------------------------------------------------------ Overview
 
+/** Entry fees each desk took (cash and UPI), by department. */
+function deskTotals(registrations: Iterable<FestRegistration>, dept: string, desk: number) {
+  let count = 0;
+  let cash = 0;
+  let upi = 0;
+  for (const item of registrations) {
+    if (item.dept !== dept || !isActive(item)) continue;
+    const payment = item.entry.payment;
+    if (!payment || payment.voided || payment.desk !== desk) continue;
+    count += 1;
+    if (payment.method === 'CASH') cash += payment.amount;
+    else if (payment.method === 'UPI') upi += payment.amount;
+  }
+  return { count, cash, upi };
+}
+
+/** The live numbers: how many came, what was collected, how far the events are, what each desk took. */
 export function FestOverview() {
   const { catalog, registrations, filters, results, setFilters } = useFest();
-  const { list, viewAll } = useFiltered();
-  const totals = totalsOf(list, filters.eventId || undefined);
+  const { viewAll } = useFiltered();
+  const all = useMemo(() => [...registrations.values()], [registrations]);
   if (!catalog) return <p className="adm-loading">Loading the live data…</p>;
-  const all = [...registrations.values()];
+  // Only the department narrows the overview (the Students list's filters do not).
+  const inScope = (dept: string) => applyFilters(all, { ...NO_FILTERS, dept }, catalog);
+  const totals = totalsOf(inScope(filters.dept));
   const depts = catalog.departments.filter((dept) => !filters.dept || dept.code === filters.dept);
-  const events = catalog.events.filter((event) => (!filters.dept || event.dept === filters.dept) && (!filters.venue || event.venue === filters.venue) && (!filters.eventId || event.id === filters.eventId));
-  const deskDept = filters.dept || (depts.length === 1 ? depts[0].code : '');
-  const deskCount = catalog.departments.find((dept) => dept.code === deskDept)?.desks ?? 0;
+  const paid = totals.registered - totals.entryDue;
+  const notPaid = totals.entryDue - totals.awaiting;
+  const entryFees = totals.entryCash + totals.entryUpi + totals.entryOnline;
+  const eventFees = totals.feeCash + totals.feeUpi;
+  const activeEvents = catalog.events.filter((event) => event.active && (!filters.dept || event.dept === filters.dept));
+  const submitted = activeEvents.filter((event) => results.get(event.id)?.submitted).length;
 
   return (
     <main className="adm-page">
       <section className="adm-card adm-pad">
         <FilterBar showDept={viewAll} />
         <div className="fest-stats">
-          <Stat label="Registered" value={totals.registered} sub={`${totals.self} own phone${totals.forThem ? ` · ${totals.forThem} by a desk` : ''}${totals.desk ? ` · ${totals.desk} desk (earlier)` : ''} · ${totals.online} online${totals.paper ? ` · ${totals.paper} paper` : ''}`} />
-          {totals.awaiting > 0 && <Stat label="Payments to check" value={totals.awaiting} sub="Self-registered, waiting for a desk" />}
-          <Stat label="On campus" value={totals.checkedIn} sub={totals.online ? `${totals.online - (totals.checkedIn - totals.desk - totals.paper)} online not arrived` : undefined} />
-          <Stat label="Entry fees" value={rupees(totals.entryCash + totals.entryUpi + totals.entryOnline)} sub={`${rupees(totals.entryCash)} cash · ${rupees(totals.entryUpi)} UPI · ${rupees(totals.entryOnline)} online`} />
-          <Stat label="Event fees" value={rupees(totals.feeCash + totals.feeUpi)} sub={`${totals.feesPaid} paid of ${totals.eventEntries} entries`} />
-          <Stat label="Present at events" value={totals.present} />
+          <Stat label="Students registered" value={totals.registered} sub={`${totals.checkedIn} on campus`} />
+          <Stat label="Paid" value={paid} />
+          <Stat label="Payment to check" value={totals.awaiting} sub="Sent a transaction ID; a desk verifies it" />
+          <Stat label="Not paid yet" value={notPaid} />
+          <Stat label="Total collected" value={rupees(entryFees + eventFees)} sub={`Entry ${rupees(entryFees)} · events ${rupees(eventFees)}`} />
+          <Stat label="Results submitted" value={`${submitted} of ${activeEvents.length}`} sub={`${totals.present} present at events`} />
         </div>
       </section>
 
-      {viewAll && !filters.dept && (
-        <section className="adm-card adm-pad">
-          <h3 className="adm-h3">By department</h3>
-          <div className="adm-table-wrap">
-            <table className="adm-table adm-table--static fest-table">
-              <thead>
-                <tr>
-                  <th scope="col">Department</th>
-                  <th scope="col">Registered</th>
-                  <th scope="col">Desk / online</th>
-                  <th scope="col">Entry fees</th>
-                  <th scope="col">Event fees</th>
-                  <th scope="col">Present</th>
-                  <th scope="col">Results</th>
-                </tr>
-              </thead>
-              <tbody>
-                {catalog.departments.map((dept) => {
-                  const part = totalsOf(applyFilters(all, { ...filters, dept: dept.code }, catalog));
-                  const deptEvents = catalog.events.filter((event) => event.dept === dept.code && event.active);
-                  const submitted = deptEvents.filter((event) => results.get(event.id)?.submitted).length;
-                  return (
-                    <tr key={dept.code} className="fest-row-link" onClick={() => setFilters({ ...filters, dept: dept.code })}>
-                      <th scope="row">
-                        {deptShort(dept.code)} <span className="adm-muted">{dept.name}</span>
-                      </th>
-                      <td>{part.registered}</td>
-                      <td>
-                        {part.desk} / {part.online}
-                      </td>
-                      <td>{rupees(part.entryCash + part.entryUpi + part.entryOnline)}</td>
-                      <td>{rupees(part.feeCash + part.feeUpi)}</td>
-                      <td>{part.present}</td>
-                      <td>
-                        {submitted}/{deptEvents.length}
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-          <p className="adm-muted">Tap a department to see it alone.</p>
-        </section>
-      )}
-
       <section className="adm-card adm-pad">
-        <h3 className="adm-h3">By event and venue</h3>
+        <h3 className="adm-h3">{viewAll && !filters.dept ? 'By department' : deptName(catalog, depts[0]?.code ?? '')}</h3>
         <div className="adm-table-wrap">
           <table className="adm-table adm-table--static fest-table">
             <thead>
               <tr>
-                <th scope="col">Event</th>
-                <th scope="col">Venue · time</th>
-                <th scope="col">Registered</th>
-                <th scope="col">Fee paid</th>
-                <th scope="col">Present</th>
+                <th scope="col">Department</th>
+                <th scope="col">Students</th>
+                <th scope="col">Paid</th>
+                <th scope="col">Entry fees (cash · UPI)</th>
+                <th scope="col">Event fees</th>
+                <th scope="col">Total collected</th>
                 <th scope="col">Results</th>
+                <th scope="col">Present</th>
               </tr>
             </thead>
             <tbody>
-              {events.map((event) => {
-                const part = totalsOf(all, event.id);
-                const result = results.get(event.id);
+              {depts.map((dept) => {
+                const part = totalsOf(inScope(dept.code));
+                const deptEvents = catalog.events.filter((event) => event.dept === dept.code && event.active);
+                const done = deptEvents.filter((event) => results.get(event.id)?.submitted).length;
+                const entry = part.entryCash + part.entryUpi + part.entryOnline;
+                const events = part.feeCash + part.feeUpi;
                 return (
-                  <tr key={event.id} className="fest-row-link" onClick={() => setFilters({ ...filters, dept: event.dept, eventId: event.id })}>
+                  <tr key={dept.code} className={viewAll && !filters.dept ? 'fest-row-link' : undefined} onClick={viewAll && !filters.dept ? () => setFilters({ ...filters, dept: dept.code }) : undefined}>
                     <th scope="row">
-                      {viewAll && <span className="adm-muted">{deptShort(event.dept)} · </span>}
-                      {eventLabel(event)}
-                      {!event.active && <Badge tone="plain">Closed</Badge>}
+                      {deptShort(dept.code)} <span className="adm-muted">{dept.name}</span>
                     </th>
-                    <td>{[event.venue, event.time].filter(Boolean).join(' · ') || '—'}</td>
                     <td>{part.registered}</td>
+                    <td>{part.registered - part.entryDue}</td>
                     <td>
-                      {part.feesPaid} <span className="adm-muted">({rupees(part.feeCash + part.feeUpi)})</span>
+                      {rupees(entry)}{' '}
+                      <span className="adm-muted">
+                        ({rupees(part.entryCash)} · {rupees(part.entryUpi)})
+                      </span>
+                    </td>
+                    <td>{rupees(events)}</td>
+                    <td>
+                      <strong>{rupees(entry + events)}</strong>
+                    </td>
+                    <td>
+                      {done}/{deptEvents.length}
                     </td>
                     <td>{part.present}</td>
-                    <td>{result?.submitted ? <Badge tone="good">Submitted</Badge> : result?.places.length ? <Badge tone="warn">Saved</Badge> : <span className="adm-muted">—</span>}</td>
                   </tr>
                 );
               })}
             </tbody>
           </table>
         </div>
+        {viewAll && !filters.dept && <p className="adm-muted">Tap a department to see it alone.</p>}
       </section>
 
-      {deskDept && deskCount > 0 && (
-        <section className="adm-card adm-pad">
-          <h3 className="adm-h3">{deptShort(deskDept)} desks</h3>
-          <div className="adm-table-wrap">
-            <table className="adm-table adm-table--static fest-table">
-              <thead>
-                <tr>
-                  <th scope="col">Desk</th>
-                  <th scope="col">Registered</th>
-                  <th scope="col">Online checked in</th>
-                  <th scope="col">Cash</th>
-                  <th scope="col">UPI</th>
-                </tr>
-              </thead>
-              <tbody>
-                {Array.from({ length: deskCount }, (_, index) => index + 1).map((desk) => {
-                  const inDept = all.filter((item) => item.dept === deskDept && isActive(item));
-                  const made = inDept.filter((item) => item.desk === desk && item.source !== 'ONLINE').length;
-                  const checked = inDept.filter((item) => item.checkedIn?.desk === desk).length;
-                  let cash = 0;
-                  let upi = 0;
-                  for (const item of inDept) {
-                    const payment = item.entry.payment;
-                    if (!payment || payment.voided || payment.desk !== desk) continue;
-                    if (payment.method === 'CASH') cash += payment.amount;
-                    else if (payment.method === 'UPI') upi += payment.amount;
-                  }
+      <section className="adm-card adm-pad">
+        <h3 className="adm-h3">Desk totals</h3>
+        <p className="adm-muted">Entry fees each desk took. Hand-over at the end of the day should match these.</p>
+        <div className="adm-table-wrap">
+          <table className="adm-table adm-table--static fest-table">
+            <thead>
+              <tr>
+                <th scope="col">Desk</th>
+                <th scope="col">Fees taken</th>
+                <th scope="col">Cash</th>
+                <th scope="col">UPI</th>
+                <th scope="col">Total</th>
+              </tr>
+            </thead>
+            <tbody>
+              {depts.flatMap((dept) =>
+                Array.from({ length: DESKS }, (_, index) => index + 1).map((desk) => {
+                  const { count, cash, upi } = deskTotals(all, dept.code, desk);
                   return (
-                    <tr key={desk}>
-                      <th scope="row">Desk {desk}</th>
-                      <td>{made}</td>
-                      <td>{checked}</td>
+                    <tr key={`${dept.code}-${desk}`}>
+                      <th scope="row">
+                        {deptShort(dept.code)} · Desk {desk}
+                      </th>
+                      <td>{count}</td>
                       <td>{rupees(cash)}</td>
                       <td>{rupees(upi)}</td>
+                      <td>
+                        <strong>{rupees(cash + upi)}</strong>
+                      </td>
                     </tr>
                   );
-                })}
-              </tbody>
-            </table>
-          </div>
-        </section>
-      )}
+                }),
+              )}
+            </tbody>
+          </table>
+        </div>
+      </section>
     </main>
   );
 }
@@ -217,9 +200,11 @@ export function FestRegistrations() {
   return (
     <main className="adm-page">
       <section className="adm-card adm-pad">
-        <FilterBar showDept={viewAll} />
+        <FilterBar showDept={viewAll} fields={['payment', 'college', 'event', 'search', 'cancelled']} />
         <div className="adm-toolbar">
-          <strong>{list.length} registrations</strong>
+          <strong>
+            {list.length} student{list.length === 1 ? '' : 's'}
+          </strong>
           {canDownload && (
             <button
               className="adm-button adm-button--small"
@@ -240,8 +225,7 @@ export function FestRegistrations() {
                 <th scope="col">Phone</th>
                 <th scope="col">College</th>
                 <th scope="col">Events</th>
-                <th scope="col">Registered</th>
-                <th scope="col">Entry</th>
+                <th scope="col">Payment</th>
               </tr>
             </thead>
             <tbody>
@@ -255,15 +239,23 @@ export function FestRegistrations() {
                     {item.team && <span className="adm-muted"> · {item.team}</span>}
                   </td>
                   <td>{item.phone}</td>
-                  <td>{item.college}</td>
+                  <td>
+                    {item.college}
+                    {item.collegeCode && <span className="adm-muted"> · {item.collegeCode}</span>}
+                  </td>
                   <td>{item.events.map((entry) => name(entry.eventId)).join(', ') || '—'}</td>
                   <td>
-                    {howRegistered(item)}
-                    {item.desk ? ` · desk ${item.desk}` : ''}
-                    {item.source === 'ONLINE' && (item.checkedIn ? ' · arrived' : ' · not arrived')}
-                  </td>
-                  <td>
-                    {item.deleted ? <Badge tone="bad">Deleted</Badge> : item.cancelled ? <Badge tone="bad">Cancelled</Badge> : item.entry.status === 'DUE' ? <Badge tone="warn">Due</Badge> : <Badge tone="good">{item.entry.payment?.method === 'ONLINE' ? 'Online' : item.entry.payment?.method === 'UPI' ? 'UPI' : 'Cash'}</Badge>}
+                    {item.deleted ? (
+                      <Badge tone="bad">Deleted</Badge>
+                    ) : item.cancelled ? (
+                      <Badge tone="bad">Cancelled</Badge>
+                    ) : item.entry.status === 'PAID' ? (
+                      <Badge tone="good">Paid · {item.entry.payment?.method === 'ONLINE' ? 'online' : item.entry.payment?.method === 'UPI' ? 'UPI' : 'cash'}</Badge>
+                    ) : awaitingCheck(item) ? (
+                      <Badge tone="warn">To check</Badge>
+                    ) : (
+                      <Badge tone="plain">Not paid</Badge>
+                    )}
                   </td>
                 </tr>
               ))}
@@ -535,13 +527,16 @@ const MEDALS = 'medals' as const;
  */
 export function FestColleges() {
   const { catalog, results, filters, setFilters, session } = useFest();
-  const { list, viewAll, canDownload } = useFiltered();
+  const { viewAll, canDownload } = useFiltered();
+  const { registrations } = useFest();
+  const scope = useMemo<FestFilters>(() => ({ ...NO_FILTERS, dept: filters.dept, college: filters.college }), [filters.dept, filters.college]);
+  const list = useMemo(() => applyFilters(registrations.values(), scope, catalog), [registrations, scope, catalog]);
   const [sort, setSort] = useState<{ key: keyof CollegeRow | typeof MEDALS; down: boolean }>({ key: MEDALS, down: true });
   const [minEvents, setMinEvents] = useState(0);
   const [minPrizes, setMinPrizes] = useState(0);
   const rows = useMemo(() => {
     // Places count for the events the filters show (all events when none is chosen).
-    const shown = catalog ? new Set(catalog.events.filter((event) => (!filters.dept || event.dept === filters.dept) && (!filters.eventId || event.id === filters.eventId)).map((event) => event.id)) : new Set<string>();
+    const shown = catalog ? new Set(catalog.events.filter((event) => !filters.dept || event.dept === filters.dept).map((event) => event.id)) : new Set<string>();
     const summary = collegeSummary(list, [...results.values()].filter((result) => shown.has(result.eventId))).filter((row) => row.participations >= minEvents && row.places >= minPrizes);
     const { key, down } = sort;
     if (key === MEDALS) return summary.sort(medalOrder);
@@ -561,12 +556,12 @@ export function FestColleges() {
       ['Rank', 'College', 'College code', 'Students', 'Event participations', 'Event registrations', '1st prizes', '2nd prizes', '3rd prizes', 'Total prizes'],
       ...rows.map((row, index) => [index + 1, row.name, row.code, row.students, row.participations, row.registrations, row.first, row.second, row.third, row.places]),
     ];
-    saveTable(`techfest-college-ranking-${filters.dept || 'all'}-${today()}.xlsx`, 'College ranking', `${filterNote(filters, session.displayName)}${limits ? ` · ${limits}` : ''}`, table);
+    saveTable(`techfest-college-ranking-${filters.dept || 'all'}-${today()}.xlsx`, 'College ranking', `${filterNote(scope, session.displayName)}${limits ? ` · ${limits}` : ''}`, table);
   };
   return (
     <main className="adm-page">
       <section className="adm-card adm-pad">
-        <FilterBar showDept={viewAll} />
+        <FilterBar showDept={viewAll} fields={['college']} />
         <div className="fest-filters" role="group" aria-label="Ranking filters">
           <label className="adm-field">
             <span>Event participations (at least)</span>
@@ -646,7 +641,27 @@ export function FestColleges() {
 
 // ------------------------------------------------------------------------------------------ Results
 
+/** Results: every event's winners, or the college ranking built from them. */
 export function FestResults() {
+  const [view, setView] = useState<'winners' | 'ranking'>('winners');
+  return (
+    <>
+      <div className="adm-page fest-subnav">
+        <div className="fest-chips" role="group" aria-label="Results">
+          <button type="button" className={`fest-chip-button${view === 'winners' ? ' is-on' : ''}`} aria-pressed={view === 'winners'} onClick={() => setView('winners')}>
+            Event winners
+          </button>
+          <button type="button" className={`fest-chip-button${view === 'ranking' ? ' is-on' : ''}`} aria-pressed={view === 'ranking'} onClick={() => setView('ranking')}>
+            College ranking
+          </button>
+        </div>
+      </div>
+      {view === 'winners' ? <EventWinners /> : <FestColleges />}
+    </>
+  );
+}
+
+function EventWinners() {
   const { catalog, results, registrations, filters, session, change } = useFest();
   const { viewAll, canDownload } = useFiltered();
   if (!catalog) return <p className="adm-loading">Loading the live data…</p>;
@@ -673,7 +688,7 @@ export function FestResults() {
   return (
     <main className="adm-page">
       <section className="adm-card adm-pad">
-        <FilterBar showDept={viewAll} />
+        <FilterBar showDept={viewAll} fields={['event']} />
         <div className="adm-toolbar">
           <strong>
             {submitted.length} of {events.length} events submitted
@@ -701,7 +716,7 @@ export function FestResults() {
                 {result?.submitted ? <Badge tone="good">Submitted {when(result.submitted.at)}</Badge> : result?.places.length ? <Badge tone="warn">Saved, not submitted</Badge> : <Badge tone="plain">No winners yet</Badge>}
               </header>
               <p className="adm-muted">
-                {[event.venue, event.time].filter(Boolean).join(' · ')} · {part.registered} registered · {part.present} present
+                {[event.venue, event.time, `${part.registered} registered`, `${part.present} present`].filter(Boolean).join(' · ')}
               </p>
               {result && result.places.length > 0 && (
                 <ol className="fest-winners">

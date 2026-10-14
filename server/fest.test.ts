@@ -17,6 +17,7 @@ const student = (n: number, extra: Record<string, unknown> = {}) => ({
   phone: `9${String(800000000 + n).padStart(9, '0')}`,
   email: `s${n}@example.com`,
   college: 'Sona College of Technology',
+  collegeCode: '2615',
   branch: 'B.E. CSE',
   year: '2nd Year',
   team: '',
@@ -52,12 +53,12 @@ async function register(h: Harness, token: string, expected: string, events: str
 }
 
 describe('the fest catalog', () => {
-  it('starts with the poster: eight departments and 44 events, each department with four desks', async () => {
+  it('starts with the poster: eight departments and 44 events, each department with two desks', async () => {
     const h = setup({ at: TIMES.eventDay });
     const { body } = await h.asOwner('GET', '/api/admin/fest/catalog');
     expect(body.catalog.departments.map((dept: { code: string }) => dept.code)).toEqual(['CSE', 'AIDS', 'IT', 'ECE', 'CYS', 'EEE', 'MECH', 'SH']);
     expect(body.catalog.events).toHaveLength(44);
-    expect(body.catalog.departments.every((dept: { desks: number }) => dept.desks === 4)).toBe(true);
+    expect(body.catalog.departments.every((dept: { desks: number }) => dept.desks === 2)).toBe(true);
     expect(body.catalog.entryFee).toBe(100);
   });
 
@@ -77,16 +78,16 @@ describe('the fest catalog', () => {
 });
 
 describe('department accounts', () => {
-  it('belong to a department; desks are its desks 1–4; coordinators get its events', async () => {
+  it('belong to a department; desks are its desks 1 and 2; coordinators get its events', async () => {
     const h = setup({ at: TIMES.eventDay });
     const account = (body: Record<string, unknown>) => h.asOwner('POST', '/api/admin/staff', { displayName: 'Test Person', password: 'A-Strong-pass-2026', ...body });
     expect((await account({ username: 'hod-x', role: 'HOD' })).body.error).toMatch(/Choose the department/);
-    expect((await account({ username: 'desk-x', role: 'DESK', department: 'IT', deskNumber: 5 })).body.error).toMatch(/1 to 4/);
+    expect((await account({ username: 'desk-x', role: 'DESK', department: 'IT', deskNumber: 3 })).body.error).toMatch(/1 to 2/);
     expect((await account({ username: 'coord-x', role: 'COORDINATOR', department: 'IT', eventIds: ['cse-hackathon'] })).body.error).toMatch(/IT events only/);
-    const desk = await account({ username: 'it-desk3', role: 'DESK', department: 'IT', deskNumber: 3 });
-    expect(desk.body.account).toMatchObject({ role: 'DESK', department: 'IT', deskNumber: 3 });
-    const token = await h.loginAs('it-desk3', 'A-Strong-pass-2026');
-    expect((await h.call('GET', '/api/admin/session', undefined, { token })).body).toMatchObject({ department: 'IT', deskNumber: 3 });
+    const desk = await account({ username: 'it-desk2', role: 'DESK', department: 'IT', deskNumber: 2 });
+    expect(desk.body.account).toMatchObject({ role: 'DESK', department: 'IT', deskNumber: 2 });
+    const token = await h.loginAs('it-desk2', 'A-Strong-pass-2026');
+    expect((await h.call('GET', '/api/admin/session', undefined, { token })).body).toMatchObject({ department: 'IT', deskNumber: 2 });
   });
 });
 

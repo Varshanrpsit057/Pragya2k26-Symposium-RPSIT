@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState, type FormEvent } from 'react';
 import { formatIst, parseEventStart } from '../lib/countdown';
-import { DEFAULT_CATALOG, deptShort } from '../lib/fest';
+import { DEFAULT_CATALOG, DESKS, deptShort } from '../lib/fest';
 import { ROLE_INFO, hasPermission, type Permission, type SessionInfo } from '../lib/staff';
 import { SignedOut, currentAdmin, listHelp, myHelp, savedToken, setDeskNumber, signIn, signOut } from './adminApi';
 import { CatalogEditor } from './fest/CatalogEditor';
@@ -28,9 +28,8 @@ const watches = (session: SessionInfo) => can(session, 'fest.viewAll') || sessio
 /** The dashboard's sections, each shown only to the roles it is for (the server checks again). */
 const TABS: { id: TabId; label: (session: SessionInfo) => string; show: (session: SessionInfo) => boolean }[] = [
   { id: 'overview', label: () => 'Overview', show: watches },
-  { id: 'registrations', label: () => 'Registrations', show: watches },
+  { id: 'registrations', label: () => 'Students', show: watches },
   { id: 'results', label: () => 'Results', show: watches },
-  { id: 'colleges', label: () => 'Colleges', show: watches },
   { id: 'desk', label: (session) => (session.role === 'DESK' ? 'Registration desk' : 'Desk'), show: (session) => can(session, 'fest.register') },
   { id: 'event', label: (session) => (session.role === 'COORDINATOR' ? 'My events' : 'Event windows'), show: (session) => can(session, 'fest.event') },
   { id: 'import', label: () => 'Online import', show: (session) => can(session, 'fest.import') },
@@ -242,7 +241,7 @@ function LoginForm({ notice, onSignedIn }: { notice: string; onSignedIn: (token:
 }
 
 /** Desk numbers an older desk account (made without one) can choose after signing in. */
-const DESK_CHOICES = 8;
+const DESK_CHOICES = DESKS;
 
 interface ShellProps {
   token: string;

@@ -64,7 +64,7 @@ describe('students join only their own department’s events', () => {
     h.call(
       'POST',
       '/api/fest/register',
-      { submissionId: `access-test-key-0000000${n}`, dept, participant: { name: `Student ${'ABC'[n]}`, phone: `977700000${n}`, college: 'Sona', branch: 'B.E. CSE', year: '2nd Year', email: `s${n}@example.com` }, events: [] },
+      { submissionId: `access-test-key-0000000${n}`, dept, participant: { name: `Student ${'ABC'[n]}`, phone: `977700000${n}`, college: 'Sona', collegeCode: '2615', branch: 'B.E. CSE', year: '2nd Year', email: `s${n}@example.com` }, events: [] },
       { ip: '10.6.0.1' },
     );
 
@@ -92,7 +92,7 @@ describe('students join only their own department’s events', () => {
     const other = await h.call(
       'POST',
       '/api/fest/register',
-      { submissionId: 'access-test-key-00000009', dept: 'AIDS', participant: { name: 'Student D', phone: '9777000009', college: 'Sona', branch: 'B.E. CSE', year: '2nd Year', email: 's9@example.com' }, events: ['cse-hackathon'] },
+      { submissionId: 'access-test-key-00000009', dept: 'AIDS', participant: { name: 'Student D', phone: '9777000009', college: 'Sona', collegeCode: '2615', branch: 'B.E. CSE', year: '2nd Year', email: 's9@example.com' }, events: ['cse-hackathon'] },
       { ip: '10.6.0.1' },
     );
     expect(other.body.registration).toMatchObject({ id: 'AIDS-2003', events: [] });
