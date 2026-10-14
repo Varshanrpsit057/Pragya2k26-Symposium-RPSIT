@@ -83,7 +83,10 @@ export function applyFilters(registrations: Iterable<FestRegistration>, filters:
     if (venueEvents && !registration.events.some((entry) => venueEvents.has(entry.eventId))) continue;
     if (filters.source && registration.source !== filters.source) continue;
     if (filters.desk && String(registration.desk ?? registration.entry.payment?.desk ?? '') !== filters.desk) continue;
-    if (filters.entry === 'WAITING' ? !awaitingCheck(registration) : filters.entry && registration.entry.status !== filters.entry) continue;
+    // Paid; payment sent, waiting for the desk to check; or not paid yet (nothing sent).
+    if (filters.entry === 'WAITING' && !awaitingCheck(registration)) continue;
+    if (filters.entry === 'PAID' && registration.entry.status !== 'PAID') continue;
+    if (filters.entry === 'DUE' && (registration.entry.status !== 'DUE' || awaitingCheck(registration))) continue;
     if (filters.status === 'active' && !isActive(registration)) continue;
     if (filters.status === 'cancelled' && !(registration.cancelled && !registration.deleted)) continue;
     if (filters.status === 'deleted' && !registration.deleted) continue;
@@ -93,23 +96,25 @@ export function applyFilters(registrations: Iterable<FestRegistration>, filters:
   return list.sort((a, b) => a.id.localeCompare(b.id));
 }
 
-/** The UMIS-style filter row: department, event, venue, how they registered, desk, entry fee, status, search. */
-export function FilterBar({ showDept }: { showDept: boolean }) {
-  const { catalog, filters, setFilters, registrations, results } = useFest();
+/** The filters a screen offers: the department (when it sees every department) and only those it needs. */
+export type FilterField = 'payment' | 'college' | 'event' | 'search' | 'cancelled';
+
+export function FilterBar({ showDept, fields = [] }: { showDept: boolean; fields?: readonly FilterField[] }) {
+  const { catalog, filters, setFilters, registrations } = useFest();
   const colleges = useMemo(() => collegeSummary(registrations.values(), []).sort((a, b) => a.name.localeCompare(b.name)), [registrations]);
   const collegeOptions = useMemo(() => [ALL_COLLEGES, ...colleges.map((college) => `${college.name} (${college.students})`)], [colleges]);
-  void results;
   if (!catalog) return null;
   const set = (change: Partial<FestFilters>) => setFilters({ ...filters, ...change });
   const events = catalog.events.filter((event) => !filters.dept || event.dept === filters.dept);
-  const venues = [...new Set(events.map((event) => event.venue).filter(Boolean))].sort();
-  const desks = filters.dept ? Array.from({ length: catalog.departments.find((dept) => dept.code === filters.dept)?.desks ?? 4 }, (_, index) => String(index + 1)) : ['1', '2', '3', '4'];
+  const has = (field: FilterField) => fields.includes(field);
+  const narrowed = Boolean((showDept && filters.dept) || filters.eventId || filters.entry || filters.college || filters.q || filters.status !== 'active');
+  if (!showDept && !fields.length) return null;
   return (
     <div className="fest-filters" role="group" aria-label="Filters">
       {showDept && (
         <label className="adm-field">
           <span>Department</span>
-          <select value={filters.dept} onChange={(event) => set({ dept: event.target.value, eventId: '', venue: '', desk: '' })}>
+          <select value={filters.dept} onChange={(event) => set({ dept: event.target.value, eventId: '' })}>
             <option value="">All departments</option>
             {catalog.departments.map((dept) => (
               <option key={dept.code} value={dept.code}>
@@ -119,89 +124,66 @@ export function FilterBar({ showDept }: { showDept: boolean }) {
           </select>
         </label>
       )}
-      <label className="adm-field">
-        <span>Event</span>
-        <select value={filters.eventId} onChange={(event) => set({ eventId: event.target.value })}>
-          <option value="">All events</option>
-          {events.map((event) => (
-            <option key={event.id} value={event.id}>
-              {showDept && !filters.dept ? `${deptShort(event.dept)} · ` : ''}
-              {eventLabel(event)}
-            </option>
-          ))}
-        </select>
-      </label>
-      <label className="adm-field">
-        <span>Venue</span>
-        <select value={filters.venue} onChange={(event) => set({ venue: event.target.value })}>
-          <option value="">All venues</option>
-          {venues.map((venue) => (
-            <option key={venue}>{venue}</option>
-          ))}
-        </select>
-      </label>
-      <label className="adm-field">
-        <span>Registered</span>
-        <select value={filters.source} onChange={(event) => set({ source: event.target.value as FestFilters['source'] })}>
-          <option value="">Every way</option>
-          <option value="SELF">On their own phone</option>
-          <option value="DESK">At a desk</option>
-          <option value="ONLINE">Online</option>
-          <option value="PAPER">Paper slip</option>
-        </select>
-      </label>
-      <label className="adm-field">
-        <span>Desk</span>
-        <select value={filters.desk} onChange={(event) => set({ desk: event.target.value })}>
-          <option value="">All desks</option>
-          {desks.map((desk) => (
-            <option key={desk} value={desk}>
-              Desk {desk}
-            </option>
-          ))}
-        </select>
-      </label>
-      <label className="adm-field">
-        <span>Entry fee</span>
-        <select value={filters.entry} onChange={(event) => set({ entry: event.target.value as FestFilters['entry'] })}>
-          <option value="">Paid and due</option>
-          <option value="PAID">Paid</option>
-          <option value="WAITING">Waiting for a desk to check</option>
-          <option value="DUE">Due</option>
-        </select>
-      </label>
-      {/* Searchable: after a big day there are a hundred colleges or more */}
-      <div className="adm-field fest-filters__college">
-        <span id="fest-filter-college">College</span>
-        <SearchSelect
-          id="fest-filter-college-pick"
-          labelId="fest-filter-college"
-          options={collegeOptions}
-          value={filters.college ? (collegeOptions[colleges.findIndex((college) => college.key === filters.college) + 1] ?? ALL_COLLEGES) : ALL_COLLEGES}
-          onChange={(label) => set({ college: label === ALL_COLLEGES ? '' : (colleges[collegeOptions.indexOf(label) - 1]?.key ?? '') })}
-          placeholder={ALL_COLLEGES}
-          searchPlaceholder="College name or initials"
-          searchLabel="Search colleges"
-          bestFirst
-          searchFirst
-        />
-      </div>
-      <label className="adm-field">
-        <span>Status</span>
-        <select value={filters.status} onChange={(event) => set({ status: event.target.value as FestFilters['status'] })}>
-          <option value="active">Active</option>
-          <option value="cancelled">Cancelled</option>
-          <option value="deleted">Deleted</option>
-          <option value="">Everything</option>
-        </select>
-      </label>
-      <label className="adm-field fest-filters__search">
-        <span>Search</span>
-        <input type="search" value={filters.q} placeholder="ID, name, phone or college" onChange={(event) => set({ q: event.target.value })} />
-      </label>
-      <button className="adm-button adm-button--small" type="button" onClick={() => setFilters({ ...NO_FILTERS, dept: showDept ? '' : filters.dept })}>
-        Clear filters
-      </button>
+      {has('payment') && (
+        <label className="adm-field">
+          <span>Payment</span>
+          <select value={filters.entry} onChange={(event) => set({ entry: event.target.value as FestFilters['entry'] })}>
+            <option value="">Everyone</option>
+            <option value="PAID">Paid</option>
+            <option value="WAITING">Payment sent · desk to check</option>
+            <option value="DUE">Not paid yet</option>
+          </select>
+        </label>
+      )}
+      {has('event') && (
+        <label className="adm-field">
+          <span>Event</span>
+          <select value={filters.eventId} onChange={(event) => set({ eventId: event.target.value })}>
+            <option value="">All events</option>
+            {events.map((event) => (
+              <option key={event.id} value={event.id}>
+                {showDept && !filters.dept ? `${deptShort(event.dept)} · ` : ''}
+                {eventLabel(event)}
+              </option>
+            ))}
+          </select>
+        </label>
+      )}
+      {has('college') && (
+        /* Searchable: after a big day there are a hundred colleges or more */
+        <div className="adm-field fest-filters__college">
+          <span id="fest-filter-college">College</span>
+          <SearchSelect
+            id="fest-filter-college-pick"
+            labelId="fest-filter-college"
+            options={collegeOptions}
+            value={filters.college ? (collegeOptions[colleges.findIndex((college) => college.key === filters.college) + 1] ?? ALL_COLLEGES) : ALL_COLLEGES}
+            onChange={(label) => set({ college: label === ALL_COLLEGES ? '' : (colleges[collegeOptions.indexOf(label) - 1]?.key ?? '') })}
+            placeholder={ALL_COLLEGES}
+            searchPlaceholder="College name or initials"
+            searchLabel="Search colleges"
+            bestFirst
+            searchFirst
+          />
+        </div>
+      )}
+      {has('search') && (
+        <label className="adm-field fest-filters__search">
+          <span>Search</span>
+          <input type="search" value={filters.q} placeholder="ID, name, phone or college" onChange={(event) => set({ q: event.target.value })} />
+        </label>
+      )}
+      {has('cancelled') && (
+        <label className="adm-check fest-filters__check">
+          <input type="checkbox" checked={filters.status !== 'active'} onChange={(event) => set({ status: event.target.checked ? '' : 'active' })} />
+          <span>Show cancelled</span>
+        </label>
+      )}
+      {narrowed && (
+        <button className="adm-button adm-button--small" type="button" onClick={() => setFilters({ ...NO_FILTERS, dept: showDept ? '' : filters.dept })}>
+          Clear filters
+        </button>
+      )}
     </div>
   );
 }

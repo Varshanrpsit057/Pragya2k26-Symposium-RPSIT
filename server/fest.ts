@@ -12,7 +12,7 @@
  *
  * Every rule is checked here; the dashboards only hide what a role cannot use.
  */
-import { canJoin, catalogProblem, DEFAULT_CATALOG, departmentOf, deptShort, entryOf, eventOf, feePaid, formatFestId, ID_RANGES, isActive, matchEvents, normaliseFestId, parseFestId, participantProblems, readParticipant, selfRegistrationProblems, showId, toStudentView, TXN, type FestCatalog, type FestDepartment, type FestEvent, type FestMethod, type FestParticipant, type FestPayment, type FestPlace, type FestRegistration, type FestResult, type FestSource, type FestStamp, type UtrChange } from '../src/lib/fest';
+import { canJoin, catalogProblem, DEFAULT_CATALOG, DESKS, departmentOf, deptShort, entryOf, eventOf, feePaid, formatFestId, ID_RANGES, isActive, matchEvents, normaliseFestId, parseFestId, participantProblems, readParticipant, selfRegistrationProblems, showId, toStudentView, TXN, type FestCatalog, type FestDepartment, type FestEvent, type FestMethod, type FestParticipant, type FestPayment, type FestPlace, type FestRegistration, type FestResult, type FestSource, type FestStamp, type UtrChange } from '../src/lib/fest';
 import { timingSafeEqual } from 'node:crypto';
 import { formatIst, parseEventStart } from '../src/lib/countdown';
 import { DEFAULT_PORTAL, portalProblem, QR_IMAGE, QR_MAX_CHARS, readPortal, tidyUtr, UTR, type BackupStatus, type PortalSettings, type SwitchName } from '../src/lib/portal';
@@ -133,7 +133,7 @@ export class FestService {
       hod: text(dept.hod, 80),
       staffCoordinator: readContact(dept.staffCoordinator),
       studentCoordinator: readContact(dept.studentCoordinator),
-      desks: int(dept.desks, 4),
+      desks: DESKS,
       active: dept.active !== false,
     }));
     const events: FestEvent[] = (Array.isArray(input.events) ? input.events : []).filter(isObject).map((event) => ({

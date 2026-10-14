@@ -86,7 +86,7 @@ export function CatalogEditor({ token, onSignedOut }: { token: string; onSignedO
         return (
           <section key={dept.code} className="adm-card adm-pad">
             <button className="fest-catalog__head" type="button" aria-expanded={isOpen} onClick={() => setOpen(isOpen ? '' : dept.code)}>
-              <strong>{deptShort(dept.code)}</strong> {dept.name} <span className="adm-muted">· {events.length} events · {dept.desks} desks</span> {!dept.active && <Badge tone="bad">Off</Badge>}
+              <strong>{deptShort(dept.code)}</strong> {dept.name} <span className="adm-muted">· {events.length} events · 2 desks</span> {!dept.active && <Badge tone="bad">Off</Badge>}
             </button>
             {isOpen && (
               <>
@@ -114,10 +114,6 @@ export function CatalogEditor({ token, onSignedOut }: { token: string; onSignedO
                   <label className="adm-field">
                     <span>Student coordinator phone</span>
                     <input value={dept.studentCoordinator?.phone ?? ''} onChange={(event) => setDept(dept.code, { studentCoordinator: { name: dept.studentCoordinator?.name ?? '', phone: event.target.value } })} />
-                  </label>
-                  <label className="adm-field">
-                    <span>Registration desks</span>
-                    <input type="number" min={1} max={20} value={dept.desks} onChange={(event) => setDept(dept.code, { desks: Number(event.target.value) })} />
                   </label>
                   <label className="adm-check">
                     <input type="checkbox" checked={dept.active} onChange={(event) => setDept(dept.code, { active: event.target.checked })} />

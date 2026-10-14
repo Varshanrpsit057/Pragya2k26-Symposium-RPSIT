@@ -17,7 +17,7 @@ const form = (extra: Record<string, unknown> = {}) => {
   count += 1;
   return {
     submissionId: `self-key-${String(count).padStart(16, '0')}`,
-    participant: { name: 'Divya R', phone: `98${String(40000000 + count).padStart(8, '0')}`, email: 'divya.r@example.com', college: 'Sona College of Technology', branch: 'B.E. ECE', year: '3rd Year', team: '' },
+    participant: { name: 'Divya R', phone: `98${String(40000000 + count).padStart(8, '0')}`, email: 'divya.r@example.com', college: 'Sona College of Technology', collegeCode: '2615', branch: 'B.E. ECE', year: '3rd Year', team: '' },
     dept: 'IT',
     events: [],
     txn: '412345678901',
@@ -139,7 +139,7 @@ describe('the department’s desk', () => {
     await selfRegister(h, b);
     await selfRegister(h, mech);
     const itDesk = await h.staff('DESK', [], 'it-desk2', { department: 'IT', deskNumber: 2 });
-    const itDesk3 = await h.staff('DESK', [], 'it-desk3', { department: 'IT', deskNumber: 3 });
+    const otherDesk = await h.staff('DESK', [], 'it-desk1', { department: 'IT', deskNumber: 1 });
     const mechDesk = await h.staff('DESK', [], 'mech-desk1', { department: 'MECH', deskNumber: 1 });
 
     const seen = (await h.call('POST', '/api/admin/fest/sync', {}, { token: itDesk.token })).body.registrations as FestRegistration[];
@@ -159,7 +159,7 @@ describe('the department’s desk', () => {
     expect(view(await me(h, 'IT-2001', a.participant.phone)).status).toBe('verified');
 
     // The second student typed the same transaction ID: refused, naming who has it.
-    const used = await h.call('POST', '/api/admin/fest/registrations/IT-2002', { action: 'verify', txn: a.txn, confirmed: true }, { token: itDesk3.token });
+    const used = await h.call('POST', '/api/admin/fest/registrations/IT-2002', { action: 'verify', txn: a.txn, confirmed: true }, { token: otherDesk.token });
     expect(used.body).toMatchObject({ code: 'TXN_USED', details: { existingId: 'IT-2001' } });
   });
 
@@ -167,7 +167,7 @@ describe('the department’s desk', () => {
     const h = setup({ at: TIMES.eventDay });
     const body = form();
     await selfRegister(h, body);
-    const desk = await h.staff('DESK', [], 'it-desk3', { department: 'IT', deskNumber: 3 });
+    const desk = await h.staff('DESK', [], 'it-desk2', { department: 'IT', deskNumber: 2 });
     expect((await h.call('POST', '/api/admin/fest/registrations/IT-2001', { action: 'reject', reason: 'x' }, { token: desk.token })).body.code).toBe('INVALID');
     await h.call('POST', '/api/admin/fest/registrations/IT-2001', { action: 'reject', reason: 'Not received' }, { token: desk.token });
     expect(view(await me(h, 'IT-2001', body.participant.phone))).toMatchObject({ status: 'rejected', reason: 'Not received' });

@@ -15,7 +15,7 @@ const UTR = '712345678901';
 const student = (n: number, dept: string) => ({
   submissionId: `utr-owner-key-00000000${String(n).padStart(2, '0')}`,
   dept,
-  participant: { name: `Student ${'ABCDEFGHIJ'[n]}`, phone: `97880000${String(n).padStart(2, '0')}`, college: 'Sona College of Technology, Salem', branch: 'B.E. CSE', year: '2nd Year', email: `u${n}@example.com` },
+  participant: { name: `Student ${'ABCDEFGHIJ'[n]}`, phone: `97880000${String(n).padStart(2, '0')}`, college: 'Sona College of Technology, Salem', collegeCode: '2615', branch: 'B.E. CSE', year: '2nd Year', email: `u${n}@example.com` },
   events: [],
 });
 /** A student registers on their phone (and, with `utr`, pays by UPI and sends it). */

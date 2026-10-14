@@ -82,6 +82,30 @@
   grid-column: span 2;
 }
 
+/* "Show cancelled": sits on the same line as the selects */
+.fest-filters__check {
+  align-self: center;
+  min-height: 2.5rem;
+  align-items: center;
+}
+
+.fest-filters__check input {
+  margin-top: 0;
+}
+
+/* Results: Event winners | College ranking */
+.adm-page.fest-subnav {
+  padding-bottom: 0;
+}
+
+.fest-subnav + .adm-page {
+  padding-top: 0.75rem;
+}
+
+.fest-subnav .fest-chips {
+  margin: 0;
+}
+
 /* Totals */
 .fest-stats {
   display: grid;

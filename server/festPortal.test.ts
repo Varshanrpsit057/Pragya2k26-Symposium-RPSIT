@@ -20,7 +20,7 @@ const form = (extra: Record<string, unknown> = {}) => {
   count += 1;
   return {
     submissionId: `portal-key-${String(count).padStart(16, '0')}`,
-    participant: { name: 'Kavin S', phone: `97${String(50000000 + count).padStart(8, '0')}`, email: `kavin${count}@example.com`, college: 'Sona College of Technology', branch: 'B.E. CSE', year: '2nd Year', team: '' },
+    participant: { name: 'Kavin S', phone: `97${String(50000000 + count).padStart(8, '0')}`, email: `kavin${count}@example.com`, college: 'Sona College of Technology', collegeCode: '2615', branch: 'B.E. CSE', year: '2nd Year', team: '' },
     dept: 'CSE',
     events: [],
     ...extra,
