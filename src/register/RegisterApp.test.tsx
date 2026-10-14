@@ -48,7 +48,7 @@ async function fill() {
   fireEvent.click(await screen.findByRole('button', { name: /^AI&DS/ }));
   fireEvent.change(await screen.findByLabelText('Name with initial'), { target: { value: 'Meena K' } });
   fireEvent.change(screen.getByLabelText(/^Mobile number/), { target: { value: '97900 11122' } });
-  fireEvent.change(screen.getByLabelText('College'), { target: { value: 'Sona College of Technology' } });
+  await pick('College', 'sona', /^Sona College of Technology, Salem$/);
   await pick('Stream', 'b.e', /^B\.E\.$/);
   await pick('Department', 'cse', /\(CSE\)$/);
   fireEvent.change(screen.getByLabelText('Year'), { target: { value: '3rd Year' } });
@@ -78,6 +78,27 @@ describe('a student on their phone', () => {
     fireEvent.change(screen.getByRole('combobox', { name: 'Search departments' }), { target: { value: 'other' } });
     fireEvent.click(within(screen.getByRole('listbox')).getByRole('option', { name: 'Other' }));
     expect(screen.getByLabelText(/^Your department/)).toBeInTheDocument();
+  });
+
+  it('finds the college in a searchable list (by name or initials), or types one not in it after Other', async () => {
+    const h = setup({ at: TIMES.eventDay });
+    backend(h);
+    render(<RegisterApp />);
+    fireEvent.click(await screen.findByRole('button', { name: /^AI&DS/ }));
+    await screen.findByLabelText('Name with initial');
+    fireEvent.click(screen.getByRole('button', { name: /^College/ }));
+    const search = screen.getByRole('combobox', { name: 'Search colleges' });
+    expect(search).toHaveFocus();
+    fireEvent.change(search, { target: { value: 'dhirajlal' } });
+    expect(within(screen.getByRole('listbox')).getAllByRole('option')[0]).toHaveTextContent('Dhirajlal Gandhi College Of Technology, Salem');
+    fireEvent.change(search, { target: { value: 'government college of engineering salem' } });
+    expect(within(screen.getByRole('listbox')).getAllByRole('option')[0]).toHaveTextContent('Government College of Engineering, Salem');
+    fireEvent.change(search, { target: { value: 'other' } });
+    fireEvent.click(within(screen.getByRole('listbox')).getByRole('option', { name: /^Other/ }));
+    fireEvent.click(screen.getByRole('button', { name: 'Register' }));
+    expect(await screen.findByText('Type the name of your college.')).toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText(/^Your college/), { target: { value: 'New Horizon College, Erode' } });
+    expect(JSON.parse(localStorage.getItem('techfest-draft')!)).toMatchObject({ college: 'Other (type your college)', collegeOther: 'New Horizon College, Erode' });
   });
 
   it('chooses the department first (all 8), then registers without choosing events (they register at each venue)', async () => {
@@ -167,7 +188,7 @@ describe('a student on their phone', () => {
     await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Register' })));
     expect(await screen.findByRole('alert')).toHaveTextContent('No connection');
     expect(screen.getByLabelText('Name with initial')).toHaveValue('Meena K');
-    expect(JSON.parse(localStorage.getItem('techfest-draft')!)).toMatchObject({ name: 'Meena K', email: 'meena.k@example.com', stream: 'B.E.' });
+    expect(JSON.parse(localStorage.getItem('techfest-draft')!)).toMatchObject({ name: 'Meena K', email: 'meena.k@example.com', stream: 'B.E.', college: 'Sona College of Technology, Salem' });
   });
 
   it('is sent to a desk while registration on phones is paused', async () => {

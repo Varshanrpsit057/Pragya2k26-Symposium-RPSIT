@@ -4,18 +4,18 @@
  * students who registered online, and the desk's own totals for handing over the money.
  */
 import { useMemo, useState, type FormEvent } from 'react';
-import { NEARBY_COLLEGES, OTHER_COLLEGES } from '../../content/colleges';
+import { COLLEGES, OTHER_COLLEGE } from '../../content/colleges';
 import { COURSE_DEPARTMENTS, OTHER, STREAMS, courseText } from '../../content/courses';
 import { SearchSelect } from '../../components/ui/SearchSelect';
-import { awaitingCheck, deptShort, eventLabel, eventsOf, isActive, normaliseFestId, parseFestId, participantProblems, readParticipant, rupees, showId, sourceOfNumber, teamRule, tidyPhone, YEARS, type FestParticipant, type FestRegistration } from '../../lib/fest';
+import { awaitingCheck, deptShort, eventLabel, eventsOf, isActive, normaliseFestId, parseFestId, participantProblems, readParticipant, rupees, showId, sourceOfNumber, teamRule, tidyPhone, YEARS, type FestParticipant, type FestRegistration, type UtrHolder } from '../../lib/fest';
 import { hasPermission } from '../../lib/staff';
 import { Badge, when } from '../ui';
 import { useFest } from './FestData';
 import { tidyUtr } from '../../lib/portal';
+import { assignUtr, lookupUtr } from './festApi';
 import { NO_PAYMENT, PaymentChoice, RegistrationCard, ShortList, Stat, matches, paymentBody, paymentReady, stampNow, txnHolders, type PaymentDraft } from './festUi';
 
 const EMPTY: FestParticipant = { name: '', phone: '', email: '', college: '', branch: '', year: '', team: '' };
-const COLLEGES = [...NEARBY_COLLEGES, ...OTHER_COLLEGES];
 
 /** The department this screen works on: the account's own, or (web assist) the one chosen. */
 export function useWorkDept(): [string, (dept: string) => void, boolean] {
@@ -85,6 +85,12 @@ export function RegisterForm({ dept, paper = false }: { dept: string; paper?: bo
   const { catalog, registrations, register, idsLeft, online } = useFest();
   const [slipId, setSlipId] = useState('');
   const [form, setForm] = useState<FestParticipant>(EMPTY);
+  // The college from the searchable list, or typed after Other.
+  const [college, setCollege] = useState({ choice: '', other: '' });
+  const setCollegeTo = (next: typeof college) => {
+    setCollege(next);
+    setForm((current) => ({ ...current, college: next.choice === OTHER_COLLEGE ? next.other.replace(/\s+/g, ' ').trim() : next.choice }));
+  };
   // The stream and department, chosen from searchable lists, make up the "department / course" (B.E. CSE).
   const [course, setCourse] = useState({ stream: '', dept: '', other: '' });
   const setCourseTo = (next: typeof course) => {
@@ -126,6 +132,7 @@ export function RegisterForm({ dept, paper = false }: { dept: string; paper?: bo
           onClick={() => {
             setDone(null);
             setForm(EMPTY);
+            setCollege({ choice: '', other: '' });
             setCourse({ stream: '', dept: '', other: '' });
             setEvents([]);
             setPayment(NO_PAYMENT);
@@ -181,16 +188,30 @@ export function RegisterForm({ dept, paper = false }: { dept: string; paper?: bo
           </span>
         )}
       </label>
-      <label className="adm-field">
-        <span>College</span>
-        <input value={form.college} list="fest-colleges" autoComplete="off" onChange={(event) => setForm({ ...form, college: event.target.value })} placeholder="Type the first letters" />
-        <datalist id="fest-colleges">
-          {COLLEGES.map((college) => (
-            <option key={college} value={college} />
-          ))}
-        </datalist>
-        {field('college')}
-      </label>
+      <div className="adm-field">
+        <span id="desk-college-label">College</span>
+        <SearchSelect
+          id="desk-college"
+          labelId="desk-college-label"
+          options={COLLEGES}
+          value={college.choice}
+          onChange={(choice) => setCollegeTo({ ...college, choice })}
+          placeholder="Choose… (type to find it)"
+          searchPlaceholder="College name or initials"
+          searchLabel="Search colleges"
+          emptyText={(query) => `No college matches “${query}”. Choose ${OTHER_COLLEGE} and type it.`}
+          bestFirst
+          searchFirst
+        />
+        {college.choice !== OTHER_COLLEGE && field('college')}
+      </div>
+      {college.choice === OTHER_COLLEGE && (
+        <label className="adm-field">
+          <span>Their college</span>
+          <input value={college.other} maxLength={120} autoComplete="off" onChange={(event) => setCollegeTo({ ...college, other: event.target.value })} />
+          {field('college')}
+        </label>
+      )}
       <div className="fest-form__row">
         <div className="adm-field">
           <span id="desk-stream-label">Stream (optional)</span>
@@ -401,6 +422,7 @@ function VerifyPayments({ dept }: { dept: string }) {
         <span>Find</span>
         <input type="search" value={query} placeholder={`ID (${deptShort(dept)}-2001…), name, phone or UTR`} onChange={(event) => setQuery(event.target.value)} />
       </label>
+      <UtrFinder dept={dept} />
       <ShortList items={shown} empty={waiting.length ? 'Nobody matches.' : 'No payments waiting. New ones appear here by themselves.'} render={(registration) => (
         <RegistrationCard key={registration.id} registration={registration}>
           <VerifyBox registration={registration} />
@@ -451,7 +473,7 @@ function VerifyBox({ registration }: { registration: FestRegistration }) {
       {registration.entry.rejected && <p className="adm-field__error">Marked not found: {registration.entry.rejected.reason}. They may have sent a new UTR.</p>}
       {acceptedFor ? (
         <p className="fest-match is-bad" role="alert">
-          Duplicate: this UTR was already accepted for {showId(acceptedFor.id)} ({acceptedFor.name}). Do not verify; mark it not found.
+          Duplicate: this UTR was already accepted for {showId(acceptedFor.id)} ({acceptedFor.name}). Find out whose it is below before verifying anyone.
         </p>
       ) : (
         others.length > 0 && (
@@ -460,6 +482,7 @@ function VerifyBox({ registration }: { registration: FestRegistration }) {
           </p>
         )
       )}
+      {(acceptedFor || others.length > 0) && <UtrFinder dept={registration.dept} initial={sent} compact />}
       <label className="adm-field">
         <span>UTR of the payment you received (from the receiving account, or the student’s payment screen)</span>
         <input value={typed} inputMode="numeric" autoComplete="off" spellCheck={false} placeholder="12 digits" onChange={(event) => setTyped(event.target.value)} />
@@ -499,6 +522,147 @@ function VerifyBox({ registration }: { registration: FestRegistration }) {
         </span>
       )}
     </div>
+  );
+}
+
+const UTR_STATE: Record<UtrHolder['state'], { label: string; tone: 'good' | 'warn' | 'bad' }> = {
+  accepted: { label: 'Accepted for them', tone: 'good' },
+  sent: { label: 'Sent by them · not checked', tone: 'warn' },
+  notFound: { label: 'Marked not found', tone: 'bad' },
+};
+
+/**
+ * "Who does this UTR belong to?": everyone with the UTR in any department (the student it was
+ * accepted for, and everyone who sent it), with their details to check against the payment (the
+ * name in the UPI app, the phone that paid). The desk then gives it to the student it belongs to:
+ * they are verified, whoever had it is back to not paid, and the others are told it is not theirs.
+ */
+function UtrFinder({ dept, initial = '', compact = false }: { dept: string; initial?: string; compact?: boolean }) {
+  const { token, session, refresh } = useFest();
+  const [open, setOpen] = useState(false);
+  const [typed, setTyped] = useState(initial);
+  const [holders, setHolders] = useState<UtrHolder[] | null>(null);
+  const [other, setOther] = useState('');
+  const [seen, setSeen] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+  const [done, setDone] = useState('');
+  const utr = tidyUtr(typed).toUpperCase();
+  const mine = (id: string) => session.role === 'ADMIN' || parseFestId(normaliseFestId(id))?.dept === dept;
+
+  const find = async () => {
+    setBusy(true);
+    setError('');
+    setDone('');
+    try {
+      setHolders((await lookupUtr(token, utr)).holders);
+    } catch (failure) {
+      setError(failure instanceof Error ? failure.message : 'No connection: looking up a UTR needs the network.');
+    } finally {
+      setBusy(false);
+    }
+  };
+  const give = async (to: string) => {
+    const id = normaliseFestId(to);
+    const holder = holders?.find((item) => item.state === 'accepted' && item.id !== id);
+    const losing = holders?.filter((item) => item.state === 'sent' && item.id !== id) ?? [];
+    const lines = [
+      `Give the UTR ending ${utr.slice(-4)} to ${showId(id)}? They are verified with it.`,
+      holder && `${showId(holder.id)} (${holder.name}) loses it and is back to not paid.`,
+      losing.length > 0 && `${losing.map((item) => showId(item.id)).join(', ')} ${losing.length === 1 ? 'is' : 'are'} told it was not their payment.`,
+    ].filter(Boolean);
+    if (!window.confirm(lines.join('\n\n'))) return;
+    setBusy(true);
+    setError('');
+    try {
+      const result = await assignUtr(token, utr, id);
+      setDone(
+        `${showId(result.registration.id)} is verified with the UTR ending ${utr.slice(-4)}.${result.movedFrom ? ` ${showId(result.movedFrom)} is back to not paid.` : ''}${
+          result.notFound.length ? ` ${result.notFound.map(showId).join(', ')} marked not found.` : ''
+        }`,
+      );
+      setHolders((await lookupUtr(token, utr)).holders);
+      setOther('');
+      setSeen(false);
+      refresh();
+    } catch (failure) {
+      setError(failure instanceof Error ? failure.message : 'No connection: try again when the network is back.');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  if (!open) {
+    return (
+      <button className="adm-button adm-button--small" type="button" onClick={() => {
+        setOpen(true);
+        if (initial) void find();
+      }}>
+        {compact ? 'Who does this UTR belong to?' : 'Who does a UTR belong to? Look it up'}
+      </button>
+    );
+  }
+  return (
+    <section className="fest-utr" aria-label="Who does this UTR belong to?">
+      {!compact && (
+        <form className="adm-inline adm-inline--wrap" onSubmit={(event) => {
+          event.preventDefault();
+          void find();
+        }}>
+          <label className="adm-field">
+            <span>UTR of the payment</span>
+            <input value={typed} inputMode="numeric" autoComplete="off" spellCheck={false} placeholder="12 digits" onChange={(event) => setTyped(event.target.value)} />
+          </label>
+          <button className="adm-button" type="submit" disabled={busy || utr.length < 6}>
+            {busy && !holders ? 'Looking…' : 'Find'}
+          </button>
+        </form>
+      )}
+      {holders && (
+        <>
+          <p className="adm-muted">
+            {holders.length
+              ? `Everyone with the UTR ending ${utr.slice(-4)}, in every department. Check who paid (the payer’s name and phone in the payment), then give it to them.`
+              : `Nobody has the UTR ending ${utr.slice(-4)} yet.`}
+          </p>
+          <ul className="fest-utr__list">
+            {holders.map((item) => (
+              <li key={item.id} className="fest-utr__item">
+                <span>
+                  <strong>{showId(item.id)}</strong> {item.name} · {deptShort(item.dept)} · {item.college} · {item.phone}
+                  <br />
+                  <Badge tone={UTR_STATE[item.state].tone}>{UTR_STATE[item.state].label}</Badge>{' '}
+                  <span className="adm-muted">
+                    {when(item.at)}
+                    {item.by ? ` by ${item.by}` : ''}
+                  </span>
+                </span>
+                {item.state !== 'accepted' && mine(item.id) && (
+                  <button className="adm-button adm-button--small adm-button--approve" type="button" disabled={busy || !seen} onClick={() => void give(item.id)}>
+                    It is {showId(item.id)}’s
+                  </button>
+                )}
+              </li>
+            ))}
+          </ul>
+          <span className="adm-inline adm-inline--wrap">
+            <input className="fest-utr__other" value={other} aria-label="Another student’s registration ID" placeholder={`Someone else: ${deptShort(dept)}-…`} onChange={(event) => setOther(event.target.value)} />
+            <button className="adm-button adm-button--small" type="button" disabled={busy || !seen || !parseFestId(normaliseFestId(other)) || !mine(other)} onClick={() => void give(other)}>
+              Give it to them
+            </button>
+          </span>
+          <label className="adm-check">
+            <input type="checkbox" checked={seen} onChange={(event) => setSeen(event.target.checked)} />
+            <span>I have seen this payment received, and checked whose it is.</span>
+          </label>
+          {holders.some((item) => item.state !== 'accepted' && !mine(item.id)) && session.role !== 'ADMIN' && (
+            <p className="adm-muted">Students of another department are given a UTR by that department’s desk.</p>
+          )}
+        </>
+      )}
+      {error && <p className="adm-field__error" role="alert">{error}</p>}
+      {done && <p className="fest-match is-good" role="status">{done}</p>}
+    </section>
   );
 }
 

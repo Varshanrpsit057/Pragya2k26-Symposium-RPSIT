@@ -274,6 +274,20 @@ export interface FestEntry {
   present?: FestStamp;
 }
 
+/** Who has a UPI transaction ID (the desks' "Who does this UTR belong to?"), in any department. */
+export interface UtrHolder {
+  id: string;
+  dept: string;
+  name: string;
+  college: string;
+  phone: string;
+  /** accepted: this UTR is their verified payment; sent: they sent it and a desk has not checked it; notFound: marked not found. */
+  state: 'accepted' | 'sent' | 'notFound';
+  /** When they sent it, or when it was accepted (and by whom). */
+  at: string;
+  by: string | null;
+}
+
 /** The UPI transaction ID a student typed when registering themselves, waiting for a desk to check it. */
 export interface FestClaim {
   txn: string;

@@ -74,6 +74,8 @@ interface IdBlock {
 }
 
 export interface FestContextValue {
+  /** The sign-in, for the few calls made straight to the API (e.g. looking up a UTR). */
+  token: string;
   session: SessionInfo;
   catalog: FestCatalog | null;
   registrations: Map<string, FestRegistration>;
@@ -458,6 +460,7 @@ export function FestProvider({ token, session, pageDept = null, onSignedOut, chi
   const pending = useMemo(() => new Set(outbox.filter((op) => !op.failed).map((op) => op.target)), [outbox]);
 
   const value: FestContextValue = {
+    token,
     session,
     catalog,
     registrations,

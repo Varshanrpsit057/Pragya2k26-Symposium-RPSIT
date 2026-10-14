@@ -640,6 +640,112 @@ export class FestService {
     });
   }
 
+  // -----------------------------------------------------------------------------------------
+  // Who does a UTR belong to? (desks, when a UTR is sent twice or already used)
+
+  /** Every registration with this UPI transaction ID, in every department. */
+  private async utrHolders(txn: string): Promise<{ accepted: string | null; holders: FestRegistration[] }> {
+    const catalog = await this.catalog();
+    const [accepted, parts] = await Promise.all([this.deps.store.findTxn(TXN_SCOPE, txn), Promise.all(catalog.departments.map((dept) => this.deps.store.changes(dept.code, '')))]);
+    const same = (value: string | undefined) => tidyUtr(value ?? '').toUpperCase() === txn;
+    const holders = parts
+      .flatMap((part) => part.registrations)
+      .filter((registration) => !registration.deleted && (registration.id === accepted || same(registration.entry.payment?.txn) || same(registration.entry.claim?.txn)));
+    return { accepted, holders };
+  }
+
+  private readUtr(body: unknown) {
+    const txn = tidyUtr(text(isObject(body) ? body.txn : '', 40)).toUpperCase();
+    if (!TXN.test(txn)) throw new ApiError(400, 'INVALID', 'Type the UTR (the 12 digits of the payment).');
+    return txn;
+  }
+
+  /** "Who does this UTR belong to?": the student it was accepted for and everyone who sent it. */
+  async utrLookup(_actor: Actor, body: unknown) {
+    const txn = this.readUtr(body);
+    const { accepted, holders } = await this.utrHolders(txn);
+    const view = (registration: FestRegistration) => {
+      const paid = tidyUtr(registration.entry.payment?.txn ?? '').toUpperCase() === txn && registration.entry.status === 'PAID';
+      const state: 'accepted' | 'sent' | 'notFound' = paid || registration.id === accepted ? 'accepted' : registration.entry.rejected ? 'notFound' : 'sent';
+      return {
+        id: registration.id,
+        dept: registration.dept,
+        name: registration.name,
+        college: registration.college,
+        phone: registration.phone,
+        state,
+        at: state === 'accepted' ? (registration.entry.payment?.at ?? registration.created.at) : (registration.entry.claim?.at ?? registration.created.at),
+        by: state === 'accepted' ? (registration.entry.payment?.by ?? null) : null,
+      };
+    };
+    const order = { accepted: 0, sent: 1, notFound: 2 } as const;
+    const list = holders.map(view).sort((a, b) => order[a.state] - order[b.state] || a.at.localeCompare(b.at));
+    return { success: true as const, txn, holders: list };
+  }
+
+  /**
+   * The desk gives a UTR to the student it really belongs to: that student is verified with it;
+   * the registration it was accepted for (if another) loses it and is back to not paid, and anyone
+   * else who sent it is marked not found, each with the reason on their own page.
+   */
+  async utrAssign(actor: Actor, body: unknown) {
+    const txn = this.readUtr(body);
+    if (!isObject(body) || body.confirmed !== true) throw new ApiError(400, 'INVALID', 'Tick that you have seen this payment received.');
+    const { id, dept } = this.target(text(body.to, 20));
+    await this.workDepartment(actor, dept);
+    const catalog = await this.catalog();
+    const stamp = this.stamp(actor);
+    const desk = actor.deskNumber ?? undefined;
+    const target = await this.required(dept, id);
+    if (!isActive(target)) throw new ApiError(409, 'CANCELLED', `${showId(id)} is cancelled or deleted.`);
+    const already = target.entry.status === 'PAID';
+    if (already && tidyUtr(target.entry.payment?.txn ?? '').toUpperCase() === txn) return { success: true as const, registration: target, movedFrom: null, notFound: [] };
+    if (already) throw new ApiError(409, 'ALREADY_PAID', `${showId(id)} has already paid (${target.entry.payment?.method === 'CASH' ? 'cash' : `UTR ending ${target.entry.payment?.txn?.slice(-4) ?? ''}`}).`);
+    const reason = text(body.reason, 200) || `UTR ending ${txn.slice(-4)} belongs to ${showId(id)}`;
+    const { accepted, holders } = await this.utrHolders(txn);
+
+    // The registration it was accepted for gives it up first.
+    let movedFrom: string | null = null;
+    if (accepted && accepted !== id) {
+      const owner = parseFestId(accepted);
+      if (owner) {
+        await this.mutate(owner.dept, accepted, (registration) => {
+          if (registration.entry.status !== 'PAID' || tidyUtr(registration.entry.payment?.txn ?? '').toUpperCase() !== txn) return null;
+          return { next: { entry: { status: 'DUE', ...(registration.entry.claim && { claim: registration.entry.claim }), rejected: { ...stamp, reason } } } };
+        });
+      }
+      await this.deps.store.releaseTxn(TXN_SCOPE, txn, accepted);
+      movedFrom = accepted;
+    }
+    const holder = await this.deps.store.claimTxn(TXN_SCOPE, txn, id);
+    if (holder && holder !== id) throw new ApiError(409, 'BUSY', 'Someone changed this UTR at the same moment. Please look it up again.');
+    let result;
+    try {
+      result = await this.mutate(dept, id, (registration) => {
+        if (!isActive(registration)) throw new ApiError(409, 'CANCELLED', `${showId(id)} is cancelled or deleted.`);
+        if (registration.entry.status === 'PAID') return null;
+        const payment: FestPayment = { method: 'UPI', amount: registration.entry.claim?.amount ?? catalog.entryFee, txn, ...stamp, ...(desk && { desk }) };
+        return { next: { entry: { status: 'PAID', payment, ...(registration.entry.claim && { claim: registration.entry.claim }) }, checkedIn: registration.checkedIn ?? { ...stamp, ...(desk && { desk }) } } };
+      });
+    } catch (error) {
+      await this.deps.store.releaseTxn(TXN_SCOPE, txn, id);
+      throw error;
+    }
+    // Anyone else who sent it (and waits) is told it was not found, with whose it is.
+    const notFound: string[] = [];
+    for (const other of holders) {
+      if (other.id === id || other.id === movedFrom || other.entry.status === 'PAID' || other.entry.rejected || !other.entry.claim) continue;
+      if (tidyUtr(other.entry.claim.txn).toUpperCase() !== txn) continue;
+      await this.mutate(other.dept, other.id, (registration) => {
+        if (registration.entry.status === 'PAID' || registration.entry.rejected || !registration.entry.claim) return null;
+        return { next: { entry: { ...registration.entry, rejected: { ...stamp, reason } } } };
+      });
+      notFound.push(other.id);
+    }
+    this.deps.log('UTR given to its owner', { utr: txn.slice(-4), to: id, from: movedFrom, notFound, by: actor.username });
+    return { success: true as const, registration: result.registration, movedFrom, notFound };
+  }
+
   /** Adds and removes events (a fee paid or attendance marked keeps an event). */
   private async changeEvents(catalog: FestCatalog, dept: string, id: string, input: Record<string, unknown>, stamp: FestStamp) {
     const add = await this.readEventIds(catalog, dept, input.add);

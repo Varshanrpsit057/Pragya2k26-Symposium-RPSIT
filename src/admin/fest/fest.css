@@ -546,3 +546,58 @@
   color: var(--adm-red);
   background: var(--adm-red-soft);
 }
+
+/* The college filter: wider (long names), searchable, as compact as the other filters */
+.fest-filters__college {
+  grid-column: span 2;
+}
+
+.fest-filters .search-select__trigger {
+  min-height: 2.4rem;
+  padding-block: 0.4rem;
+  font-size: 0.95rem;
+}
+
+@media (max-width: 719px) {
+  .fest-filters__college {
+    grid-column: 1 / -1;
+  }
+}
+
+/* "Who does this UTR belong to?" */
+.fest-utr {
+  display: grid;
+  gap: 0.6rem;
+  margin: 0.4rem 0;
+  padding: 0.75rem;
+  border: 1px solid var(--adm-line);
+  border-radius: 10px;
+  background: var(--adm-surface);
+}
+
+.fest-utr__list {
+  display: grid;
+  gap: 0.4rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.fest-utr__item {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem 1rem;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.5rem 0.6rem;
+  border: 1px solid var(--adm-line);
+  border-radius: 8px;
+}
+
+.fest-utr__other {
+  min-width: 10rem;
+  padding: 0.4rem 0.6rem;
+  border: 1px solid var(--adm-line);
+  border-radius: 8px;
+  font: inherit;
+}

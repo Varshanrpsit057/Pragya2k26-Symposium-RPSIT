@@ -40,7 +40,9 @@ interface Draft {
   name: string;
   phone: string;
   email: string;
+  /** One of COLLEGES, or Other (then `collegeOther`). */
   college: string;
+  collegeOther: string;
   /** B.E., B.Sc… */
   stream: string;
   /** One of COURSE_DEPARTMENTS, or Other (then `courseOther`). */
@@ -73,7 +75,15 @@ const newId = () => {
   const bytes = random.getRandomValues(new Uint8Array(16));
   return `s-${Array.from(bytes, (byte: number) => byte.toString(16).padStart(2, '0')).join('')}`;
 };
-const emptyDraft = (): Draft => ({ submissionId: newId(), name: '', phone: '', email: '', college: '', stream: '', course: '', courseOther: '', year: '', team: '' });
+const emptyDraft = (): Draft => ({ submissionId: newId(), name: '', phone: '', email: '', college: '', collegeOther: '', stream: '', course: '', courseOther: '', year: '', team: '' });
+/** A draft kept from before the college list (a typed college not in the list becomes Other). */
+const loadDraft = (): Draft => {
+  const draft = { ...emptyDraft(), ...read<Draft>(DRAFT) };
+  if (draft.college && !COLLEGES.includes(draft.college)) return { ...draft, college: OTHER_COLLEGE, collegeOther: draft.collegeOther || draft.college };
+  return draft;
+};
+/** The college as stored: the one chosen, or the one typed after Other. */
+const collegeOf = (draft: Pick<Draft, 'college' | 'collegeOther'>) => (draft.college === OTHER_COLLEGE ? draft.collegeOther.replace(/\s+/g, ' ').trim() : draft.college);
 const rupees = (amount: number) => `₹${amount.toLocaleString('en-IN')}`;
 const messageOf = (error: unknown) => (error instanceof Error ? error.message : NO_CONNECTION);
 
@@ -217,7 +227,7 @@ function RegisterForm({
   onFind: () => void;
 }) {
   const deptName = info.departments.find((item) => item.code === dept)?.name ?? '';
-  const [draft, setDraft] = useState<Draft>(() => ({ ...emptyDraft(), ...read<Draft>(DRAFT) }));
+  const [draft, setDraft] = useState<Draft>(loadDraft);
   const [tried, setTried] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
@@ -231,9 +241,10 @@ function RegisterForm({
     setServerFields({});
   };
 
-  const participant = readParticipant({ ...draft, branch: courseText(draft.stream, draft.course, draft.courseOther) });
+  const participant = readParticipant({ ...draft, college: collegeOf(draft), branch: courseText(draft.stream, draft.course, draft.courseOther) });
   const problems: Record<string, string> = { ...selfRegistrationProblems(participant) };
-  if (draft.college === OTHER_COLLEGE) problems.college = 'Type the name of your college.';
+  if (!draft.college) problems.college = 'Choose your college.';
+  else if (draft.college === OTHER_COLLEGE && draft.collegeOther.trim().length < 3) problems.college = 'Type the name of your college.';
   // The stream and department make up the "department / course" the desks see (B.E. CSE).
   delete problems.branch;
   if (!draft.stream) problems.stream = 'Choose your stream.';
@@ -289,14 +300,29 @@ function RegisterForm({
         <Field label="Email" error={fieldError('email')}>
           <input value={draft.email} type="email" inputMode="email" autoComplete="email" onChange={(event) => set({ email: event.target.value })} />
         </Field>
-        <Field label="College" error={fieldError('college')}>
-          <input value={draft.college} list="reg-colleges" autoComplete="organization" placeholder="Start typing to find it" onChange={(event) => set({ college: event.target.value })} />
-          <datalist id="reg-colleges">
-            {COLLEGES.filter((college) => college !== OTHER_COLLEGE).map((college) => (
-              <option key={college} value={college} />
-            ))}
-          </datalist>
-        </Field>
+        <PickField id="reg-college" label="College" error={draft.college === OTHER_COLLEGE ? undefined : fieldError('college')}>
+          {(labelId, invalid) => (
+            <SearchSelect
+              id="reg-college"
+              labelId={labelId}
+              options={COLLEGES}
+              value={draft.college}
+              onChange={(college) => set({ college })}
+              placeholder="Choose… (type to find it)"
+              searchPlaceholder="Type your college’s name or initials"
+              searchLabel="Search colleges"
+              emptyText={(query) => `No college matches “${query}”. Choose ${OTHER_COLLEGE} and type it.`}
+              invalid={invalid}
+              bestFirst
+              searchFirst
+            />
+          )}
+        </PickField>
+        {draft.college === OTHER_COLLEGE && (
+          <Field label="Your college" error={fieldError('college')} hint="Its full name and town.">
+            <input value={draft.collegeOther} maxLength={120} autoComplete="organization" onChange={(event) => set({ collegeOther: event.target.value })} />
+          </Field>
+        )}
         <PickField id="reg-stream" label="Stream" error={fieldError('stream')}>
           {(labelId, invalid) => (
             <SearchSelect
