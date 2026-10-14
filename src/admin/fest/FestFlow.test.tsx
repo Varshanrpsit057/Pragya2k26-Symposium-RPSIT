@@ -49,7 +49,9 @@ afterEach(() => {
 async function fillStudent(name: string, phone: string) {
   fireEvent.change(await screen.findByLabelText('Name with initial'), { target: { value: name } });
   fireEvent.change(screen.getByLabelText(/^Mobile number/), { target: { value: phone } });
-  fireEvent.change(screen.getByLabelText('College'), { target: { value: 'Sona College of Technology' } });
+  fireEvent.click(screen.getByRole('button', { name: /^College/ }));
+  fireEvent.change(screen.getByRole('combobox', { name: 'Search colleges' }), { target: { value: 'sona' } });
+  fireEvent.click(within(screen.getByRole('listbox')).getByRole('option', { name: 'Sona College of Technology, Salem' }));
   fireEvent.click(screen.getByRole('checkbox', { name: /Hackathon/ }));
   fireEvent.click(screen.getByRole('radio', { name: 'Cash' }));
   fireEvent.click(screen.getByRole('checkbox', { name: 'I have received ₹100 in cash.' }));
@@ -283,6 +285,19 @@ describe('verifying a UPI payment at the desk', () => {
     fireEvent.click(within(second).getByRole('checkbox', { name: /I have seen ₹100 received/ }));
     fireEvent.change(within(second).getByLabelText(/^UTR of the payment you received/), { target: { value: '612345678901' } });
     expect(within(second).getByRole('button', { name: 'Verify CSE-2002' })).toBeDisabled();
+
+    // Whose is it? The desk looks it up and gives it to the second student (it was their payment).
+    vi.spyOn(window, 'confirm').mockReturnValue(true);
+    fireEvent.click(within(second).getByRole('button', { name: 'Who does this UTR belong to?' }));
+    const finder = await within(second).findByRole('region', { name: 'Who does this UTR belong to?' });
+    const items = await within(finder).findAllByRole('listitem');
+    expect(items.map((item) => item.textContent)).toEqual([expect.stringMatching(/^CSE-2001 Student A.*Accepted for them/), expect.stringMatching(/^CSE-2002 Student B.*Sent by them/)]);
+    fireEvent.click(within(finder).getByRole('checkbox', { name: /I have seen this payment received/ }));
+    fireEvent.click(within(finder).getByRole('button', { name: 'It is CSE-2002’s' }));
+    expect(await within(finder).findByText(/CSE-2002 is verified with the UTR ending 8901\. CSE-2001 is back to not paid\./)).toBeInTheDocument();
+    const after = await sync(h, desk.token);
+    expect(after.find((item) => item.id === 'CSE-2002')?.entry).toMatchObject({ status: 'PAID', payment: { txn: '612345678901' } });
+    expect(after.find((item) => item.id === 'CSE-2001')?.entry).toMatchObject({ status: 'DUE', rejected: { reason: 'UTR ending 8901 belongs to CSE-2002' } });
   });
 });
 

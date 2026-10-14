@@ -1,5 +1,5 @@
 /** The fest's API calls (server/fest.ts). */
-import type { FestCatalog, FestRegistration, FestResult, FestSource } from '../../lib/fest';
+import type { FestCatalog, FestRegistration, FestResult, FestSource, UtrHolder } from '../../lib/fest';
 import type { BackupStatus, PortalSettings } from '../../lib/portal';
 import { request } from '../adminApi';
 
@@ -57,6 +57,11 @@ export interface ImportOutcome {
 export const importFest = (token: string, body: { dept?: string; rows: ImportRow[]; dryRun: boolean; eventFeesPaid?: boolean }) =>
   request<{ outcomes: ImportOutcome[] }>('/api/admin/fest/import', { method: 'POST', body, token }).then((data) => data.outcomes);
 /** Deletes a batch of test registrations; `remaining` says how many are left for the next call. */
+/** "Who does this UTR belong to?": everyone with it, in every department. */
+export const lookupUtr = (token: string, txn: string) => request<{ txn: string; holders: UtrHolder[] }>('/api/admin/fest/utr', { method: 'POST', body: { txn }, token });
+/** Gives the UTR to the student it belongs to (verified); whoever had it loses it, others are told. */
+export const assignUtr = (token: string, txn: string, to: string) =>
+  request<{ registration: FestRegistration; movedFrom: string | null; notFound: string[] }>('/api/admin/fest/utr/assign', { method: 'POST', body: { txn, to, confirmed: true }, token });
 /** The load test: adds mock participants (TEST) up to 1,000 in all, a batch per call. */
 export const seedFestTestData = (token: string, count?: number) =>
   request<{ added: number; total: number; remaining: number; cap: number }>('/api/admin/fest/test-data/seed', { method: 'POST', body: count ? { count } : {}, token });

@@ -1,7 +1,10 @@
 /** Pieces every fest screen uses: the live status, the filters, payments and registration cards. */
 import { useMemo, useState, type ReactNode } from 'react';
 import { awaitingCheck, collegeKey, collegeSummary, deptShort, entryOf, eventLabel, eventOf, feePaid, isActive, rupees, showId, type FestCatalog, type FestEvent, type FestRegistration } from '../../lib/fest';
+import { SearchSelect } from '../../components/ui/SearchSelect';
 import { Badge, clockTime, when } from '../ui';
+
+const ALL_COLLEGES = 'All colleges';
 import { NO_FILTERS, useFest, type FestFilters } from './FestData';
 
 /** Online or not, when the data last arrived, what is waiting to be sent, and what the server refused. */
@@ -93,6 +96,7 @@ export function applyFilters(registrations: Iterable<FestRegistration>, filters:
 export function FilterBar({ showDept }: { showDept: boolean }) {
   const { catalog, filters, setFilters, registrations, results } = useFest();
   const colleges = useMemo(() => collegeSummary(registrations.values(), []).sort((a, b) => a.name.localeCompare(b.name)), [registrations]);
+  const collegeOptions = useMemo(() => [ALL_COLLEGES, ...colleges.map((college) => `${college.name} (${college.students})`)], [colleges]);
   void results;
   if (!catalog) return null;
   const set = (change: Partial<FestFilters>) => setFilters({ ...filters, ...change });
@@ -165,17 +169,22 @@ export function FilterBar({ showDept }: { showDept: boolean }) {
           <option value="DUE">Due</option>
         </select>
       </label>
-      <label className="adm-field">
-        <span>College</span>
-        <select value={filters.college} onChange={(event) => set({ college: event.target.value })}>
-          <option value="">All colleges</option>
-          {colleges.map((college) => (
-            <option key={college.key} value={college.key}>
-              {college.name} ({college.students})
-            </option>
-          ))}
-        </select>
-      </label>
+      {/* Searchable: after a big day there are a hundred colleges or more */}
+      <div className="adm-field fest-filters__college">
+        <span id="fest-filter-college">College</span>
+        <SearchSelect
+          id="fest-filter-college-pick"
+          labelId="fest-filter-college"
+          options={collegeOptions}
+          value={filters.college ? (collegeOptions[colleges.findIndex((college) => college.key === filters.college) + 1] ?? ALL_COLLEGES) : ALL_COLLEGES}
+          onChange={(label) => set({ college: label === ALL_COLLEGES ? '' : (colleges[collegeOptions.indexOf(label) - 1]?.key ?? '') })}
+          placeholder={ALL_COLLEGES}
+          searchPlaceholder="College name or initials"
+          searchLabel="Search colleges"
+          bestFirst
+          searchFirst
+        />
+      </div>
       <label className="adm-field">
         <span>Status</span>
         <select value={filters.status} onChange={(event) => set({ status: event.target.value as FestFilters['status'] })}>

@@ -29,6 +29,8 @@ interface SearchSelectProps {
   describedBy?: string;
   /** Long lists: matches that start with what was typed come first (see filterOptions). */
   bestFirst?: boolean;
+  /** Focus the search box on touch screens too (very long lists, such as colleges, are found by typing). */
+  searchFirst?: boolean;
 }
 
 /** Lowercase words, ignoring punctuation: 'Data Science (AI & DS)' → data, science, ai, ds. */
@@ -72,6 +74,7 @@ export function SearchSelect({
   invalid,
   describedBy,
   bestFirst = false,
+  searchFirst = false,
 }: SearchSelectProps) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState('');
@@ -109,9 +112,9 @@ export function SearchSelect({
   useEffect(() => {
     if (!open) return;
     const finePointer = window.matchMedia?.('(pointer: fine)').matches ?? true;
-    (finePointer ? searchRef.current : listRef.current)?.focus({ preventScroll: true });
+    (finePointer || searchFirst ? searchRef.current : listRef.current)?.focus({ preventScroll: true });
     popupRef.current?.scrollIntoView?.({ block: 'nearest' });
-  }, [open]);
+  }, [open, searchFirst]);
 
   // Keep the highlighted option in view while moving through the list.
   useEffect(() => {

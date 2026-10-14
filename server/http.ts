@@ -205,6 +205,9 @@ export const STAFF_ROUTES: readonly StaffRoute[] = [
   },
   { method: 'POST', path: route_(`/fest/events/${EVENT}/results`), permission: ['fest.event', 'fest.correct'], run: (s, { actor, body, params: [eventId] }) => s.fest.results(actor, eventId, body) },
   { method: 'POST', path: route_('/fest/import'), permission: 'fest.import', run: (s, { actor, body }) => s.fest.importRows(actor, body) },
+  // Who does a UTR belong to (any department), and giving it to the student it really belongs to.
+  { method: 'POST', path: route_('/fest/utr'), permission: 'fest.register', run: (s, { actor, body }) => s.fest.utrLookup(actor, body) },
+  { method: 'POST', path: route_('/fest/utr/assign'), permission: 'fest.register', run: (s, { actor, body }) => s.fest.utrAssign(actor, body) },
   { method: 'POST', path: route_('/fest/test-data/clear'), permission: 'system.testing', run: (s, { actor, body }) => s.fest.clearTest(actor, body) },
   // The load test: up to 1,000 mock participants (marked TEST), a batch per call.
   { method: 'POST', path: route_('/fest/test-data/seed'), permission: 'system.testing', run: (s, { actor, body }) => s.fest.seedTest(actor, body) },

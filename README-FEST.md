@@ -85,7 +85,8 @@ an **Events and route map** button.
    **8 departments**; they choose theirs (or open https://pragya2k26.online/register/, which asks for
    the department first). Then: name, mobile number, email, college (searchable list), **stream**
    (B.E., B.Tech., B.Sc.…) and **department** (CSE, ECE, Mechanical…, or Other to type it), both
-   **dropdowns with a search box**, year and team name (optional). Stored together as the
+   **dropdowns with a search box**, year and team name (optional). The college is chosen the same way
+   (by name or initials, e.g. `ksr`, `sona`), or typed after *Other* when it is not listed. Stored together as the
    "department / course" (`B.E. CSE`). No staff sign-in, no events (they register for events at each
    venue).
 2. **They get their department's ID at once**, large on the screen: **CSE-2001, CSE-2002…**
@@ -110,6 +111,15 @@ an **Events and route map** button.
    UTRs sent by students and for UPI payments taken at a desk. **Not found…** (with a reason) tells
    the student, who can send the right UTR. Tip: typing a received payment's UTR in **Find** shows
    whose it is.
+   - **Whose UTR is it?** When a UTR is sent by two students, or was already accepted for someone,
+     **Who does this UTR belong to?** (on the card, or at the top of Verify payments with any UTR)
+     lists everyone with it **in every department**: name, department, college, phone, and whether
+     it was accepted for them or only sent. Check the payer's name and phone in the payment, tick
+     *I have seen this payment received*, then **It is CSE-2002's** (or give it to another student
+     by ID). That student is verified with it; whoever it was accepted for is back to *not paid*,
+     and anyone else who sent it is marked *not found*, each told *"UTR ending 8901 belongs to
+     CSE-2002"* on their page. A desk gives a UTR to its own department's students; the web assist
+     team to anyone. Needs the network.
 5. **The student's page** shows *Verified* (it checks by itself while waiting).
 6. **At the venue**, the student gives their ID: the event's coordinator adds them, takes the event
    fee and marks them present. Attendance needs the entry fee verified.
