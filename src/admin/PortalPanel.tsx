@@ -166,9 +166,14 @@ export function PortalPanel({ token, onSignedOut }: PanelProps) {
           <div className="adm-qr__preview">{qr ? <img src={qr} alt="The UPI QR code students see" width={200} height={200} /> : <span className="adm-muted">No QR code uploaded</span>}</div>
           <div className="adm-qr__actions">
             <p className="adm-muted">
-              Upload the QR code from GPay (or any UPI app) for the account receiving the entry fees. Students scan it, pay, then send the 12-digit UTR; desks match it.
-              {portal.qrAt && <> Uploaded {when(portal.qrAt)}.</>}
+              Upload the QR code from GPay (or any UPI app) for the account receiving the entry fees. Students scan it, pay, then send the 12-digit UTR; desks match it. A picture is
+              saved the moment you choose it: there is no separate save.
             </p>
+            {portal.qrAt && (
+              <p className="fest-match is-good" role="status">
+                ✓ Saved {when(portal.qrAt)}: students see this QR code now.
+              </p>
+            )}
             <label className={`adm-button adm-button--primary${busy === 'qr' ? ' is-busy' : ''}`}>
               {busy === 'qr' ? 'Uploading…' : qr ? 'Replace the QR code' : 'Upload the QR code'}
               <input className="adm-visually-hidden" type="file" accept="image/png,image/jpeg,image/webp" disabled={busy !== null} onChange={(event) => void upload(event)} />
@@ -198,10 +203,11 @@ export function PortalPanel({ token, onSignedOut }: PanelProps) {
           </label>
         </div>
         {upiProblem && <p className="adm-field__error">{upiProblem}</p>}
-        <span className="adm-inline">
+        <span className="adm-inline adm-inline--wrap">
           <button className="adm-button adm-button--primary" type="button" disabled={!upiChanged || Boolean(upiProblem) || busy !== null} onClick={() => void run('upi', () => savePortal(token, { upiId: upi.upiId.trim(), upiPayee: upi.upiPayee.trim() }))}>
-            {busy === 'upi' ? 'Saving…' : 'Save the UPI account'}
+            {busy === 'upi' ? 'Saving…' : upiChanged ? 'Save the UPI ID and name' : 'UPI ID and name saved'}
           </button>
+          {!upiChanged && <span className="adm-muted">Change the UPI ID or the name to save them again.</span>}
         </span>
       </section>
 
