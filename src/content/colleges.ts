@@ -43,6 +43,8 @@ export const NEARBY_COLLEGES: readonly string[] = [
   'Government College of Engineering, Dharmapuri',
   'Government College of Engineering, Salem',
   'Greentech College of Engineering for Women, Salem',
+  // Also known as DGCT (asked for beside Dhirajlal Gandhi College Of Technology, which stays as it is).
+  'Hindusthan College of Technology (DGCT), Salem',
   'Hosur Institute Of Technology And Science',
   'Institute of Road and Transport Technology, Erode',
   'J K K Munirajah College of Technology, Gobichettipalayam',

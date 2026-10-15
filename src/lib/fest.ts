@@ -275,6 +275,8 @@ export interface FestEntry {
   added: FestStamp;
   fee?: FestPayment;
   present?: FestStamp;
+  /** Their team in this event (team events): the name its coordinator gave it. */
+  team?: string;
 }
 
 /** Who has a UPI transaction ID (the desks' "Who does this UTR belong to?"), in any department. */
@@ -540,6 +542,52 @@ export const deptLabel = (catalog: FestCatalog | null, code: string) => (catalog
 export const isActive = (registration: Pick<FestRegistration, 'cancelled' | 'deleted'>) => !registration.cancelled && !registration.deleted;
 export const entryOf = (registration: FestRegistration, eventId: string) => registration.events.find((item) => item.eventId === eventId) ?? null;
 export const feePaid = (entry: FestEntry | null) => Boolean(entry?.fee && !entry.fee.voided);
+
+// ------------------------------------------------------------------------------------------
+// Teams (team events): each member's entry carries the team's name
+
+export const TEAM_NAME_MAX = 60;
+/** A team name as saved: spaces tidied ('  Team  Nova ' → 'Team Nova'). */
+export const tidyTeamName = (value: unknown) => (typeof value === 'string' ? value.replace(/\s+/g, ' ').trim().slice(0, TEAM_NAME_MAX) : '');
+/** Team names match whatever their capitals ('nova' is team 'Nova'). */
+export const teamKey = (name: string) => tidyTeamName(name).toLowerCase();
+/** Their team in an event ('' when they are in none). */
+export const teamOf = (registration: FestRegistration, eventId: string) => entryOf(registration, eventId)?.team ?? '';
+
+export interface FestTeam {
+  /** As first typed. */
+  name: string;
+  key: string;
+  members: FestRegistration[];
+}
+
+/** An event's teams, by name: its active participants with a team, grouped. */
+export function teamsOf(registrations: Iterable<FestRegistration>, eventId: string): FestTeam[] {
+  const teams = new Map<string, FestTeam>();
+  for (const registration of registrations) {
+    const name = isActive(registration) ? teamOf(registration, eventId) : '';
+    if (!name) continue;
+    const key = teamKey(name);
+    const team = teams.get(key) ?? { name, key, members: [] };
+    team.members.push(registration);
+    teams.set(key, team);
+  }
+  for (const team of teams.values()) team.members.sort((a, b) => a.id.localeCompare(b.id));
+  return [...teams.values()].sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base', numeric: true }));
+}
+
+/** A place's team: its name, 'Individual' for one student who won on their own, else ''. */
+export const placeTeam = (place: Pick<FestPlace, 'ids' | 'team'>) => place.team || (place.ids.length === 1 ? 'Individual' : '');
+
+/**
+ * The teams in a student's events ('Nova (Hackathon); Bits (Quiz)'); in none, the name they typed
+ * when registering, marked so ('Nova (typed when registering)'), as it is no event's team.
+ */
+export const teamsText = (registration: FestRegistration, eventName: (eventId: string) => string) =>
+  registration.events
+    .filter((entry) => entry.team)
+    .map((entry) => `${entry.team} (${eventName(entry.eventId)})`)
+    .join('; ') || (registration.team ? `${registration.team} (typed when registering)` : '');
 
 // ------------------------------------------------------------------------------------------
 // The student's details (checked the same way in the browser and by the API)

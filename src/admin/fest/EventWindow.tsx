@@ -1,12 +1,34 @@
 /**
  * An event's window (event coordinators; department admins and the web assist team for any
  * event): the department's students (only they take part in its events), opened one at a time to
- * check them, added to the event, the fee, attendance, and the winners, submitted to the overall
- * coordinator. Its participants and the department download as Excel.
+ * check them, added to the event, the fee, attendance, its teams (team events), and the winners,
+ * submitted to the overall coordinator. Its participants and the department download as Excel.
  */
 import { useMemo, useState } from 'react';
 import { formatIst } from '../../lib/countdown';
-import { canJoin, deptShort, entryOf, eventLabel, eventsOf, feePaid, isActive, rupees, showId, teamRule, totalsOf, type FestEvent, type FestPlace, type FestRegistration } from '../../lib/fest';
+import {
+  canJoin,
+  deptShort,
+  entryOf,
+  eventLabel,
+  eventsOf,
+  feePaid,
+  isActive,
+  placeTeam,
+  rupees,
+  showId,
+  teamKey,
+  teamOf,
+  teamRule,
+  teamsOf,
+  tidyTeamName,
+  totalsOf,
+  TEAM_NAME_MAX,
+  type FestEvent,
+  type FestPlace,
+  type FestRegistration,
+  type FestTeam,
+} from '../../lib/fest';
 import { Badge, when } from '../ui';
 import { DeptPicker, useWorkDept } from './DeskView';
 import { PORTAL, saveTable, today } from './excel';
@@ -202,6 +224,12 @@ function EventPanel({ event }: { event: FestEvent }) {
                         <dt>Entry fee</dt>
                         <dd>{entryPaid ? <Badge tone="good">Paid · verified at the desk</Badge> : <Badge tone="bad">Not paid: send them to the {deptShort(registration.dept)} desk</Badge>}</dd>
                       </div>
+                      {event.teamMax > 1 && entry && (
+                        <div className="fest-fact">
+                          <dt>Team</dt>
+                          <dd>{entry.team || <span className="adm-muted">Not in a team yet (Teams, below)</span>}</dd>
+                        </div>
+                      )}
                     </dl>
                     {!locked && !entry && (
                       <button className="adm-button adm-button--primary" type="button" disabled={!event.active} onClick={() => addToEvent(registration)}>
@@ -252,8 +280,265 @@ function EventPanel({ event }: { event: FestEvent }) {
         />
       </section>
 
+      {event.teamMax > 1 && <Teams event={event} registered={registered} locked={locked} />}
       <Winners event={event} registered={registered} />
     </>
+  );
+}
+
+/** Finds a student in a list by Registration ID or name, a button each (up to 6). */
+function FindStudent({ label, people, empty, placeholder, onPick }: { label: string; people: FestRegistration[]; empty: string; placeholder: string; onPick: (registration: FestRegistration) => void }) {
+  const [query, setQuery] = useState('');
+  const q = query.trim();
+  const found = q ? people.filter((item) => matches(item, q)).slice(0, 6) : [];
+  return (
+    <>
+      <label className="adm-field">
+        <span>{label}</span>
+        <input type="search" value={query} placeholder={placeholder} autoComplete="off" onChange={(change_) => setQuery(change_.target.value)} />
+      </label>
+      {q && (
+        <div className="fest-place__found" role="group" aria-label={`Found: ${label}`}>
+          {found.length ? (
+            found.map((item) => (
+              <button
+                key={item.id}
+                className="adm-button adm-button--small"
+                type="button"
+                onClick={() => {
+                  onPick(item);
+                  setQuery('');
+                }}
+              >
+                {showId(item.id)} {item.name}
+              </button>
+            ))
+          ) : (
+            <span className="adm-muted">{empty}</span>
+          )}
+        </div>
+      )}
+    </>
+  );
+}
+
+/**
+ * The teams of a team event: each made once here, its name and its members (this event's
+ * participants, one team each). Winners then finds a team by its name and adds every member.
+ */
+function Teams({ event, registered, locked }: { event: FestEvent; registered: FestRegistration[]; locked: boolean }) {
+  const { change } = useFest();
+  const teams = useMemo(() => teamsOf(registered, event.id), [registered, event.id]);
+  const loose = registered.filter((item) => !teamOf(item, event.id));
+  const [message, setMessage] = useState('');
+  const setTeam = (registration: FestRegistration, team: string) =>
+    change(
+      registration.id,
+      `/api/admin/fest/registrations/${registration.id}/events/${event.id}`,
+      { action: 'team', team },
+      team ? `${showId(registration.id)} in team ${team}` : `${showId(registration.id)} out of their team`,
+      (current) => ({ ...current, events: current.events.map((item) => (item.eventId === event.id ? { ...item, team: team || undefined } : item)) }),
+    );
+  const placeholder = `ID (${deptShort(event.dept)}-2001) or name`;
+
+  return (
+    <section className="adm-card adm-pad" aria-label="Teams">
+      <h3 className="adm-h3">Teams</h3>
+      <p className="adm-muted">
+        {teamRule(event)}. Teams are optional and for this event only: a student not in a team takes part on their own. Fees and attendance stay for each student. Make each team once:
+        its name and its members, from this event’s participants; in Winners, typing the team’s name adds every member. {teams.length} team{teams.length === 1 ? '' : 's'} ·{' '}
+        {loose.length} participant{loose.length === 1 ? '' : 's'} on their own.
+      </p>
+      {!locked && (
+        <NewTeam
+          event={event}
+          teams={teams}
+          loose={loose}
+          placeholder={placeholder}
+          onMake={(name, members) => {
+            for (const member of members) setTeam(member, name);
+            setMessage(`Team ${name} made: ${members.map((member) => showId(member.id)).join(', ')}.`);
+          }}
+        />
+      )}
+      {message && (
+        <p className="adm-note" role="status">
+          {message}
+        </p>
+      )}
+      {teams.length > 0 && (
+        <div className="fest-teams">
+          {teams.map((team) => (
+            <TeamCard key={team.key} event={event} team={team} teams={teams} loose={loose} locked={locked} placeholder={placeholder} setTeam={setTeam} />
+          ))}
+        </div>
+      )}
+    </section>
+  );
+}
+
+/** A new team: its name, then its members (participants not in a team yet). */
+function NewTeam({ event, teams, loose, placeholder, onMake }: { event: FestEvent; teams: FestTeam[]; loose: FestRegistration[]; placeholder: string; onMake: (name: string, members: FestRegistration[]) => void }) {
+  const [name, setName] = useState('');
+  const [picked, setPicked] = useState<FestRegistration[]>([]);
+  const tidy = tidyTeamName(name);
+  const key = teamKey(name);
+  const taken = key ? teams.find((team) => team.key === key) : undefined;
+  const pickedIds = new Set(picked.map((item) => item.id));
+  const room = event.teamMax - picked.length;
+  const free = loose.filter((item) => !pickedIds.has(item.id));
+  // The team name they typed when registering, if it matches: added in one tap.
+  const said = key && !taken && room > 0 ? free.filter((item) => teamKey(item.team) === key).slice(0, room) : [];
+  // A team has at least 2 members: a student on their own needs no team.
+  const ready = tidy.length >= 2 && picked.length >= 2 && !taken;
+
+  return (
+    <form
+      className="fest-place"
+      aria-label="Make a team"
+      onSubmit={(submit) => {
+        submit.preventDefault();
+        if (!ready) return;
+        onMake(tidy, picked);
+        setName('');
+        setPicked([]);
+      }}
+    >
+      <strong>Make a team</strong>
+      <label className="adm-field">
+        <span>Team name</span>
+        <input value={name} maxLength={TEAM_NAME_MAX} autoComplete="off" onChange={(change_) => setName(change_.target.value)} />
+      </label>
+      {taken && <p className="adm-field__error">Team {taken.name} already exists: add members to it below.</p>}
+      {picked.length > 0 && (
+        <ul className="fest-place__list">
+          {picked.map((item) => (
+            <li key={item.id}>
+              <span className="fest-card__id">{showId(item.id)}</span> <strong>{item.name}</strong>
+              <button className="adm-button adm-button--small" type="button" aria-label={`Take ${showId(item.id)} out of the new team`} onClick={() => setPicked(picked.filter((other) => other.id !== item.id))}>
+                Remove
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+      {said.length > 0 && (
+        <button className="adm-button adm-button--small" type="button" onClick={() => setPicked([...picked, ...said])}>
+          Typed team {tidy} when registering: add {said.map((item) => showId(item.id)).join(', ')}
+        </button>
+      )}
+      {room > 0 ? (
+        <FindStudent
+          label={picked.length ? 'Add another member' : 'Add a member'}
+          people={free}
+          placeholder={placeholder}
+          empty="Nobody in this event matches who is not in a team already (add them to the event first)."
+          onPick={(item) => setPicked([...picked, item])}
+        />
+      ) : (
+        <p className="adm-muted">The team is full: {event.teamMax} members.</p>
+      )}
+      {picked.length === 1 && <p className="adm-muted">Add at least one more member: a student on their own needs no team.</p>}
+      {picked.length >= 2 && picked.length < event.teamMin && <p className="adm-muted">A team needs at least {event.teamMin}: you can add the rest later.</p>}
+      <span>
+        <button className="adm-button adm-button--primary" type="submit" disabled={!ready}>
+          {picked.length ? `Make team${tidy ? ` ${tidy}` : ''} (${picked.length})` : 'Make team'}
+        </button>
+      </span>
+    </form>
+  );
+}
+
+/** A team: its members (take one out, add one), and its name (rename it). */
+function TeamCard({
+  event,
+  team,
+  teams,
+  loose,
+  locked,
+  placeholder,
+  setTeam,
+}: {
+  event: FestEvent;
+  team: FestTeam;
+  teams: FestTeam[];
+  loose: FestRegistration[];
+  locked: boolean;
+  placeholder: string;
+  setTeam: (registration: FestRegistration, team: string) => void;
+}) {
+  const [renaming, setRenaming] = useState(false);
+  const [name, setName] = useState(team.name);
+  const tidy = tidyTeamName(name);
+  const clash = teams.find((other) => other.key !== team.key && other.key === teamKey(name));
+  // Names match whatever their capitals, so 'NOVA' for 'Nova' changes nothing.
+  const unchanged = teamKey(name) === team.key;
+  const size = team.members.length;
+  const short = size < event.teamMin;
+  return (
+    <article className="fest-place" aria-label={`Team ${team.name}`}>
+      <span className="adm-inline adm-inline--wrap">
+        <strong>Team {team.name}</strong>
+        <Badge tone={short ? 'warn' : 'plain'}>{short ? `${size} · needs at least ${event.teamMin}` : `${size} of up to ${event.teamMax}`}</Badge>
+        {!locked && !renaming && (
+          <button className="adm-button adm-button--small" type="button" onClick={() => setRenaming(true)}>
+            Rename
+          </button>
+        )}
+      </span>
+      {renaming && (
+        <span className="adm-inline adm-inline--wrap">
+          <label className="adm-field">
+            <span>New name for team {team.name}</span>
+            <input value={name} maxLength={TEAM_NAME_MAX} autoComplete="off" onChange={(change_) => setName(change_.target.value)} />
+          </label>
+          <button
+            className="adm-button adm-button--primary adm-button--small"
+            type="button"
+            disabled={tidy.length < 2 || Boolean(clash) || unchanged}
+            onClick={() => {
+              for (const member of team.members) setTeam(member, tidy);
+              setRenaming(false);
+            }}
+          >
+            Save name
+          </button>
+          <button
+            className="adm-button adm-button--small"
+            type="button"
+            onClick={() => {
+              setName(team.name);
+              setRenaming(false);
+            }}
+          >
+            Cancel
+          </button>
+          {clash && <span className="adm-field__error">Another team is called {clash.name}.</span>}
+        </span>
+      )}
+      <ul className="fest-place__list">
+        {team.members.map((member) => (
+          <li key={member.id}>
+            <span className="fest-card__id">{showId(member.id)}</span> <strong>{member.name}</strong>
+            <span className="adm-muted"> · {entryOf(member, event.id)?.present ? 'present' : 'not marked present'}</span>
+            {!locked && (
+              <button className="adm-button adm-button--small" type="button" aria-label={`Take ${showId(member.id)} out of team ${team.name}`} onClick={() => setTeam(member, '')}>
+                Remove
+              </button>
+            )}
+          </li>
+        ))}
+      </ul>
+      {!locked && size < event.teamMax && (
+        <FindStudent
+          label={`Add a member to team ${team.name}`}
+          people={loose}
+          placeholder={placeholder}
+          empty="Nobody in this event matches who is not in a team already."
+          onPick={(item) => setTeam(item, team.name)}
+        />
+      )}
+    </article>
   );
 }
 
@@ -274,6 +559,7 @@ function Winners({ event, registered }: { event: FestEvent; registered: FestRegi
   const resultsOff = !switches.results && session.role !== 'ADMIN';
   const locked = Boolean(result?.submitted);
   const isTeam = event.teamMax > 1;
+  const teams = useMemo(() => (isTeam ? teamsOf(registered, event.id) : []), [isTeam, registered, event.id]);
   const initial = (): PlaceDraft[] =>
     [1, 2, 3].map((place) => {
       const saved = result?.places.find((item) => item.place === place);
@@ -306,10 +592,13 @@ function Winners({ event, registered }: { event: FestEvent; registered: FestRegi
         <>
           <p className="adm-muted">
             Find each winner in this event’s participants marked present ({present.length}), by Registration ID or name.
-            {isTeam ? ` For a team, add every member (up to ${event.teamMax}): each gets a row, and a certificate.` : ''}
+            {isTeam
+              ? ' For a team, type the team’s name: every member marked present is added, each with a row and a certificate. A student not in a team wins on their own: add just them, with no team name.'
+              : ''}
           </p>
+          {isTeam && !teams.length && <p className="adm-note">No teams are made yet for this event: make them in Teams above. A student on their own is found here by ID or name.</p>}
           {rows.map((row) => (
-            <PlaceEditor key={row.place} row={row} event={event} present={present} placed={placed} byId={byId} onChange={(next) => setRow(row.place, next)} />
+            <PlaceEditor key={row.place} row={row} event={event} present={present} placed={placed} byId={byId} teams={teams} onChange={(next) => setRow(row.place, next)} />
           ))}
           {problems.length > 0 && <p className="adm-field__error">{problems.join('; ')}.</p>}
           <div className="adm-inline adm-inline--wrap">
@@ -337,13 +626,17 @@ function Winners({ event, registered }: { event: FestEvent; registered: FestRegi
   );
 }
 
-/** One place: its team name (team events), a row per student, and the search that adds one. */
+/**
+ * One place: a row per student, and the search that adds one. In a team event, typing a team's
+ * name adds all its members marked present; its name goes on the certificates.
+ */
 function PlaceEditor({
   row,
   event,
   present,
   placed,
   byId,
+  teams,
   onChange,
 }: {
   row: PlaceDraft;
@@ -351,32 +644,37 @@ function PlaceEditor({
   present: FestRegistration[];
   placed: Set<string>;
   byId: Map<string, FestRegistration>;
+  teams: FestTeam[];
   onChange: (next: Partial<PlaceDraft>) => void;
 }) {
   const [query, setQuery] = useState('');
   const isTeam = event.teamMax > 1;
-  const full = row.ids.length >= event.teamMax;
+  const room = event.teamMax - row.ids.length;
+  const full = room <= 0;
   const q = query.trim();
+  const presentIds = new Set(present.map((item) => item.id));
+  const free = (item: FestRegistration) => presentIds.has(item.id) && !placed.has(item.id);
   const found = q ? present.filter((item) => !placed.has(item.id) && matches(item, q)).slice(0, 6) : [];
+  // Teams whose name matches, with a member still to place.
+  const teamsFound = isTeam && q ? teams.filter((team) => team.key.includes(teamKey(q)) && team.members.some(free)).slice(0, 4) : [];
+  // Their team in this event (made in Teams); none: they win on their own.
+  const teamName = (who: FestRegistration | undefined) => (who ? teamOf(who, event.id) : '');
   const add = (id: string) => {
-    const who = byId.get(id);
-    onChange({ ids: [...row.ids, id], team: row.team || (isTeam ? (who?.team ?? '') : '') });
+    onChange({ ids: [...row.ids, id], team: row.team || (isTeam ? teamName(byId.get(id)) : '') });
     setQuery('');
   };
-  // Their teammates (same team name, present, not placed yet): added in one tap.
-  const teamName = row.team.trim().toLowerCase();
-  const mates = isTeam && teamName && !full ? present.filter((item) => !placed.has(item.id) && item.team.trim().toLowerCase() === teamName).slice(0, event.teamMax - row.ids.length) : [];
+  const addTeam = (team: FestTeam) => {
+    onChange({ ids: [...row.ids, ...team.members.filter(free).map((item) => item.id)].slice(0, event.teamMax), team: row.team || team.name });
+    setQuery('');
+  };
+  // Their teammates (same team, present, not placed yet): added in one tap.
+  const key = teamKey(row.team);
+  const mates = isTeam && key && !full ? present.filter((item) => !placed.has(item.id) && teamKey(teamName(item)) === key).slice(0, room) : [];
   const label = `${ordinal(row.place)} place`;
 
   return (
     <fieldset className="fest-place">
       <legend>{label}</legend>
-      {isTeam && (
-        <label className="adm-field">
-          <span>Team name</span>
-          <input value={row.team} maxLength={60} onChange={(change_) => onChange({ team: change_.target.value })} />
-        </label>
-      )}
       {row.ids.length > 0 && (
         <ul className="fest-place__list">
           {row.ids.map((id) => {
@@ -397,6 +695,12 @@ function PlaceEditor({
           })}
         </ul>
       )}
+      {isTeam && row.ids.length > 0 && (
+        <label className="adm-field">
+          <span>Team name (optional, on the certificates)</span>
+          <input value={row.team} maxLength={TEAM_NAME_MAX} placeholder="None: a student on their own" onChange={(change_) => onChange({ team: change_.target.value })} />
+        </label>
+      )}
       {mates.length > 0 && (
         <button className="adm-button adm-button--small" type="button" onClick={() => onChange({ ids: [...row.ids, ...mates.map((item) => item.id)] })}>
           Add the rest of team {row.team.trim()}: {mates.map((item) => showId(item.id)).join(', ')}
@@ -404,20 +708,40 @@ function PlaceEditor({
       )}
       {!full && (
         <label className="adm-field">
-          <span>{row.ids.length ? `Add a member to the ${label}` : `Find the ${label} winner`}</span>
-          <input type="search" value={query} placeholder={`ID (${deptShort(event.dept)}-2001) or name`} autoComplete="off" onChange={(change_) => setQuery(change_.target.value)} />
+          <span>{row.ids.length ? `Add a teammate to the ${label} (a team only)` : `Find the ${label} winner`}</span>
+          <input
+            type="search"
+            value={query}
+            placeholder={isTeam ? `Team name, or ID (${deptShort(event.dept)}-2001) or name` : `ID (${deptShort(event.dept)}-2001) or name`}
+            autoComplete="off"
+            onChange={(change_) => setQuery(change_.target.value)}
+          />
         </label>
       )}
-      {q && (
+      {q && !full && (
         <div className="fest-place__found" role="group" aria-label={`Participants found for the ${label}`}>
-          {found.length ? (
-            found.map((item) => (
-              <button key={item.id} className="adm-button adm-button--small" type="button" onClick={() => add(item.id)}>
-                {showId(item.id)} {item.name}
+          {teamsFound.map((team) => {
+            const absent = team.members.filter((item) => !presentIds.has(item.id));
+            return (
+              <button key={team.key} className="fest-team-pick" type="button" aria-label={`Team ${team.name}: add its members`} onClick={() => addTeam(team)}>
+                <strong>Team {team.name}</strong>
+                <span>
+                  {team.members
+                    .filter(free)
+                    .map((item) => `${showId(item.id)} ${item.name}`)
+                    .join(' · ')}
+                </span>
+                {absent.length > 0 && <span className="fest-team-pick__left">Not marked present, left out: {absent.map((item) => `${showId(item.id)} ${item.name}`).join(' · ')}</span>}
               </button>
-            ))
-          ) : (
-            <span className="adm-muted">Nobody present in this event matches (a winner must be marked present, and in one place only).</span>
+            );
+          })}
+          {found.map((item) => (
+            <button key={item.id} className="adm-button adm-button--small" type="button" onClick={() => add(item.id)}>
+              {showId(item.id)} {item.name}
+            </button>
+          ))}
+          {!found.length && !teamsFound.length && (
+            <span className="adm-muted">Nobody present in this event matches{isTeam ? ', and no team has that name' : ''} (a winner must be marked present, and in one place only).</span>
           )}
         </div>
       )}
@@ -446,7 +770,7 @@ export function WinnerTable({ places, byId }: { places: FestPlace[]; byId: Reado
               return (
                 <tr key={`${place.place}-${id}`}>
                   <th scope="row">{ordinal(place.place)}</th>
-                  <td>{place.team ?? '—'}</td>
+                  <td>{placeTeam(place) || '—'}</td>
                   <td className="adm-mono">{showId(id)}</td>
                   <td>{who?.name ?? ''}</td>
                   <td>

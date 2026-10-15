@@ -12,7 +12,7 @@
  *
  * Every rule is checked here; the dashboards only hide what a role cannot use.
  */
-import { canJoin, catalogProblem, DEFAULT_CATALOG, DESKS, deskMoney, departmentOf, deptShort, entryOf, eventOf, feePaid, formatFestId, gateStudent, type HandOver, ID_RANGES, isActive, matchEvents, normaliseFestId, parseFestId, participantProblems, readParticipant, selfRegistrationProblems, showId, toStudentView, TXN, type FestCatalog, type FestDepartment, type FestEvent, type FestMethod, type FestParticipant, type FestPayment, type FestPlace, type FestRegistration, type FestResult, type FestSource, type FestStamp, type UtrChange } from '../src/lib/fest';
+import { canJoin, catalogProblem, DEFAULT_CATALOG, DESKS, deskMoney, departmentOf, deptShort, entryOf, eventOf, feePaid, formatFestId, gateStudent, type HandOver, ID_RANGES, isActive, matchEvents, normaliseFestId, parseFestId, participantProblems, readParticipant, selfRegistrationProblems, showId, teamKey, teamOf, tidyTeamName, toStudentView, TXN, type FestCatalog, type FestDepartment, type FestEvent, type FestMethod, type FestParticipant, type FestPayment, type FestPlace, type FestRegistration, type FestResult, type FestSource, type FestStamp, type UtrChange } from '../src/lib/fest';
 import { timingSafeEqual } from 'node:crypto';
 import { formatIst, parseEventStart } from '../src/lib/countdown';
 import { DEFAULT_PORTAL, portalProblem, QR_IMAGE, QR_MAX_CHARS, readPortal, tidyUtr, UTR, type BackupStatus, type PortalSettings, type SwitchName } from '../src/lib/portal';
@@ -989,12 +989,15 @@ export class FestService {
     return event;
   }
 
-  /** The event window: add a student (or take one added by mistake out), take the fee, mark attendance; corrections cancel a fee. */
+  /**
+   * The event window: add a student (or take one added by mistake out), take the fee, mark
+   * attendance, put them in a team (team events; an empty name takes them out); corrections cancel a fee.
+   */
   async eventAct(actor: Actor, rawId: string, eventId: string, body: unknown) {
     const { id, dept } = this.target(rawId);
     const event = await this.festEvent(eventId);
     const action = isObject(body) ? body.action : null;
-    if (!['add', 'remove', 'fee', 'present', 'absent', 'void-fee'].includes(String(action))) throw new ApiError(400, 'INVALID', 'Choose what to do.');
+    if (!['add', 'remove', 'fee', 'present', 'absent', 'team', 'void-fee'].includes(String(action))) throw new ApiError(400, 'INVALID', 'Choose what to do.');
     requirePermission(actor, action === 'void-fee' ? 'fest.correct' : 'fest.event');
     if (action !== 'void-fee') this.eventAccess(actor, event);
     // A student takes part only in their own department's events.
@@ -1005,6 +1008,7 @@ export class FestService {
     await this.ensureOpenEvents([event.id]);
     const input = body as Record<string, unknown>;
     const stamp = this.stamp(actor);
+    const team = action === 'team' ? await this.readTeam(event, id, input.team) : '';
     return this.mutate(dept, id, (registration) => {
       if (!isActive(registration)) throw new ApiError(409, 'CANCELLED', 'This registration was cancelled or deleted.');
       const entry = entryOf(registration, event.id);
@@ -1038,6 +1042,9 @@ export class FestService {
         case 'absent':
           if (!entry.present) return null;
           return update({ present: undefined });
+        case 'team':
+          if ((entry.team ?? '') === team) return null;
+          return update({ team: team || undefined });
         case 'void-fee': {
           if (!feePaid(entry)) return null;
           if (entry.present) throw new ApiError(409, 'PRESENT', 'They are marked present: undo that first.');
@@ -1049,6 +1056,25 @@ export class FestService {
           return null;
       }
     });
+  }
+
+  /**
+   * The team a student joins in an event ('' takes them out of theirs): team events only, and a
+   * team holds at most the event's team size (counted across the department's participants).
+   */
+  private async readTeam(event: FestEvent, id: string, value: unknown) {
+    const team = tidyTeamName(value);
+    if (!team) return '';
+    if (event.teamMax <= 1) throw new ApiError(400, 'INVALID', `${event.name} is an individual event: it has no teams.`);
+    if (team.length < 2) throw new ApiError(400, 'INVALID', 'Team names have at least 2 letters.');
+    const key = teamKey(team);
+    const { registrations } = await this.deps.store.changes(event.dept, '');
+    const others = registrations.filter((item) => item.id !== id && isActive(item) && teamKey(teamOf(item, event.id)) === key);
+    if (others.length >= event.teamMax) {
+      throw new ApiError(409, 'TEAM_FULL', `Team ${teamOf(others[0]!, event.id)} already has ${others.length} members: ${event.name} allows teams of up to ${event.teamMax}.`);
+    }
+    // The team keeps the spelling it was made with.
+    return others.length ? teamOf(others[0]!, event.id) : team;
   }
 
   // -----------------------------------------------------------------------------------------

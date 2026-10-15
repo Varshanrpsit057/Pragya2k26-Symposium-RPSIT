@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { filterOptions } from '../components/ui/SearchSelect';
 import { EMPTY_REGISTRATION, validateField } from '../lib/registration';
 import { COLLEGES, NEARBY_COLLEGES, OTHER_COLLEGE, OTHER_COLLEGES } from './colleges';
 
@@ -16,6 +17,14 @@ describe('Tamil Nadu colleges', () => {
     expect(NEARBY_COLLEGES).toContain('Adhiyamaan College of Engineering, Hosur');
     expect(OTHER_COLLEGES).toContain('P.S.G. College of Technology, Coimbatore');
     expect(OTHER_COLLEGES.some((college) => /Salem|Dharmapuri|Krishnagiri|Hosur|Tiruchengode/.test(college))).toBe(false);
+  });
+
+  it('has Hindusthan College of Technology (DGCT) beside Dhirajlal Gandhi College Of Technology, each found by its name', () => {
+    expect(NEARBY_COLLEGES).toContain('Dhirajlal Gandhi College Of Technology, Salem');
+    expect(NEARBY_COLLEGES).toContain('Hindusthan College of Technology (DGCT), Salem');
+    expect(filterOptions(COLLEGES, 'dgct', true)[0]).toBe('Hindusthan College of Technology (DGCT), Salem');
+    expect(filterOptions(COLLEGES, 'hindusthan technology salem', true)[0]).toBe('Hindusthan College of Technology (DGCT), Salem');
+    expect(filterOptions(COLLEGES, 'dhirajlal', true)[0]).toBe('Dhirajlal Gandhi College Of Technology, Salem');
   });
 
   it('only holds names the registration form accepts', () => {

@@ -776,6 +776,38 @@
   gap: 0.35rem;
 }
 
+/* A team found by its name in Winners: every member, in one tap */
+.fest-team-pick {
+  display: grid;
+  gap: 0.15rem;
+  width: 100%;
+  padding: 0.5rem 0.7rem;
+  border: 1px solid var(--adm-line);
+  border-radius: 8px;
+  background: var(--adm-select);
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.fest-team-pick:hover,
+.fest-team-pick:focus-visible {
+  border-color: currentColor;
+}
+
+.fest-team-pick__left {
+  font-size: 0.85em;
+  opacity: 0.75;
+}
+
+/* The teams of a team event */
+.fest-teams {
+  display: grid;
+  gap: 0.5rem;
+  margin-top: 0.75rem;
+}
+
 /* The desk's cash hand-over */
 .fest-handover {
   display: grid;

@@ -148,6 +148,42 @@ describe('an event window', () => {
   });
 });
 
+describe('teams', () => {
+  it('puts the event’s participants in named teams, up to the team size, one spelling each; closed with the results', async () => {
+    const h = setup({ at: TIMES.eventDay });
+    const coordinator = await h.staff('COORDINATOR', ['cse-hackathon'], 'cse-hack', { department: 'CSE' });
+    const team = (id: string, name: string) => h.call('POST', `/api/admin/fest/registrations/${id}/events/cse-hackathon`, { action: 'team', team: name }, { token: coordinator.token });
+    const ids: string[] = [];
+    for (let n = 0; n < 6; n += 1) ids.push(await onPhone(h, student('CSE')));
+    // Only the event's own participants.
+    expect((await team(ids[0], 'Byte Me')).body.code).toBe('NOT_IN_EVENT');
+    for (const id of ids.slice(0, 5)) await h.call('POST', `/api/admin/fest/registrations/${id}/events/cse-hackathon`, { action: 'add' }, { token: coordinator.token });
+
+    expect((await team(ids[0], '  Byte   Me ')).body.registration.events[0].team).toBe('Byte Me');
+    // The same team whatever the capitals: it keeps the spelling it was made with.
+    expect((await team(ids[1], 'byte me')).body.registration.events[0].team).toBe('Byte Me');
+    for (const id of ids.slice(2, 4)) await team(id, 'BYTE ME');
+    // The hackathon allows teams of up to 4.
+    expect((await team(ids[4], 'Byte Me')).body).toMatchObject({ code: 'TEAM_FULL', error: expect.stringContaining('Team Byte Me already has 4 members') });
+    expect((await team(ids[4], 'B')).body.code).toBe('INVALID');
+
+    // Taken out (an empty name): the place goes to another.
+    expect((await team(ids[3], '')).body.registration.events[0].team).toBeUndefined();
+    expect((await team(ids[4], 'Byte Me')).status).toBe(200);
+    const synced = (await h.call('POST', '/api/admin/fest/sync', {}, { token: coordinator.token })).body.registrations as FestRegistration[];
+    expect(synced.filter((item) => item.events[0]?.team === 'Byte Me').map((item) => item.id).sort()).toEqual([ids[0], ids[1], ids[2], ids[4]]);
+
+    // Submitted results close the event: no team changes after.
+    const desk = await h.staff('DESK', [], 'cse-desk1', { department: 'CSE', deskNumber: 1 });
+    await cash(h, desk.token, ids[0]);
+    const path = `/api/admin/fest/registrations/${ids[0]}/events/cse-hackathon`;
+    await h.call('POST', path, { action: 'fee', payment: { method: 'CASH', confirmed: true } }, { token: coordinator.token });
+    expect((await h.call('POST', path, { action: 'present' }, { token: coordinator.token })).status).toBe(200);
+    expect((await h.call('POST', '/api/admin/fest/events/cse-hackathon/results', { action: 'submit', places: [{ place: 1, ids: [ids[0]], team: 'Byte Me' }] }, { token: coordinator.token })).status).toBe(200);
+    expect((await team(ids[1], '')).body.code).toBe('RESULTS_SUBMITTED');
+  });
+});
+
 describe('online registrations from the Google form', () => {
   it('reads the form’s columns (no college code), keeps the UTR with the paid entry fee, and leaves every event fee to the venue', async () => {
     const csv = [

@@ -4,7 +4,7 @@
  * and the full copy (every sheet at once) the web assist team keeps as a backup.
  */
 import { formatIst } from '../../lib/countdown';
-import { DESKS, collegeSummary, deptShort, eventLabel, eventOf, feePaid, isActive, medalOrder, showId, totalsOf, type CollegeRow, type FestCatalog, type FestRegistration, type FestResult } from '../../lib/fest';
+import { DESKS, collegeSummary, deptShort, eventLabel, eventOf, feePaid, isActive, medalOrder, placeTeam, showId, teamOf, teamsText, totalsOf, type CollegeRow, type FestCatalog, type FestRegistration, type FestResult } from '../../lib/fest';
 import { when } from '../ui';
 import { PORTAL, saveTable, saveWorkbook, tableSheet, today } from './excel';
 
@@ -60,7 +60,7 @@ export function exportRows(list: FestRegistration[], catalog: FestCatalog) {
       item.collegeCode ?? '',
       item.branch,
       item.year,
-      item.team,
+      teamsText(item, name),
       howRegistered(item),
       payment?.desk ?? item.checkedIn?.desk ?? item.desk ?? '',
       item.entry.status === 'PAID' ? (payment?.amount ?? '') : item.entry.rejected ? 'NOT FOUND' : item.entry.claim ? 'TO CHECK' : 'DUE',
@@ -99,7 +99,7 @@ export function winnerRows(catalog: FestCatalog, events: readonly { id: string }
     for (const place of result.places) {
       for (const person of place.ids) {
         const who = registrations.get(person);
-        rows.push([deptShort(event.dept), eventLabel(event), event.venue, ordinalOf(place.place), place.team ?? '', showId(person), who?.name ?? '', who?.college ?? '', who?.phone ?? '', who?.email ?? '', result.submitted.by, when(result.submitted.at)]);
+        rows.push([deptShort(event.dept), eventLabel(event), event.venue, ordinalOf(place.place), placeTeam(place), showId(person), who?.name ?? '', who?.college ?? '', who?.phone ?? '', who?.email ?? '', result.submitted.by, when(result.submitted.at)]);
       }
     }
   }
@@ -117,13 +117,13 @@ export function certificateRows(catalog: FestCatalog, events: readonly { id: str
     const event = eventOf(catalog, id);
     if (!event) continue;
     const places = new Map<string, { place: number; team: string }>();
-    for (const place of results.get(id)?.places ?? []) for (const person of place.ids) places.set(person, { place: place.place, team: place.team ?? '' });
+    for (const place of results.get(id)?.places ?? []) for (const person of place.ids) places.set(person, { place: place.place, team: placeTeam(place) });
     const present = everyone
       .filter((item) => item.events.some((entry) => entry.eventId === id && entry.present))
       .sort((a, b) => (places.get(a.id)?.place ?? 9) - (places.get(b.id)?.place ?? 9) || a.id.localeCompare(b.id));
     for (const item of present) {
       const won = places.get(item.id);
-      rows.push([eventLabel(event), deptShort(event.dept), won ? 'Winner' : 'Participation', won ? ordinalOf(won.place) : '', won?.team || item.team, showId(item.id), item.name, item.college, item.collegeCode ?? '', item.branch, item.year]);
+      rows.push([eventLabel(event), deptShort(event.dept), won ? 'Winner' : 'Participation', won ? ordinalOf(won.place) : '', won ? won.team : teamOf(item, id), showId(item.id), item.name, item.college, item.collegeCode ?? '', item.branch, item.year]);
     }
   }
   return rows;

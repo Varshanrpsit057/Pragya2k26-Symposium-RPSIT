@@ -279,6 +279,89 @@ describe('an event coordinator', () => {
     expect(await within(winners).findByRole('cell', { name: 'Kavin R' })).toBeInTheDocument();
   });
 
+  it('makes a team once (its name and members); in Winners, typing the team’s name adds every member marked present', async () => {
+    const h = setup({ at: TIMES.eventDay });
+    const desk = await h.staff('DESK', [], 'cse-desk1', { department: 'CSE', deskNumber: 1 });
+    const coordinator = await h.staff('COORDINATOR', ['cse-hackathon'], 'cse-hack1', { department: 'CSE' });
+    const names = ['Kavin R', 'Asha K', 'Divya S', 'Ravi T'];
+    for (const [index, name] of names.entries()) {
+      const id = await onPhone(h, 'CSE', index + 1, { name });
+      await collect(h, desk.token, id);
+      const path = `/api/admin/fest/registrations/${id}/events/cse-hackathon`;
+      await h.call('POST', path, { action: 'add' }, { token: coordinator.token });
+      await h.call('POST', path, { action: 'fee', payment: { method: 'CASH', confirmed: true } }, { token: coordinator.token });
+      // Ravi T (CSE-2004) joined but is not marked present.
+      if (name !== 'Ravi T') await h.call('POST', path, { action: 'present' }, { token: coordinator.token });
+    }
+    vi.spyOn(window, 'confirm').mockReturnValue(true);
+    backend(h);
+    signIn(coordinator.token);
+    render(<AdminApp />);
+
+    // Teams: a name, then the members, found by ID or name among this event's participants.
+    const teams = await screen.findByRole('region', { name: 'Teams' }, { timeout: 5000 });
+    const make = within(teams).getByRole('form', { name: 'Make a team' });
+    fireEvent.change(within(make).getByLabelText('Team name'), { target: { value: 'Nova' } });
+    for (const [query, button] of [
+      ['kavin', 'CSE-2001 Kavin R'],
+      ['cse 2002', 'CSE-2002 Asha K'],
+      ['ravi', 'CSE-2004 Ravi T'],
+    ]) {
+      fireEvent.change(within(make).getByLabelText(/^Add (a|another) member$/), { target: { value: query } });
+      fireEvent.click(await within(make).findByRole('button', { name: button }));
+      // One student alone is no team.
+      if (button === 'CSE-2001 Kavin R') expect(within(make).getByRole('button', { name: 'Make team Nova (1)' })).toBeDisabled();
+    }
+    fireEvent.click(within(make).getByRole('button', { name: 'Make team Nova (3)' }));
+    const nova = await within(teams).findByRole('article', { name: 'Team Nova' });
+    expect(within(nova).getByText('3 of up to 4')).toBeInTheDocument();
+    await waitFor(async () =>
+      expect(
+        (await sync(h, coordinator.token))
+          .filter((item) => item.events[0]?.team === 'Nova')
+          .map((item) => item.id)
+          .sort(),
+      ).toEqual(['CSE-2001', 'CSE-2002', 'CSE-2004']),
+    );
+    // The same name again is refused: they are added to the team that has it.
+    fireEvent.change(within(make).getByLabelText('Team name'), { target: { value: 'nova' } });
+    expect(within(make).getByText('Team Nova already exists: add members to it below.')).toBeInTheDocument();
+
+    // Winners: the team's name shows every member; the one not present is left out.
+    const winners = screen.getByRole('region', { name: 'Winners' });
+    fireEvent.change(within(winners).getByLabelText('Find the 1st place winner'), { target: { value: 'nov' } });
+    const pick = within(winners).getByRole('button', { name: 'Team Nova: add its members' });
+    expect(pick).toHaveTextContent('CSE-2001 Kavin R · CSE-2002 Asha K');
+    expect(pick).toHaveTextContent('Not marked present, left out: CSE-2004 Ravi T');
+    fireEvent.click(pick);
+    expect(within(winners).getByRole('button', { name: 'Remove CSE-2001 from the 1st place' })).toBeInTheDocument();
+    expect(within(winners).getByRole('button', { name: 'Remove CSE-2002 from the 1st place' })).toBeInTheDocument();
+    expect(within(winners).getByLabelText('Team name (optional, on the certificates)')).toHaveValue('Nova');
+    // Teams are optional: Divya S (CSE-2003, in no team) wins 2nd on her own, with no team name.
+    fireEvent.change(within(winners).getByLabelText('Find the 2nd place winner'), { target: { value: 'divya' } });
+    fireEvent.click(within(winners).getByRole('button', { name: 'CSE-2003 Divya S' }));
+    expect(within(winners).getAllByLabelText('Team name (optional, on the certificates)')[1]).toHaveValue('');
+    fireEvent.click(within(winners).getByRole('button', { name: 'Submit results' }));
+    await waitFor(async () => {
+      const result = (await h.call('POST', '/api/admin/fest/sync', {}, { token: coordinator.token })).body.results[0];
+      expect(result).toMatchObject({
+        places: [
+          { place: 1, ids: ['CSE-2001', 'CSE-2002'], team: 'Nova' },
+          { place: 2, ids: ['CSE-2003'] },
+        ],
+        submitted: { by: 'cse-hack1' },
+      });
+      expect(result.places[1].team).toBeUndefined();
+    });
+    // A row per student: the team's name on its members' rows, "Individual" for her.
+    const rows = (await within(winners).findAllByRole('row')).slice(1).map((row) => within(row).getAllByRole('cell').map((cell) => cell.textContent));
+    expect(rows).toEqual([
+      ['Nova', 'CSE-2001', 'Kavin R', 'Sona College of Technology, Salem (2615)'],
+      ['Nova', 'CSE-2002', 'Asha K', 'Sona College of Technology, Salem (2615)'],
+      ['Individual', 'CSE-2003', 'Divya S', 'Sona College of Technology, Salem (2615)'],
+    ]);
+  });
+
   it('opens straight on the event its link names', async () => {
     const h = setup({ at: TIMES.eventDay });
     const admin = await h.staff('DEPT_ADMIN', [], 'cse-admin', { department: 'CSE' });

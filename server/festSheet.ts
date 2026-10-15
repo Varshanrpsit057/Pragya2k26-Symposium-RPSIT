@@ -15,7 +15,7 @@
  */
 import { createHash } from 'node:crypto';
 import { formatIst } from '../src/lib/countdown';
-import { deptShort, eventLabel, eventOf, feePaid, showId, type FestCatalog, type FestRegistration, type FestResult, type FestSource } from '../src/lib/fest';
+import { deptShort, eventLabel, eventOf, feePaid, placeTeam, showId, teamsText, type FestCatalog, type FestRegistration, type FestResult, type FestSource } from '../src/lib/fest';
 import { GoogleApiError, type GoogleClient } from './google';
 import type { Store } from './store';
 
@@ -106,7 +106,7 @@ export function registrationRows(catalog: FestCatalog, registrations: readonly F
         item.collegeCode ?? '',
         item.branch,
         item.year,
-        item.team,
+        teamsText(item, (eventId) => eventOf(catalog, eventId)?.name ?? eventId),
         fee,
         payment ? METHOD_LABEL[payment.method] : '',
         payment?.amount ?? '',
@@ -141,7 +141,7 @@ export function resultRows(catalog: FestCatalog, results: readonly FestResult[],
         PLACE_LABEL[place.place] ?? `Place ${place.place}`,
         place.ids.map(showId).join(', '),
         place.ids.map((id) => byId.get(id)?.name ?? '').join(', '),
-        place.team ?? '',
+        placeTeam(place),
         status,
         result.submitted?.by ?? '',
         ist(result.submitted?.at),
