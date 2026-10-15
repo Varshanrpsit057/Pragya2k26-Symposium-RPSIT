@@ -478,7 +478,7 @@ export class Service {
     }
     await this.limit(`student:${ip}`, STUDENT_LIMIT, STUDENT_BUSY);
     if (action === 'find') {
-      // By mobile number and email: a few tries for each number, and the address's lookup limit.
+      // By mobile number: a few tries for each number, and the address's lookup limit.
       const rawPhone = typeof body === 'object' && body !== null ? String((body as { phone?: unknown }).phone ?? '') : '';
       await this.limit(`student-lookup:${ip}`, LOOKUP_LIMIT, STUDENT_BUSY);
       await this.limit(`student-phone:${sha256(rawPhone.replace(/\D/g, '').slice(-10)).slice(0, 24)}`, STUDENT_ID_LIMIT, 'Too many tries for this mobile number. Please wait 10 minutes, or ask at a registration desk.');

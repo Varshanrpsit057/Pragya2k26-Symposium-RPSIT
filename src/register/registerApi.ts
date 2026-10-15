@@ -18,7 +18,7 @@ export interface PublicInfo {
   open: boolean;
   /** Registration on phones (off: the page sends students to a desk). */
   selfRegistration: boolean;
-  /** "My registration ID" by mobile number and email. */
+  /** "My registration ID" by mobile number. */
   lookup: boolean;
   /** Paying the entry fee here by UPI (the QR code) as well as at the desk. */
   onlinePayment: boolean;
@@ -91,6 +91,8 @@ export const fetchMe = (who: StudentPass) => call<{ registration: StudentView }>
 export const changeMyEvents = (who: StudentPass, add: string[], remove: string[] = []) =>
   call<{ registration: StudentView }>('/api/fest/me/events', { ...pass(who), add, remove }).then((data) => data.registration);
 export const sendMyPayment = (who: StudentPass, txn: string) => call<{ registration: StudentView }>('/api/fest/me/payment', { ...pass(who), txn }).then((data) => data.registration);
-/** "My registration ID" on another phone: the mobile number and email find the registrations (to look at). */
-export const findMine = (phone: string, email: string) => call<{ registrations: StudentView[] }>('/api/fest/find', { phone, email }).then((data) => data.registrations);
+/** "My registration ID" on another phone: the mobile number finds the registrations (to look at). */
+export const findMine = (phone: string) => call<{ registrations: StudentView[] }>('/api/fest/find', { phone }).then((data) => data.registrations);
+/** A message to the web assist team (it arrives in the dashboard's Help requests): who they are and how to reach them. */
+export const askAdmin = (form: { category: 'FIND_ID'; name: string; contact: string; page: string; message: string }) => call<{ id: string }>('/api/help', form).then((data) => data.id);
 export const fetchPayment = () => call<PaymentInfo>('/api/fest/payment');

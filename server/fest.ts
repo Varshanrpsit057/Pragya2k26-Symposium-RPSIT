@@ -855,7 +855,7 @@ export class FestService {
       open: registrationPhase(this.deps.schedule, this.deps.now()) !== 'closed',
       /** Registration on phones (off: the page sends students to a desk). */
       selfRegistration: portal.selfRegistration,
-      /** Finding a registration by mobile number and email. */
+      /** Finding a registration by mobile number. */
       lookup: portal.studentLookup,
       /** Paying on the website by UPI (the QR code comes from /api/fest/payment when it is needed). */
       onlinePayment: portal.onlinePayment && Boolean(portal.upiId || portal.qrAt),
@@ -929,22 +929,22 @@ export class FestService {
   }
 
   /**
-   * "My registration ID" on a phone that did not register: the mobile number and the email the
-   * student registered with find their registrations (shown, never changed), in every department.
+   * "My registration ID" on a phone that did not register: the mobile number the student registered
+   * with finds their registration (shown, never changed), in every department. (Online registrations
+   * may have no email, so the number alone; a few tries per number and per address.)
    */
   async findOwn(body: unknown) {
     await this.requireSwitch(null, 'studentLookup', 'Looking up a registration is switched off. Please ask at a registration desk.');
     const phone = readParticipant({ phone: isObject(body) ? body.phone : '' }).phone;
-    const email = text(isObject(body) ? body.email : '', 120).toLowerCase();
-    const notFound = new ApiError(404, 'NOT_FOUND', 'No registration has that mobile number with that email. Check both, or ask at a registration desk.');
-    if (!/^\d{10}$/.test(phone) || !email.includes('@')) throw notFound;
+    const notFound = new ApiError(404, 'NOT_FOUND', 'No registration has that mobile number. Check it, or contact the admin below.');
+    if (!/^\d{10}$/.test(phone)) throw notFound;
     const catalog = await this.catalog();
     const found: FestRegistration[] = [];
     await Promise.all(
       catalog.departments.map(async ({ code }) => {
         const id = await this.deps.store.findPhone(code, phone);
         const registration = id ? await this.deps.store.getRegistration(code, id) : null;
-        if (registration && !registration.deleted && registration.email.trim().toLowerCase() === email) found.push(registration);
+        if (registration && !registration.deleted) found.push(registration);
       }),
     );
     if (!found.length) throw notFound;

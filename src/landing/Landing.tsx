@@ -9,7 +9,7 @@ import './Landing.css';
 
 /** The students' page: register on their phone, then their ID and payment status. */
 export const REGISTER = '/register/';
-/** "My registration ID": the students' page opened on their registration (this phone's own, or found by mobile number and email). */
+/** "My registration ID": the students' page opened on their registration (this phone's own, or found by mobile number). */
 export const MY_ID = '/register/?my';
 
 const FOOTER_LINKS: readonly FooterLink[] = [
@@ -229,7 +229,7 @@ export function Landing() {
             </li>
             <li>Register for events at each event’s venue, in your department, on {festDay}.</li>
           </ol>
-          <p>Lost your ID? Open My registration ID: on the phone you registered with it shows at once; on another phone, your mobile number and email find it.</p>
+          <p>Lost your ID? Open My registration ID: on the phone you registered with it shows at once; on another phone, your mobile number finds it.</p>
         </section>
       </main>
 

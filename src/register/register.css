@@ -594,3 +594,12 @@ body {
   color: var(--r-ink);
   font-weight: 700;
 }
+
+/* Contact the admin: when the mobile number finds no registration */
+.reg-ask {
+  margin-top: 1rem;
+}
+
+.reg-ask select {
+  width: 100%;
+}
