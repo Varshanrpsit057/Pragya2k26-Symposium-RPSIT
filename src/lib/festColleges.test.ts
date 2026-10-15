@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { collegeKey, collegeSummary, deptShort, medalOrder, normaliseFestId, parseFestId, showId, sourceOfNumber, type CollegeRow, type FestRegistration, type FestResult } from './fest';
+import { collegeKey, collegeSummary, deptShort, medalOrder, normaliseFestId, parseFestId, placeTeam, showId, sourceOfNumber, teamKey, teamsOf, teamsText, tidyTeamName, type CollegeRow, type FestRegistration, type FestResult } from './fest';
 
 const person = (id: string, college: string, extra: Partial<FestRegistration> = {}): FestRegistration => ({
   id,
@@ -114,5 +114,38 @@ describe('AI&DS', () => {
     expect(deptShort('SH')).toBe('S&H');
     expect(showId('SH-2001')).toBe('S&H-2001');
     for (const typed of ['S&H-2001', 's & h 2001', 'SH-2001']) expect(normaliseFestId(typed)).toBe('SH-2001');
+  });
+});
+
+describe('teams (for one event only, and optional)', () => {
+  const stamp = { at: '2026-10-17T05:00:00.000Z', by: 'cse-hack' };
+  const inHack = (team?: string) => [{ eventId: 'cse-hackathon', added: stamp, ...(team && { team }) }];
+
+  it('groups an event’s participants by team name, whatever the capitals; the rest are on their own', () => {
+    const people = [
+      person('CSE-2002', 'Sona', { events: inHack('Nova') }),
+      person('CSE-2001', 'Sona', { events: inHack('nova') }),
+      person('CSE-2003', 'Sona', { events: inHack() }),
+      person('CSE-2004', 'Sona', { events: inHack('Bits'), cancelled: { ...stamp, reason: 'left' } }),
+      person('CSE-2005', 'Sona', { events: [{ eventId: 'cse-cyber-hunt', added: stamp, team: 'Nova' }] }),
+    ];
+    const teams = teamsOf(people, 'cse-hackathon');
+    // Cancelled students and other events' teams are left out; members by ID.
+    expect(teams.map((team) => [team.name, team.members.map((item) => item.id)])).toEqual([['Nova', ['CSE-2001', 'CSE-2002']]]);
+    expect(teamKey('  NOVA  ')).toBe('nova');
+    expect(tidyTeamName('  Byte   Me ')).toBe('Byte Me');
+  });
+
+  it('names a winning team, or "Individual" for one student on their own', () => {
+    expect(placeTeam({ ids: ['CSE-2001', 'CSE-2002'], team: 'Nova' })).toBe('Nova');
+    expect(placeTeam({ ids: ['CSE-2003'] })).toBe('Individual');
+    expect(placeTeam({ ids: ['CSE-2001', 'CSE-2002'] })).toBe('');
+  });
+
+  it('shows a student’s teams by event, or the name they typed when registering, marked so', () => {
+    const name = (eventId: string) => (eventId === 'cse-hackathon' ? 'Hackathon' : 'Cyber Hunt');
+    expect(teamsText(person('CSE-2001', 'Sona', { team: 'Old', events: [...inHack('Nova'), { eventId: 'cse-cyber-hunt', added: stamp, team: 'Bits' }] }), name)).toBe('Nova (Hackathon); Bits (Cyber Hunt)');
+    expect(teamsText(person('CSE-2002', 'Sona', { team: 'Old', events: inHack() }), name)).toBe('Old (typed when registering)');
+    expect(teamsText(person('CSE-2003', 'Sona', { events: inHack() }), name)).toBe('');
   });
 });

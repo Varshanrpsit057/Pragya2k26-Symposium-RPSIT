@@ -252,7 +252,7 @@ function StudentDetail({ id, onBack }: { id: string; onBack: () => void }) {
           <Fact label="College code">{registration.collegeCode ?? ''}</Fact>
           <Fact label="Department / course">{registration.branch}</Fact>
           <Fact label="Year">{registration.year}</Fact>
-          {registration.team && <Fact label="Team">{registration.team}</Fact>}
+          {registration.team && <Fact label="Team typed when registering">{registration.team}</Fact>}
           <Fact label="Registered">
             {howRegistered(registration)} · {when(registration.created.at)}
             {registration.created.by !== 'student' ? ` by ${registration.created.by}` : ''}

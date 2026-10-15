@@ -9,7 +9,7 @@
  *   college ranking (medal table) filtered by participations and prizes
  */
 import { useMemo, useState } from 'react';
-import { DESKS, awaitingCheck, collegeSummary, deskMoney, deptShort, eventLabel, eventOf, feePaid, isActive, medalOrder, participantProblems, readParticipant, rupees, showId, totalsOf, type CollegeRow, type FestEvent, type FestParticipant, type FestRegistration } from '../../lib/fest';
+import { DESKS, awaitingCheck, collegeSummary, deskMoney, deptShort, eventLabel, eventOf, feePaid, isActive, medalOrder, participantProblems, readParticipant, rupees, showId, teamsText, totalsOf, type CollegeRow, type FestEvent, type FestParticipant, type FestRegistration } from '../../lib/fest';
 import { hasPermission } from '../../lib/staff';
 import { Badge, messageOf, when } from '../ui';
 import { filterNote, saveTable, today } from './excel';
@@ -28,7 +28,7 @@ const FIELD_LABEL: Record<keyof FestParticipant, string> = {
   collegeCode: 'College code',
   branch: 'Department / course',
   year: 'Year',
-  team: 'Team',
+  team: 'Team (typed when registering)',
 };
 
 function useFiltered() {
@@ -287,7 +287,7 @@ export function FestRegistrations() {
                   </th>
                   <td>
                     {item.name}
-                    {item.team && <span className="adm-muted"> · {item.team}</span>}
+                    {teamsText(item, name) && <span className="adm-muted"> · {teamsText(item, name)}</span>}
                   </td>
                   <td>{item.phone}</td>
                   <td>
@@ -412,7 +412,7 @@ function RegistrationDetail({ id, onClose }: { id: string; onClose: () => void }
           <dd>{[registration.college, registration.collegeCode && `code ${registration.collegeCode}`, registration.branch, registration.year].filter(Boolean).join(' · ')}</dd>
           {registration.team && (
             <>
-              <dt>Team</dt>
+              <dt>Team typed when registering</dt>
               <dd>{registration.team}</dd>
             </>
           )}
@@ -460,6 +460,12 @@ function RegistrationDetail({ id, onClose }: { id: string; onClose: () => void }
                 <strong>{event ? eventLabel(event) : entry.eventId}</strong>{' '}
                 <Badge tone={feePaid(entry) ? 'good' : 'warn'}>{feePaid(entry) ? `Fee ${entry.fee!.method} · ${entry.fee!.by}` : entry.fee?.voided ? `Fee cancelled: ${entry.fee.voided.reason}` : 'Fee due'}</Badge>{' '}
                 <Badge tone={entry.present ? 'good' : 'plain'}>{entry.present ? 'Present' : 'Not present'}</Badge>
+                {entry.team && (
+                  <>
+                    {' '}
+                    <Badge tone="plain">Team {entry.team}</Badge>
+                  </>
+                )}
                 {can('fest.correct') && feePaid(entry) && !entry.present && (
                   <button
                     className="adm-button adm-button--small adm-button--danger-outline"

@@ -292,7 +292,8 @@ export function RegistrationCard({
         {showDept && <>{deptShort(registration.dept)} · </>}
         {registration.phone} · {registration.college}
         {registration.collegeCode && <> ({registration.collegeCode})</>}
-        {registration.team && <> · Team {registration.team}</>}
+        {/* In an event's list: their team there (the event's coordinator makes the teams). */}
+        {eventFocus ? entry?.team && <> · Team {entry.team}</> : registration.team && <> · Team {registration.team}</>}
       </p>
       {eventFocus ? (
         <p className="fest-card__events">
