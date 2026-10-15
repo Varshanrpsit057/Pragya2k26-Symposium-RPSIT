@@ -4,7 +4,7 @@
  * check them, added to the event, the fee, attendance, its teams (team events), and the winners,
  * submitted to the overall coordinator. Its participants and the department download as Excel.
  */
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { formatIst } from '../../lib/countdown';
 import {
   canJoin,
@@ -82,6 +82,12 @@ function EventPanel({ event }: { event: FestEvent }) {
   const [open, setOpen] = useState<string | null>(null);
   const [paying, setPaying] = useState<string | null>(null);
   const [payment, setPayment] = useState<PaymentDraft>(NO_PAYMENT);
+  // The student just marked present: the card closes and the search waits for the next ID.
+  const [finished, setFinished] = useState('');
+  const search = useRef<HTMLInputElement>(null);
+  useEffect(() => {
+    if (finished) search.current?.focus();
+  }, [finished]);
   const result = results.get(event.id) ?? null;
   // Website controls can switch event entry off (the web assist team can still fix things).
   const entryOff = !switches.eventEntry && session.role !== 'ADMIN';
@@ -107,15 +113,32 @@ function EventPanel({ event }: { event: FestEvent }) {
     setPaying(null);
     setPayment(NO_PAYMENT);
   };
-  const markPresent = (registration: FestRegistration, present: boolean) =>
+  const markPresent = (registration: FestRegistration, present: boolean) => {
     change(registration.id, path(registration.id), { action: present ? 'present' : 'absent' }, `${present ? 'Present' : 'Not present'} · ${registration.id}`, (current) =>
       patchEntry(current, { present: present ? stampNow(session.username) : undefined }),
     );
-  const addToEvent = (registration: FestRegistration) =>
+    // Marked present: this student is done; the next one is found by their ID.
+    if (present) {
+      setOpen(null);
+      setQuery('');
+      setFinished(`${showId(registration.id)} ${registration.name} is marked present at ${event.name}.`);
+    }
+  };
+  const addToEvent = (registration: FestRegistration) => {
     change(registration.id, path(registration.id), { action: 'add' }, `Add ${registration.id} to ${event.name}`, (current) => ({
       ...current,
       events: [...current.events, { eventId: event.id, added: stampNow(session.username) }],
     }));
+    // Added: the fee comes next (when there is one).
+    if (event.fee > 0) {
+      setPayment(NO_PAYMENT);
+      setPaying(registration.id);
+    }
+  };
+  const openCard = (id: string | null) => {
+    setFinished('');
+    setOpen(id);
+  };
   const removeFromEvent = (registration: FestRegistration) =>
     change(registration.id, path(registration.id), { action: 'remove' }, `Remove ${registration.id} from ${event.name}`, (current) => ({
       ...current,
@@ -165,9 +188,17 @@ function EventPanel({ event }: { event: FestEvent }) {
       </section>
 
       <section className="adm-card adm-pad">
+        {finished && (
+          <p className="fest-match is-good fest-finished" role="status">
+            <span>✓ {finished} Next student: type their ID.</span>
+            <button className="adm-button adm-button--small" type="button" onClick={() => setFinished('')}>
+              OK
+            </button>
+          </p>
+        )}
         <label className="adm-field fest-find">
           <span>Find a student</span>
-          <input type="search" value={query} placeholder={`Registration ID (${deptShort(event.dept)}-2001), name, phone or college`} onChange={(change_) => setQuery(change_.target.value)} />
+          <input ref={search} type="search" value={query} placeholder={`Registration ID (${deptShort(event.dept)}-2001), name, phone or college`} onChange={(change_) => setQuery(change_.target.value)} />
         </label>
         <p className="adm-muted">Open the student’s ID, check them, add them to the event, take the fee and mark them present. Only {deptShort(event.dept)} students take part.</p>
         <div className="fest-chips" role="group" aria-label="Show">
@@ -194,7 +225,7 @@ function EventPanel({ event }: { event: FestEvent }) {
             return (
               <RegistrationCard key={registration.id} registration={registration} eventFocus={event} compact={open !== registration.id}>
                 {open !== registration.id ? (
-                  <button className="adm-button adm-button--primary" type="button" aria-label={`Open ${showId(registration.id)}`} onClick={() => setOpen(registration.id)}>
+                  <button className="adm-button adm-button--primary" type="button" aria-label={`Open ${showId(registration.id)}`} onClick={() => openCard(registration.id)}>
                     Open
                   </button>
                 ) : (
@@ -269,7 +300,7 @@ function EventPanel({ event }: { event: FestEvent }) {
                         Remove from {event.name}
                       </button>
                     )}
-                    <button className="adm-button adm-button--small" type="button" onClick={() => setOpen(null)}>
+                    <button className="adm-button adm-button--small" type="button" onClick={() => openCard(null)}>
                       Close
                     </button>
                   </div>

@@ -192,6 +192,10 @@ export interface StaffAccount {
   /** The department (department roles) and the desk (desk accounts). */
   department?: string;
   deskNumber?: number;
+  /** How to reach the person given this login (Accounts): their own department, year and mobile number. */
+  studyDept?: string;
+  year?: string;
+  phone?: string;
   /** scrypt, as made by hashPassword; never leaves the server. */
   passwordHash: string;
   active: boolean;

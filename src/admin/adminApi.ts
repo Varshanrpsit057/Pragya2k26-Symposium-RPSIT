@@ -331,6 +331,10 @@ export interface StaffChange {
   /** The department (department roles) and the desk (desk accounts). */
   department?: string | null;
   deskNumber?: number | null;
+  /** How to reach them: their own department, year and mobile number. */
+  studyDept?: string;
+  year?: string;
+  phone?: string;
   active?: boolean;
   password?: string;
 }

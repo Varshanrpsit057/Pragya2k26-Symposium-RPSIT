@@ -43,3 +43,18 @@ customHeaders:
         value: 'no-referrer'
       - key: 'Content-Security-Policy'
         value: "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data: blob: https://*.amazonaws.com; connect-src 'self' https://*.amazonaws.com; font-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'; object-src 'none'"
+  # The students' page shows a student their own details (name, college, payment): the same rules
+  # as the dashboard. Its one small inline <style> (the dark background before the CSS arrives)
+  # is the only inline code, so styles alone also allow 'unsafe-inline'.
+  - pattern: '/register/**'
+    headers:
+      - key: 'Cache-Control'
+        value: 'no-store'
+      - key: 'X-Robots-Tag'
+        value: 'noindex, nofollow, noarchive'
+      - key: 'X-Frame-Options'
+        value: 'DENY'
+      - key: 'Referrer-Policy'
+        value: 'no-referrer'
+      - key: 'Content-Security-Policy'
+        value: "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https://*.amazonaws.com; connect-src 'self' https://*.amazonaws.com; font-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'; object-src 'none'"

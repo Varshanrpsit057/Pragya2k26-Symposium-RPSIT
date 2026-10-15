@@ -4,7 +4,7 @@
  * never stored here. Passwords are kept only as scrypt hashes, made on the server.
  */
 import { eventCatalog } from '../src/content/eventCatalog';
-import { DESKS, departmentOf, type FestCatalog } from '../src/lib/fest';
+import { DESKS, departmentOf, tidyPhone, type FestCatalog } from '../src/lib/fest';
 import { DEPARTMENT_REQUIRED, DEPARTMENT_ROLES, STAFF_USERNAME, isStaffRole, type StaffAccountView, type StaffRole } from '../src/lib/staff';
 import { hashPassword, passwordProblem, sha256 } from './auth';
 import { ApiError } from './errors';
@@ -12,6 +12,8 @@ import type { Actor } from './roles';
 import type { StaffAccount, Store } from './store';
 
 const DISPLAY_NAME = /^[\p{L}\p{N}][\p{L}\p{M}\p{N} .'()&-]{1,59}$/u;
+/** Their own department or class ('B.E. CSE', 'AI&DS') and year ('3rd Year'): short plain text. */
+const CONTACT_TEXT = /^[\p{L}\p{N}][\p{L}\p{M}\p{N} .,'()&/-]{0,39}$/u;
 
 const isObject = (value: unknown): value is Record<string, unknown> =>
   typeof value === 'object' && value !== null && !Array.isArray(value);
@@ -28,6 +30,9 @@ export function staffView(account: StaffAccount): StaffAccountView {
     eventIds: account.eventIds,
     department: account.department ?? null,
     deskNumber: account.deskNumber ?? null,
+    studyDept: account.studyDept ?? '',
+    year: account.year ?? '',
+    phone: account.phone ?? '',
     active: account.active,
     createdAt: account.createdAt,
     createdBy: account.createdBy,
@@ -87,6 +92,30 @@ function readDisplayName(value: unknown): string {
   return name;
 }
 
+/**
+ * How to reach the person given this login (all optional): their own department, year and mobile
+ * number. Only the fields sent; an empty one clears it.
+ */
+function readContact(body: Record<string, unknown>): Partial<Pick<StaffAccount, 'studyDept' | 'year' | 'phone'>> {
+  const contact: Partial<Pick<StaffAccount, 'studyDept' | 'year' | 'phone'>> = {};
+  for (const [field, label] of [
+    ['studyDept', 'their department'],
+    ['year', 'their year'],
+  ] as const) {
+    const raw = body[field];
+    if (raw === undefined) continue;
+    const value = typeof raw === 'string' ? raw.trim().replace(/\s+/g, ' ') : '';
+    if (value && !CONTACT_TEXT.test(value)) throw new ApiError(400, 'INVALID', `Check ${label}: up to 40 letters, digits and simple punctuation.`);
+    contact[field] = value;
+  }
+  if (body.phone !== undefined) {
+    const phone = typeof body.phone === 'string' ? tidyPhone(body.phone) : '';
+    if (phone && !/^[6-9]\d{9}$/.test(phone)) throw new ApiError(400, 'INVALID', 'Check their mobile number: 10 digits.');
+    contact.phone = phone;
+  }
+  return contact;
+}
+
 async function readPassword(value: unknown): Promise<string> {
   // Never with spaces at its ends: a password copied from a page often brings one along.
   const password = typeof value === 'string' ? value.slice(0, 200).trim() : '';
@@ -138,6 +167,7 @@ export class StaffAccounts {
       eventIds: readEvents(catalog, body.eventIds, role, department),
       ...(department && { department }),
       ...(deskNumber && { deskNumber }),
+      ...readContact(body),
       passwordHash: await readPassword(body.password),
       active: true,
       createdAt: now,
@@ -181,6 +211,7 @@ export class StaffAccounts {
           body.eventIds === undefined && sameScope ? current.eventIds : readEvents(catalog, body.eventIds ?? current.eventIds, role, department),
         department: department ?? undefined,
         deskNumber,
+        ...readContact(body),
         active,
         ...(passwordHash && { passwordHash, passwordChangedAt: now }),
         updatedAt: now,

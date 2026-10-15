@@ -15,6 +15,7 @@
 import { canJoin, catalogProblem, DEFAULT_CATALOG, DESKS, deskMoney, departmentOf, deptShort, entryOf, eventOf, feePaid, formatFestId, gateStudent, type HandOver, ID_RANGES, isActive, matchEvents, normaliseFestId, parseFestId, participantProblems, readParticipant, selfRegistrationProblems, showId, teamKey, teamOf, tidyTeamName, toStudentView, TXN, type FestCatalog, type FestDepartment, type FestEvent, type FestMethod, type FestParticipant, type FestPayment, type FestPlace, type FestRegistration, type FestResult, type FestSource, type FestStamp, type UtrChange } from '../src/lib/fest';
 import { timingSafeEqual } from 'node:crypto';
 import { formatIst, parseEventStart } from '../src/lib/countdown';
+import { START_FRESH_PHRASE } from '../src/lib/testTools';
 import { DEFAULT_PORTAL, portalProblem, QR_IMAGE, QR_MAX_CHARS, readPortal, tidyUtr, UTR, type BackupStatus, type PortalSettings, type SwitchName } from '../src/lib/portal';
 import { registrationPhase, type RegistrationSchedule } from '../src/lib/schedule';
 import { DEPARTMENT_ROLES, hasPermission, type Permission } from '../src/lib/staff';
@@ -1226,26 +1227,34 @@ export class FestService {
   // -----------------------------------------------------------------------------------------
   // Test data and backups
 
-  /** Deletes the registrations made in test sessions (after saving them to a backup file). */
   /**
    * Deletes the registrations made in test sessions, a batch per call (well inside the API's time
    * limit); the dashboard calls again while some remain. The last call also clears event results
    * if asked, starts IDs again where nothing real is left, and tells every phone to load afresh.
+   *
+   * Start fresh (`everything`, with START_FRESH_PHRASE typed): every registration goes, test or
+   * not, with every result and desk cash hand-over, and every department's IDs start again (e.g.
+   * after a rehearsal day, before the online registrations are typed in). Each batch is saved to
+   * a private backup file first, as for test data.
    */
   async clearTest(actor: Actor, body: unknown) {
     const catalog = await this.catalog();
-    const withResults = isObject(body) && body.results === true;
+    const all = isObject(body) && body.everything === true;
+    if (all && (isObject(body) ? body.phrase : '') !== START_FRESH_PHRASE) throw new ApiError(400, 'INVALID', `Type ${START_FRESH_PHRASE} to confirm.`);
+    const withResults = all || (isObject(body) && body.results === true);
     const limit = Math.min(Math.max(int(isObject(body) ? body.limit : undefined, CLEAR_BATCH), 1), 500);
     const codes = catalog.departments.map((dept) => dept.code);
     const everything = await Promise.all(codes.map(async (dept) => ({ dept, ...(await this.deps.store.changes(dept, '')) })));
-    const tests = everything.flatMap((part) => part.registrations.filter((registration) => registration.test));
+    const tests = everything.flatMap((part) => part.registrations.filter((registration) => all || registration.test));
     const batch = tests.slice(0, limit);
     const remaining = tests.length - batch.length;
     const last = remaining === 0;
     if (batch.length || (last && withResults)) {
       const stamp = this.iso().replace(/[:.]/g, '-');
       const saved = { at: this.iso(), by: actor.username, registrations: batch, results: last && withResults ? everything.flatMap((part) => part.results) : [] };
-      await this.deps.files.put(`backups/fest-test-data-${stamp}.json`, new TextEncoder().encode(JSON.stringify(saved)), 'application/json');
+      // The batch's first ID in the name: two batches saved in the same instant never share a file.
+      const first = batch[0]?.id ?? 'results';
+      await this.deps.files.put(`backups/${all ? 'fest-everything' : 'fest-test-data'}-${stamp}-${first}.json`, new TextEncoder().encode(JSON.stringify(saved)), 'application/json');
     }
     for (let index = 0; index < batch.length; index += PURGE_PARALLEL) {
       await Promise.all(batch.slice(index, index + PURGE_PARALLEL).map((registration) => this.deps.store.purgeRegistration(registration)));
@@ -1260,15 +1269,17 @@ export class FestService {
       }
       // Departments left with no registrations start their IDs again.
       for (const part of everything) {
-        if (part.registrations.some((registration) => !registration.test)) continue;
+        if (!all && part.registrations.some((registration) => !registration.test)) continue;
         const sources: FestSource[] = ['DESK', 'SELF', 'ONLINE', 'PAPER'];
         await Promise.all(sources.map((source) => this.deps.store.resetCounter(part.dept, source)));
         restarted.push(part.dept);
       }
+      // Start fresh: the desks' cash hand-overs go too (they counted money that is gone).
+      if (all) await Promise.all(codes.flatMap((dept) => Array.from({ length: DESKS }, (_, index) => this.deps.settings.putSetting(handOverKey(dept, index + 1), '[]'))));
       await this.deps.settings.putSetting(RESET_SETTING, this.iso());
       this.resetCached = null;
     }
-    this.deps.log('Fest test data deleted', { registrations: batch.length, remaining, results, restarted, by: actor.username });
+    this.deps.log(all ? 'Fest data deleted: start fresh' : 'Fest test data deleted', { registrations: batch.length, remaining, results, restarted, by: actor.username });
     return { success: true as const, cleared: batch.length, remaining, results, restarted };
   }
 

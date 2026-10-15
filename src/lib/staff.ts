@@ -226,6 +226,10 @@ export interface StaffAccountView {
   /** The department (department roles), and the desk (desk accounts). */
   department: string | null;
   deskNumber: number | null;
+  /** How to reach them (who was given this login): their own department, year and mobile number ('' when not given). */
+  studyDept: string;
+  year: string;
+  phone: string;
   active: boolean;
   createdAt: string;
   createdBy: string;

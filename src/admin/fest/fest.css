@@ -822,3 +822,12 @@
 .fest-handover .adm-h3 {
   margin: 0;
 }
+
+/* The student just finished at a desk or an event: the list is back, waiting for the next ID */
+.fest-finished {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
