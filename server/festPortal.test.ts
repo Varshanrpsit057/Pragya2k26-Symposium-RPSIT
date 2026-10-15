@@ -2,7 +2,7 @@
  * Website controls through the API: the web assist team switches each part of the portal off and
  * on, uploads the UPI QR code students pay with, and every switch is enforced by the server. The
  * students' payment step (QR code, a compulsory 12-digit UTR, each UTR accepted once) and "My
- * registration ID" by mobile number and email.
+ * registration ID" by mobile number.
  */
 import { describe, expect, it, vi } from 'vitest';
 import type { StudentView } from '../src/lib/fest';
@@ -94,7 +94,7 @@ describe('the payment step after registering', () => {
 });
 
 describe('“My registration ID” on another phone', () => {
-  it('finds the registration by the mobile number and email (shown, never changed)', async () => {
+  it('finds the registration by the mobile number alone (shown, never changed)', async () => {
     const h = setup({ at: TIMES.eventDay });
     const a = form();
     await selfRegister(h, a);
@@ -102,9 +102,11 @@ describe('“My registration ID” on another phone', () => {
     const again = await selfRegister(h, { ...form({ dept: 'MECH' }), participant: a.participant });
     expect(again.body).toMatchObject({ code: 'DUPLICATE_PHONE', error: expect.stringContaining('already registered under CSE') });
     expect(again.body.details?.existingId).toBeUndefined();
-    const find = (phone: string, email: string) => h.call('POST', '/api/fest/find', { phone, email }, { ip: '10.5.1.1' });
-    expect((await find(a.participant.phone, 'someone@example.com')).status).toBe(404);
-    const found = await find(`+91 ${a.participant.phone}`, a.participant.email.toUpperCase());
+    const find = (phone: string) => h.call('POST', '/api/fest/find', { phone }, { ip: '10.5.1.1' });
+    // A number nobody registered with: told to check it, or contact the admin.
+    expect((await find('9000000000')).body).toMatchObject({ code: 'NOT_FOUND', error: expect.stringContaining('contact the admin') });
+    // No email needed (online registrations may have none).
+    const found = await find(`+91 ${a.participant.phone}`);
     expect(found.status).toBe(200);
     expect(found.body.registrations.map((item: StudentView) => [item.id, item.canChange])).toEqual([['CSE-2001', false]]);
   });
@@ -113,14 +115,14 @@ describe('“My registration ID” on another phone', () => {
     const h = setup({ at: TIMES.eventDay });
     const a = form();
     await selfRegister(h, a);
-    for (let n = 0; n < 10; n += 1) await h.call('POST', '/api/fest/find', { phone: a.participant.phone, email: `guess${n}@example.com` }, { ip: `10.5.2.${n}` });
-    expect((await h.call('POST', '/api/fest/find', { phone: a.participant.phone, email: a.participant.email }, { ip: '10.5.3.1' })).status).toBe(429);
+    for (let n = 0; n < 10; n += 1) await h.call('POST', '/api/fest/find', { phone: a.participant.phone }, { ip: `10.5.2.${n}` });
+    expect((await h.call('POST', '/api/fest/find', { phone: a.participant.phone }, { ip: '10.5.3.1' })).status).toBe(429);
 
     const h2 = setup({ at: TIMES.eventDay });
     await selfRegister(h2, a);
     await h2.asOwner('POST', '/api/admin/portal', { portal: { studentLookup: false } });
     expect((await h2.call('GET', '/api/fest/info')).body.lookup).toBe(false);
-    expect((await h2.call('POST', '/api/fest/find', { phone: a.participant.phone, email: a.participant.email }, { ip: '10.5.3.2' })).body.code).toBe('SWITCHED_OFF');
+    expect((await h2.call('POST', '/api/fest/find', { phone: a.participant.phone }, { ip: '10.5.3.2' })).body.code).toBe('SWITCHED_OFF');
     // The phone that registered still sees its own ID.
     expect((await h2.call('POST', '/api/fest/me', { id: 'CSE-2001', key: a.submissionId }, { ip: '10.5.3.2' })).status).toBe(200);
   });

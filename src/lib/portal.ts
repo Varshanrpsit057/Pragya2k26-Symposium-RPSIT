@@ -15,7 +15,7 @@ export interface PortalSwitches {
   selfRegistration: boolean;
   /** Students pay the entry fee on the website by UPI (the QR code) and send the UTR. */
   onlinePayment: boolean;
-  /** Students find their registration ID with their mobile number and email. */
+  /** Students find their registration ID with their mobile number. */
   studentLookup: boolean;
   /** Registration desks register walk-in students. */
   deskRegistration: boolean;
@@ -71,7 +71,7 @@ export const SWITCH_INFO: Record<SwitchName, { label: string; on: string; off: s
   },
   studentLookup: {
     label: 'Students find their registration',
-    on: '“My registration ID” finds a registration by mobile number and email.',
+    on: '“My registration ID” finds a registration by its mobile number.',
     off: 'Only the phone that registered shows the ID; others ask at a desk.',
   },
   deskRegistration: {

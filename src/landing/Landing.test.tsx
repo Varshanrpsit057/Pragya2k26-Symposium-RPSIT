@@ -24,7 +24,7 @@ describe('the front door (pragya2k26.online)', () => {
     const steps = screen.getByRole('region', { name: 'Taking part?' });
     expect(steps).toHaveTextContent('Register on your phone');
     expect(steps).toHaveTextContent('by UPI right after registering (scan the QR code and send the UTR), or in cash at your department’s registration desk');
-    expect(steps).toHaveTextContent('your mobile number and email find it');
+    expect(steps).toHaveTextContent('on another phone, your mobile number finds it');
     expect(steps).toHaveTextContent('Register for events at each event’s venue, in your department');
   });
 

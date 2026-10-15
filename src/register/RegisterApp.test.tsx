@@ -206,7 +206,7 @@ describe('a student on their phone', () => {
 });
 
 describe('“My registration ID” on another phone', () => {
-  it('opens straight on finding it (/register/?my): the mobile number and email, never the ID', async () => {
+  it('opens straight on finding it (/register/?my): the mobile number alone, never the ID; a number not found asks the admin for help', async () => {
     const h = setup({ at: TIMES.eventDay });
     await h.call('POST', '/api/fest/register', { submissionId: 'self-test-key-0000000000001', dept: 'CSE', participant: { name: 'Divya R', phone: '9840011111', college: 'Sona', collegeCode: '2615', branch: 'B.E. CSE', year: '2nd Year', email: 'divya.r@example.com' }, events: [] }, { ip: '10.0.0.8' });
     backend(h);
@@ -216,12 +216,25 @@ describe('“My registration ID” on another phone', () => {
     expect(screen.queryByLabelText('Registration ID')).toBeNull();
     expect(screen.queryByLabelText('Name with initial')).toBeNull();
 
-    fireEvent.change(screen.getByLabelText('Mobile number'), { target: { value: '98400 11111' } });
-    fireEvent.change(screen.getByLabelText('Email'), { target: { value: 'someone.else@example.com' } });
+    expect(screen.queryByLabelText('Email')).toBeNull();
+    // A wrong number: told so, with a form to send the admin who they are and how to reach them.
+    fireEvent.change(screen.getByLabelText('Mobile number'), { target: { value: '98400 22222' } });
     fireEvent.click(screen.getByRole('button', { name: 'Find my registration' }));
-    expect(await screen.findByRole('alert')).toHaveTextContent('No registration has that mobile number with that email.');
+    expect(await screen.findByRole('alert')).toHaveTextContent('No registration has that mobile number.');
+    const ask = await screen.findByRole('form', { name: 'Contact the admin' });
+    expect(within(ask).getByLabelText(/^Mobile number to contact you/)).toHaveValue('9840022222');
+    fireEvent.change(within(ask).getByLabelText(/^Your name/), { target: { value: 'Divya R' } });
+    fireEvent.change(within(ask).getByLabelText(/^Department you registered under/), { target: { value: 'CSE' } });
+    fireEvent.change(within(ask).getByLabelText(/^Mobile number to contact you/), { target: { value: '98400 33333' } });
+    fireEvent.click(within(ask).getByRole('button', { name: 'Send to the admin' }));
+    expect(await screen.findByText(/will call or WhatsApp you on 9840033333/)).toBeInTheDocument();
+    const [request] = (await h.asOwner('GET', '/api/admin/help')).body.requests;
+    expect(request).toMatchObject({ category: 'FIND_ID', name: 'Divya R', contact: '9840033333' });
+    expect(request.message).toContain('mobile number 9840022222');
+    expect(request.message).toContain('Registered under CSE');
 
-    fireEvent.change(screen.getByLabelText('Email'), { target: { value: 'Divya.R@example.com' } });
+    // The right number finds it.
+    fireEvent.change(screen.getByLabelText('Mobile number'), { target: { value: '98400 11111' } });
     fireEvent.click(screen.getByRole('button', { name: 'Find my registration' }));
     await waitFor(() => expect(screen.getByText('Divya R')).toBeInTheDocument());
     expect(screen.getByText('CSE-2001')).toBeInTheDocument();

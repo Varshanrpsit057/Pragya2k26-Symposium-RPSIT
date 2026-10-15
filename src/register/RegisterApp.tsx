@@ -3,7 +3,7 @@
  * Portal, on their own phones and mobile data: choose the department, fill in the details and get
  * the registration ID at once. Then the ₹100 entry fee: by UPI here (the QR code, and the UTR sent
  * for the desk to match), or at the department's desk in cash. The ID stays on the phone, and
- * "My registration ID" finds it on another phone with the mobile number and email.
+ * "My registration ID" finds it on another phone with the mobile number (or the admin is asked to help).
  */
 import { useCallback, useEffect, useState, type FormEvent, type ReactNode } from 'react';
 import { COLLEGES, OTHER_COLLEGE } from '../content/colleges';
@@ -22,6 +22,7 @@ import {
   fetchInfo,
   fetchMe,
   fetchPayment,
+  askAdmin,
   findMine,
   registerSelf,
   sendMyPayment,
@@ -99,7 +100,7 @@ export function RegisterApp() {
   const [infoError, setInfoError] = useState('');
   const [saved, setSaved] = useState<Saved | null>(() => read<Saved>(SAVED));
   // "My registration ID" on the home page comes here as /register/?my: straight to the registration
-  // (this phone's own if it registered here, otherwise found by mobile number and email).
+  // (this phone's own if it registered here, otherwise found by mobile number).
   const [finding, setFinding] = useState(() => typeof window !== 'undefined' && new URLSearchParams(window.location.search).has('my'));
   // The department chosen in the home page's pop-up (/register/?dept=CSE), or here first.
   const [dept, setDept] = useState(() => (typeof window !== 'undefined' ? (new URLSearchParams(window.location.search).get('dept') ?? '').toUpperCase() : ''));
@@ -307,7 +308,7 @@ function RegisterForm({
         <Field label="Name with initial" error={fieldError('name')}>
           <input value={draft.name} autoComplete="name" autoCapitalize="words" onChange={(event) => set({ name: event.target.value })} />
         </Field>
-        <Field label="Mobile number" error={fieldError('phone')} hint="10 digits. With your email it finds your registration later.">
+        <Field label="Mobile number" error={fieldError('phone')} hint="10 digits. It finds your registration later, on any phone.">
           <input value={draft.phone} type="tel" inputMode="numeric" autoComplete="tel-national" maxLength={14} onChange={(event) => set({ phone: event.target.value })} />
         </Field>
         <Field label="Email" error={fieldError('email')}>
@@ -444,11 +445,11 @@ const eventFacts = (event: PublicEvent) =>
 
 // ------------------------------------------------------------------------------------------ finding it again
 
-/** "My registration ID" on a phone that did not register: the mobile number and email find it. */
+/** "My registration ID" on a phone that did not register: the mobile number finds it (or the admin is asked to help). */
 function FindMine({ info, onDone, onBack }: { info: PublicInfo | null; onDone: (saved: Saved) => void; onBack: () => void }) {
   const [phone, setPhone] = useState('');
-  const [email, setEmail] = useState('');
   const [error, setError] = useState('');
+  const [missing, setMissing] = useState(false);
   const [busy, setBusy] = useState(false);
   const [several, setSeveral] = useState<StudentView[]>([]);
   const tidyPhone = readParticipant({ phone }).phone;
@@ -468,8 +469,9 @@ function FindMine({ info, onDone, onBack }: { info: PublicInfo | null; onDone: (
     event.preventDefault();
     setBusy(true);
     setError('');
+    setMissing(false);
     try {
-      const found = await findMine(tidyPhone, email.trim());
+      const found = await findMine(tidyPhone);
       if (found.length === 1) onDone({ id: found[0]!.id, phone: tidyPhone });
       else {
         setSeveral(found);
@@ -477,6 +479,8 @@ function FindMine({ info, onDone, onBack }: { info: PublicInfo | null; onDone: (
       }
     } catch (failure) {
       setError(messageOf(failure));
+      // Not found: the number may be mistyped here, or was typed wrong when registering.
+      setMissing(failure instanceof StudentApiError && failure.code === 'NOT_FOUND');
       setBusy(false);
     }
   };
@@ -502,26 +506,117 @@ function FindMine({ info, onDone, onBack }: { info: PublicInfo | null; onDone: (
   }
 
   return (
-    <form className="reg-panel" onSubmit={(event) => void submit(event)}>
-      <h1 className="reg-h1">Find your registration ID</h1>
-      <p className="reg-lead">On the phone you registered with, this page shows your ID by itself. On another phone, type the mobile number and email you registered with.</p>
-      <Field label="Mobile number">
-        <input value={phone} type="tel" inputMode="numeric" autoComplete="tel-national" maxLength={14} onChange={(event) => setPhone(event.target.value)} />
+    <>
+      <form className="reg-panel" onSubmit={(event) => void submit(event)}>
+        <h1 className="reg-h1">Find your registration ID</h1>
+        <p className="reg-lead">On the phone you registered with, this page shows your ID by itself. On another phone, type the mobile number you registered with.</p>
+        <Field label="Mobile number">
+          <input value={phone} type="tel" inputMode="numeric" autoComplete="tel-national" maxLength={14} onChange={(event) => setPhone(event.target.value)} />
+        </Field>
+        {error && (
+          <p className="reg-error" role="alert">
+            {error}
+          </p>
+        )}
+        <button className="reg-button reg-button--big" type="submit" disabled={busy || tidyPhone.length !== 10}>
+          {busy ? 'Looking…' : 'Find my registration'}
+        </button>
+        {!missing && <p className="reg-muted">Still can’t find it? Any registration desk finds you by your mobile number.</p>}
+        <button className="reg-link" type="button" onClick={onBack}>
+          Not registered yet? Register
+        </button>
+      </form>
+      {missing && <AskAdmin info={info} triedPhone={tidyPhone} />}
+    </>
+  );
+}
+
+/**
+ * When the mobile number finds nothing: the student tells the web assist team who they are and
+ * how to reach them (it arrives in the dashboard's Help requests); they are called back.
+ */
+function AskAdmin({ info, triedPhone }: { info: PublicInfo | null; triedPhone: string }) {
+  const [name, setName] = useState('');
+  const [dept, setDept] = useState('');
+  const [contact, setContact] = useState(triedPhone);
+  const [note, setNote] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+  const [sent, setSent] = useState('');
+  const reach = readParticipant({ phone: contact }).phone;
+  const ready = name.trim().length >= 2 && reach.length === 10;
+
+  const send = async (event: FormEvent) => {
+    event.preventDefault();
+    if (!ready) return;
+    setBusy(true);
+    setError('');
+    try {
+      const department = info?.departments.find((item) => item.code === dept);
+      await askAdmin({
+        category: 'FIND_ID',
+        name: name.trim(),
+        contact: reach,
+        page: 'Student page: find my registration ID',
+        message: [
+          `Cannot find their registration ID with the mobile number ${triedPhone}.`,
+          department ? `Registered under ${deptShort(department.code)} (${department.name}).` : 'Department not given.',
+          `Call or WhatsApp them on ${reach}.`,
+          note.trim() && `Note: ${note.trim()}`,
+        ]
+          .filter(Boolean)
+          .join(' '),
+      });
+      setSent(reach);
+    } catch (failure) {
+      setError(messageOf(failure));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  if (sent) {
+    return (
+      <section className="reg-panel reg-ask" role="status">
+        <h2 className="reg-h2">Message sent to the admin</h2>
+        <p className="reg-lead">The web assist team will call or WhatsApp you on {sent} to find your registration. You can also show this page at any registration desk.</p>
+      </section>
+    );
+  }
+
+  return (
+    <form className="reg-panel reg-ask" aria-label="Contact the admin" onSubmit={(event) => void send(event)}>
+      <h2 className="reg-h2">Contact the admin</h2>
+      <p className="reg-lead">
+        No registration has the number {triedPhone}. Check it and try again. If you are sure you registered (the number may have been typed wrong then), send these details: the web
+        assist team will contact you.
+      </p>
+      <Field label="Your name">
+        <input value={name} maxLength={60} autoComplete="name" onChange={(event) => setName(event.target.value)} />
       </Field>
-      <Field label="Email">
-        <input value={email} type="email" inputMode="email" autoComplete="email" onChange={(event) => setEmail(event.target.value)} />
+      <Field label="Department you registered under">
+        <select value={dept} onChange={(event) => setDept(event.target.value)}>
+          <option value="">Choose (if you know it)</option>
+          {info?.departments.map((item) => (
+            <option key={item.code} value={item.code}>
+              {deptShort(item.code)} · {item.name}
+            </option>
+          ))}
+        </select>
+      </Field>
+      <Field label="Mobile number to contact you" hint="We call or WhatsApp you on this number.">
+        <input value={contact} type="tel" inputMode="numeric" autoComplete="tel-national" maxLength={14} onChange={(event) => setContact(event.target.value)} />
+      </Field>
+      <Field label="Anything else (optional)" hint="For example your email, or when and how you registered.">
+        <input value={note} maxLength={300} onChange={(event) => setNote(event.target.value)} />
       </Field>
       {error && (
         <p className="reg-error" role="alert">
           {error}
         </p>
       )}
-      <button className="reg-button reg-button--big" type="submit" disabled={busy || tidyPhone.length !== 10 || !email.includes('@')}>
-        {busy ? 'Looking…' : 'Find my registration'}
-      </button>
-      <p className="reg-muted">Still can’t find it? Any registration desk finds you by your mobile number.</p>
-      <button className="reg-link" type="button" onClick={onBack}>
-        Not registered yet? Register
+      <button className="reg-button reg-button--big" type="submit" disabled={busy || !ready}>
+        {busy ? 'Sending…' : 'Send to the admin'}
       </button>
     </form>
   );
@@ -651,7 +746,7 @@ function MyRegistration({ saved, info, onForget }: { saved: Saved; info: PublicI
           className="reg-link"
           type="button"
           onClick={() => {
-            if (window.confirm('Remove this registration from this phone? You can find it again with your mobile number and email.')) onForget();
+            if (window.confirm('Remove this registration from this phone? You can find it again with your mobile number.')) onForget();
           }}
         >
           Not you? Remove from this phone

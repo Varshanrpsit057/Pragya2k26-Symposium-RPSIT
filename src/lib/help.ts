@@ -10,6 +10,7 @@ export const HELP_CATEGORIES = {
   SIGN_IN: 'I cannot sign in',
   WRONG_DETAILS: "A student's details are wrong",
   PAYMENT: 'A payment problem',
+  FIND_ID: 'A student cannot find their registration ID',
   OTHER: 'Something else',
 } as const;
 
