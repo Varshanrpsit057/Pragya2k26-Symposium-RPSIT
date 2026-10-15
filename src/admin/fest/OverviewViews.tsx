@@ -338,10 +338,10 @@ function EntryStatus({ registration }: { registration: FestRegistration }) {
   const { entry } = registration;
   if (entry.status === 'PAID' && entry.payment) {
     const payment = entry.payment;
-    const how = payment.method === 'CASH' ? 'cash' : payment.method === 'UPI' ? `UPI · UTR ${payment.txn ?? ''}` : 'online';
+    const how = payment.method === 'CASH' ? 'cash' : payment.method === 'UPI' ? `UPI · UTR ${payment.txn ?? ''}` : `with the online form${payment.txn ? ` · UTR ${payment.txn}` : ''}`;
     return (
       <>
-        <Badge tone="good">Paid and verified</Badge> {rupees(payment.amount)} · {how} · {payment.by}
+        <Badge tone="good">{payment.method === 'ONLINE' ? 'Paid online' : 'Paid and verified'}</Badge> {rupees(payment.amount)} · {how} · {payment.by}
         {payment.desk ? ` (desk ${payment.desk})` : ''} · {when(payment.at)}
       </>
     );

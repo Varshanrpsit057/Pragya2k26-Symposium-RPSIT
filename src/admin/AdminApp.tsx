@@ -40,7 +40,7 @@ const TABS: { id: TabId; label: (session: SessionInfo) => string; show: (session
   { id: 'desk', label: (session) => (session.role === 'DESK' ? 'Registration desk' : 'Desk'), show: (session) => can(session, 'fest.register'), group: 'Event day' },
   { id: 'event', label: (session) => (session.role === 'COORDINATOR' ? 'My events' : 'Event windows'), show: (session) => can(session, 'fest.event'), group: 'Event day' },
   { id: 'gate', label: () => 'Gate pass check', show: (session) => can(session, 'fest.gate'), group: 'Event day' },
-  { id: 'import', label: () => 'Online import', show: (session) => can(session, 'fest.import'), group: 'Event day' },
+  { id: 'import', label: () => 'Online registrations', show: (session) => can(session, 'fest.import'), group: 'Event day' },
   { id: 'controls', label: () => 'Switches & payment', show: (session) => can(session, 'site.switches'), group: 'Website' },
   { id: 'window', label: () => 'Times & notice', show: (session) => can(session, 'registration.window') || can(session, 'site.notice'), group: 'Website' },
   { id: 'catalog', label: () => 'Departments & events', show: (session) => can(session, 'fest.catalog'), group: 'Website' },

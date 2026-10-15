@@ -205,37 +205,14 @@ export function Landing() {
             {EVENTS_SITE_URL && (
               <a className="landing-button landing-button--ghost" href={EVENTS_SITE_URL} {...NEW_TAB}>
                 Explore events
+                <span className="landing-button__out" aria-hidden="true">
+                  ↗
+                </span>
               </a>
             )}
           </div>
         </section>
 
-        {EVENTS_SITE_URL && (
-          <section className="landing-block landing-explore" aria-labelledby="landing-explore">
-            <h2 id="landing-explore">Explore the events</h2>
-            <p>
-              {eventCount} events across {departments.length} departments: what each one is, its rules, venue and time. They open on the events website.
-            </p>
-            <ul className="landing-depts">
-              {departments.map((dept) => (
-                <li key={dept.code}>
-                  <a href={EVENTS_SITE_URL} {...NEW_TAB}>
-                    <span className="landing-depts__code">{deptShort(dept.code)}</span>
-                    <span className="landing-depts__name">{dept.name}</span>
-                    <span className="landing-depts__count">{DEFAULT_CATALOG.events.filter((event) => event.dept === dept.code).length} events</span>
-                  </a>
-                </li>
-              ))}
-            </ul>
-            <a className="landing-button" href={EVENTS_SITE_URL} {...NEW_TAB}>
-              Explore all events
-              <span className="landing-button__out" aria-hidden="true">
-                ↗
-              </span>
-              <span className="sr-only"> (opens in a new tab)</span>
-            </a>
-          </section>
-        )}
 
         <section className="landing-block" aria-labelledby="landing-students">
           <h2 id="landing-students">Taking part?</h2>
@@ -253,15 +230,6 @@ export function Landing() {
             <li>Register for events at each event’s venue, in your department, on {festDay}.</li>
           </ol>
           <p>Lost your ID? Open My registration ID: on the phone you registered with it shows at once; on another phone, your mobile number and email find it.</p>
-          {EVENTS_SITE_URL && (
-            <p>
-              Every department’s events are on the{' '}
-              <a href={EVENTS_SITE_URL} {...NEW_TAB}>
-                events website
-              </a>
-              .
-            </p>
-          )}
         </section>
       </main>
 

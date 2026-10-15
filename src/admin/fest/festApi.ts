@@ -43,6 +43,8 @@ export interface ImportRow {
   year: string;
   team: string;
   events: string;
+  /** The entry fee's UPI transaction ID from the online form. */
+  utr: string;
   ref: string;
 }
 export interface ImportOutcome {
@@ -51,7 +53,7 @@ export interface ImportOutcome {
   id?: string;
   message?: string;
 }
-export const importFest = (token: string, body: { dept?: string; rows: ImportRow[]; dryRun: boolean; eventFeesPaid?: boolean }) =>
+export const importFest = (token: string, body: { dept?: string; rows: ImportRow[]; dryRun: boolean }) =>
   request<{ outcomes: ImportOutcome[] }>('/api/admin/fest/import', { method: 'POST', body, token }).then((data) => data.outcomes);
 /** "Who has this UTR?": everyone with it, in every department (the desks, when a UTR clashes). */
 export const lookupUtr = (token: string, txn: string) => request<{ txn: string; holders: UtrHolder[] }>('/api/admin/fest/utr', { method: 'POST', body: { txn }, token });

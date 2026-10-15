@@ -664,19 +664,23 @@ export function toCsv(rows: (string | number)[][]): string {
 const BOM = 0xfeff;
 
 /** The column each detail comes from, guessed from the header row. */
-export type ImportField = keyof FestParticipant | 'events' | 'ref';
+export type ImportField = keyof FestParticipant | 'events' | 'utr' | 'ref';
 export const IMPORT_FIELDS: { field: ImportField; label: string; required: boolean; hints: RegExp }[] = [
   { field: 'name', label: 'Name', required: true, hints: /^(full ?)?name|participant|student/i },
   { field: 'phone', label: 'Phone', required: true, hints: /phone|mobile|contact|whats ?app/i },
-  { field: 'email', label: 'Email', required: false, hints: /e-?mail/i },
+  // Google Forms names the address it collects "Username" (or "Email address").
+  { field: 'email', label: 'Email', required: false, hints: /e-?mail|^user ?name$/i },
   // Before College: a "College code" column is the code, not the name.
   { field: 'collegeCode', label: 'College code', required: false, hints: /(college|institut\w*|inst)\.? ?code|^code$/i },
   { field: 'college', label: 'College', required: true, hints: /college|institut|university|school/i },
   { field: 'branch', label: 'Branch', required: false, hints: /branch|department|dept|course|stream/i },
   { field: 'year', label: 'Year', required: false, hints: /year|semester|sem\b/i },
-  { field: 'events', label: 'Events', required: true, hints: /event/i },
+  // Optional: students join events at each venue anyway (and pay its fee there).
+  { field: 'events', label: 'Events', required: false, hints: /event/i },
   { field: 'team', label: 'Team name', required: false, hints: /team/i },
-  { field: 'ref', label: 'Reference', required: false, hints: /^(id|ref|reference|submission|order|transaction|utr)/i },
+  // The ₹100 entry fee's UPI transaction ID, paid with the online form.
+  { field: 'utr', label: 'UTR (entry fee)', required: false, hints: /utr|transaction|txn/i },
+  { field: 'ref', label: 'Roll number / reference', required: false, hints: /register|roll|^(id|ref|reference|submission|order)\b/i },
 ];
 
 /** For each field, the column whose header matches best (-1 when none). */
