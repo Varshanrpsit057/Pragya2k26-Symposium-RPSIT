@@ -401,6 +401,34 @@ describe('deleting the test data', () => {
 });
 
 describe('a department admin', () => {
+  it('types in an online registration from the form: the next -5001 ID, the entry fee paid online, events added unpaid', async () => {
+    const h = setup({ at: TIMES.online });
+    const admin = await h.staff('DEPT_ADMIN', [], 'aids-admin', { department: 'AIDS' });
+    backend(h);
+    signIn(admin.token);
+    render(<AdminApp />);
+    fireEvent.click(within(await screen.findByRole('navigation', { name: 'Sections' })).getByRole('button', { name: 'Online registrations' }));
+    const form = await screen.findByRole('form', { name: 'Type in an online registration' });
+    // Nothing typed: told what is missing, nothing added.
+    fireEvent.click(within(form).getByRole('button', { name: 'Add and give the ID' }));
+    expect(await within(form).findByText('Enter a 10-digit mobile number.')).toBeInTheDocument();
+    fireEvent.change(within(form).getByLabelText(/^Name with initial/), { target: { value: 'Abi S' } });
+    fireEvent.change(within(form).getByLabelText(/^Mobile number/), { target: { value: '96000 00009' } });
+    fireEvent.click(within(form).getByRole('button', { name: /^College/ }));
+    fireEvent.change(await screen.findByRole('combobox', { name: 'Search colleges' }), { target: { value: 'sona' } });
+    fireEvent.click(within(screen.getByRole('listbox')).getByRole('option', { name: /^Sona College of Technology, Salem$/ }));
+    fireEvent.change(within(form).getByLabelText(/^UTR of the/), { target: { value: '6287 8563 2560' } });
+    fireEvent.click(within(form).getByRole('checkbox', { name: 'Cognix (Quiz)' }));
+    fireEvent.click(within(form).getByRole('button', { name: 'Add and give the ID' }));
+    expect(await within(form).findByText('AI&DS-5001')).toBeInTheDocument();
+    const [made] = await sync(h, admin.token);
+    expect(made).toMatchObject({ id: 'AIDS-5001', source: 'ONLINE', name: 'Abi S', college: 'Sona College of Technology, Salem', entry: { status: 'PAID', payment: { method: 'ONLINE', txn: '628785632560' } } });
+    expect(made.events).toEqual([expect.objectContaining({ eventId: 'aids-cognix' })]);
+    expect(made.events[0].fee).toBeUndefined();
+    // The form is empty for the next one.
+    expect(within(form).getByLabelText(/^Name with initial/)).toHaveValue('');
+  });
+
   it('uploads the online form’s CSV: checks it, then imports it with -5001 IDs', async () => {
     const h = setup({ at: TIMES.online });
     const admin = await h.staff('DEPT_ADMIN', [], 'cse-admin', { department: 'CSE' });
@@ -408,7 +436,7 @@ describe('a department admin', () => {
     backend(h);
     signIn(admin.token);
     render(<AdminApp />);
-    fireEvent.click(within(await screen.findByRole('navigation', { name: 'Sections' })).getByRole('button', { name: 'Online import' }));
+    fireEvent.click(within(await screen.findByRole('navigation', { name: 'Sections' })).getByRole('button', { name: 'Online registrations' }));
     const csv = 'Timestamp,Full Name,Mobile Number,Email,College Name,Department,Year,Events\n1,Kavin R,9840011111,k@example.com,Sona College,CSE,2nd Year,"Hackathon, Snap with AI"\n2,Asha K,9840022222,a@example.com,KSR,IT,3rd Year,Underwater basket weaving\n';
     fireEvent.change(await screen.findByLabelText('CSV file'), { target: { files: [new File([csv], 'cse.csv', { type: 'text/csv' })] } });
     expect(await screen.findByText(/cse.csv: 2 rows/)).toBeInTheDocument();

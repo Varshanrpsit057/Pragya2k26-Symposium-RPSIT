@@ -201,9 +201,10 @@ describe('online registrations', () => {
     const sync = await h.call('POST', '/api/admin/fest/sync', {}, { token: admin.token });
     const first: FestRegistration = sync.body.registrations.find((item: FestRegistration) => item.id === 'CSE-5001');
     expect(first).toMatchObject({ source: 'ONLINE', ref: 'NF-1', entry: { status: 'PAID', payment: { method: 'ONLINE', amount: 100 } } });
+    // Event fees are paid at each venue, online registrations too (an "event fees paid" flag is ignored).
     expect(first.events.map((entry) => [entry.eventId, entry.fee?.method])).toEqual([
-      ['cse-hackathon', 'ONLINE'],
-      ['cse-snap-with-ai', 'ONLINE'],
+      ['cse-hackathon', undefined],
+      ['cse-snap-with-ai', undefined],
     ]);
     // The same file again: nothing new.
     const repeat = await h.call('POST', '/api/admin/fest/import', { rows: rows.slice(0, 2) }, { token: admin.token });

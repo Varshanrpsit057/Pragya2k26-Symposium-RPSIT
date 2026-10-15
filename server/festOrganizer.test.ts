@@ -4,7 +4,7 @@
  * student wins one place only).
  */
 import { describe, expect, it, vi } from 'vitest';
-import type { FestRegistration, GateStudent, HandOver } from '../src/lib/fest';
+import { guessColumns, IMPORT_FIELDS, parseCsv, type FestRegistration, type GateStudent, type HandOver } from '../src/lib/fest';
 import { TIMES, setup } from './testing';
 
 type Harness = ReturnType<typeof setup>;
@@ -145,5 +145,52 @@ describe('an event window', () => {
     await h.call('POST', path, { action: 'add' }, { token: coordinator.token });
     await h.call('POST', path, { action: 'fee', payment: { method: 'CASH', confirmed: true } }, { token: coordinator.token });
     expect((await h.call('POST', path, { action: 'remove' }, { token: coordinator.token })).body.code).toBe('FEE_PAID');
+  });
+});
+
+describe('online registrations from the Google form', () => {
+  it('reads the form’s columns (no college code), keeps the UTR with the paid entry fee, and leaves every event fee to the venue', async () => {
+    const csv = [
+      '"Timestamp","Username","Name with initial","Register Number / Roll Number","Department","Year of study","College Name","Phone number","TECHNICAL EVENTS (₹50 each - Pay On-Spot)","Paper Presentation Topic / Drive Link (Optional)","Payment Screenshot","Transaction ID / UTR Number","Declaration"',
+      '"2026/10/14 1:29:02 pm GMT+5:30","test.one@example.com","TEST.A.B","611111111111","Artificial Intelligence and Data Science (AI & DS)","III Year","Test College of Engineering","9600000001","COGNIX (Quiz) - ₹50, PRO-PITCH (Prompt to App) - ₹50","","https://example.com/shot","611111111112","I confirm"',
+      '"2026/10/14 1:30:02 pm GMT+5:30","test.two@example.com","Test C","611111111113","AI & DS","II Year","Test College of Engineering","9600000002","","","","",""',
+    ].join('\n');
+    const table = parseCsv(csv);
+    const columns = guessColumns(table[0]);
+    const columnOf = (field: string) => table[0][(columns as Record<string, number>)[field]] ?? '';
+    expect(Object.fromEntries(IMPORT_FIELDS.map((item) => [item.field, columnOf(item.field)]))).toMatchObject({
+      name: 'Name with initial',
+      phone: 'Phone number',
+      email: 'Username',
+      college: 'College Name',
+      branch: 'Department',
+      year: 'Year of study',
+      events: 'TECHNICAL EVENTS (₹50 each - Pay On-Spot)',
+      utr: 'Transaction ID / UTR Number',
+      ref: 'Register Number / Roll Number',
+      collegeCode: '',
+    });
+    const rows = table.slice(1).map((cells, index) => {
+      const cell = (field: string) => ((columns as Record<string, number>)[field] >= 0 ? cells[(columns as Record<string, number>)[field]] : '');
+      return { row: index + 2, name: cell('name'), phone: cell('phone'), email: cell('email'), college: cell('college'), collegeCode: '', branch: cell('branch'), year: cell('year'), team: '', events: cell('events'), utr: cell('utr'), ref: cell('ref') };
+    });
+
+    const h = setup({ at: TIMES.online });
+    const admin = await h.staff('DEPT_ADMIN', [], 'aids-admin', { department: 'AIDS' });
+    // An "event fees paid" flag from an older page is ignored: event fees are paid at each venue.
+    const imported = await h.call('POST', '/api/admin/fest/import', { rows, dryRun: false, eventFeesPaid: true }, { token: admin.token });
+    expect(imported.body.outcomes.map((item: { status: string; id?: string }) => [item.status, item.id])).toEqual([
+      ['created', 'AIDS-5001'],
+      ['created', 'AIDS-5002'],
+    ]);
+    const list = (await h.call('POST', '/api/admin/fest/sync', {}, { token: admin.token })).body.registrations as FestRegistration[];
+    const first = list.find((item) => item.id === 'AIDS-5001')!;
+    expect(first).toMatchObject({ source: 'ONLINE', email: 'test.one@example.com', collegeCode: '', ref: '611111111111', entry: { status: 'PAID', payment: { method: 'ONLINE', amount: 100, txn: '611111111112' } } });
+    expect(first.events.map((entry) => [entry.eventId, entry.fee])).toEqual([
+      ['aids-cognix', undefined],
+      ['aids-pro-pitch', undefined],
+    ]);
+    // No events chosen is fine: they join at the venue.
+    expect(list.find((item) => item.id === 'AIDS-5002')!.events).toEqual([]);
   });
 });

@@ -1124,12 +1124,12 @@ export class FestService {
     const rows = Array.isArray(body.rows) ? body.rows : [];
     if (rows.length > MAX_IMPORT_ROWS) throw new ApiError(400, 'INVALID', `Send at most ${MAX_IMPORT_ROWS} rows at a time.`);
     const dryRun = body.dryRun === true;
-    const feesPaid = body.eventFeesPaid === true;
+    // Event fees are always paid at each venue (online registrations too): an online fee is never recorded here.
     const catalog = await this.catalog();
     const stamp = this.stamp(actor);
     type Outcome = { row: number; status: 'ok' | 'created' | 'duplicate' | 'error'; id?: string; message?: string };
     const outcomes: Outcome[] = [];
-    const ready: { row: number; participant: FestParticipant; eventIds: string[]; ref: string }[] = [];
+    const ready: { row: number; participant: FestParticipant; eventIds: string[]; ref: string; txn: string }[] = [];
     const phones = new Map<string, number>();
     for (const [index, raw] of rows.entries()) {
       const row = int(isObject(raw) ? raw.row : index, index);
@@ -1144,8 +1144,10 @@ export class FestService {
         outcomes.push({ row, status: 'error', message: `Not ${dept} events: ${unknown.join(', ')}.` });
         continue;
       }
-      if (!ids.length) {
-        outcomes.push({ row, status: 'error', message: 'No events.' });
+      // The entry fee's UPI transaction ID, if the form asked for it: kept with the payment.
+      const txn = tidyUtr(text(isObject(raw) ? raw.utr : '', 60)).toUpperCase();
+      if (txn && !/^[A-Z0-9]{6,35}$/.test(txn)) {
+        outcomes.push({ row, status: 'error', message: 'Check the UTR (the UPI transaction ID: 12 digits).' });
         continue;
       }
       if (phones.has(participant.phone)) {
@@ -1158,7 +1160,7 @@ export class FestService {
         outcomes.push({ row, status: 'duplicate', id: existing.id, message: existing.dept === dept ? `Already registered as ${existing.id}.` : `Already registered under ${deptShort(existing.dept)} as ${existing.id} (one department per student).` });
         continue;
       }
-      ready.push({ row, participant, eventIds: ids, ref: text(isObject(raw) ? raw.ref : '', 80) });
+      ready.push({ row, participant, eventIds: ids, ref: text(isObject(raw) ? raw.ref : '', 80), txn });
     }
     if (dryRun) {
       outcomes.push(...ready.map(({ row }) => ({ row, status: 'ok' as const })));
@@ -1170,14 +1172,15 @@ export class FestService {
       const mark = await this.deps.testMark();
       for (const [index, item] of ready.entries()) {
         const id = formatFestId(dept, first + index);
-        const online = (amount: number): FestPayment => ({ method: 'ONLINE' as FestMethod, amount, ...stamp });
+        // The ₹100 entry fee was paid with the online form; each event's fee is taken at its venue.
+        const payment: FestPayment = { method: 'ONLINE' as FestMethod, amount: catalog.entryFee, ...stamp, ...(item.txn && { txn: item.txn }) };
         const registration: FestRegistration = {
           id,
           dept,
           source: 'ONLINE',
           ...item.participant,
-          entry: { status: 'PAID', payment: online(catalog.entryFee) },
-          events: item.eventIds.map((eventId) => ({ eventId, added: stamp, ...(feesPaid && { fee: online(eventOf(catalog, eventId)?.fee ?? 0) }) })),
+          entry: { status: 'PAID', payment },
+          events: item.eventIds.map((eventId) => ({ eventId, added: stamp })),
           created: stamp,
           ...(item.ref && { ref: item.ref }),
           ...(mark.test ? { test: true } : {}),

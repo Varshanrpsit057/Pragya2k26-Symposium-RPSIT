@@ -58,11 +58,11 @@ describe('dashboard of the student coordinators', () => {
     [
       'ADMIN',
       {},
-      ['Home', 'Overview', 'Students', 'Results', 'Desk', 'Event windows', 'Gate pass check', 'Online import', 'Switches & payment', 'Times & notice', 'Departments & events', 'Accounts', 'Help requests', 'Health & backups', 'Testing'],
+      ['Home', 'Overview', 'Students', 'Results', 'Desk', 'Event windows', 'Gate pass check', 'Online registrations', 'Switches & payment', 'Times & notice', 'Departments & events', 'Accounts', 'Help requests', 'Health & backups', 'Testing'],
     ],
     ['OVERALL', {}, ['Overview', 'Students', 'Results']],
     ['HOD', { department: 'CSE' }, ['Overview', 'Students', 'Results']],
-    ['DEPT_ADMIN', { department: 'CSE' }, ['Overview', 'Students', 'Results', 'Desk', 'Event windows', 'Online import']],
+    ['DEPT_ADMIN', { department: 'CSE' }, ['Overview', 'Students', 'Results', 'Desk', 'Event windows', 'Online registrations']],
     // One section: no tabs at all.
     ['DESK', { department: 'CSE', deskNumber: 2 }, []],
     ['COORDINATOR', { department: 'CSE', eventIds: ['cse-hackathon'] }, []],
