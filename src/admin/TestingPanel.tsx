@@ -11,9 +11,9 @@
 import { useCallback, useState } from 'react';
 import { formatIst, parseEventStart } from '../lib/countdown';
 import type { SessionInfo } from '../lib/staff';
-import { CLEAR_PHRASE, type ClearResult, type TimelineMode } from '../lib/testTools';
+import { CLEAR_PHRASE, START_FRESH_PHRASE, type ClearResult, type TimelineMode } from '../lib/testTools';
 import { SignedOut, clearTestData, currentAdmin, markTest, setTimeline, startTestSession, stopTestSession, testingState, type TimelineRequest } from './adminApi';
-import { clearFestTestData, seedFestTestData } from './fest/festApi';
+import { clearFestTestData, seedFestTestData, startFreshFest } from './fest/festApi';
 import { Badge, ErrorNote, LiveStatus, useLiveData, when } from './ui';
 
 interface PanelProps {
@@ -62,6 +62,31 @@ export function TestingPanel({ token, onSignedOut, onSession }: PanelProps) {
   const [cleared, setCleared] = useState<ClearResult[] | null>(null);
   const [festCleared, setFestCleared] = useState<{ cleared: number; results: number; restarted: string[] } | null>(null);
   const [seeded, setSeeded] = useState<{ added: number; total: number; cap: number } | null>(null);
+  const [freshPhrase, setFreshPhrase] = useState('');
+  const [freshFinish, setFreshFinish] = useState(true);
+  const [fresh, setFresh] = useState<{ cleared: number; results: number; restarted: string[]; left: number } | null>(null);
+
+  // Start fresh: every registration (test or not), result and cash hand-over, a batch per call until none are left.
+  const startFresh = () =>
+    run(
+      'fresh',
+      async () => {
+        let done = { cleared: 0, results: 0, restarted: [] as string[], left: 0 };
+        for (let round = 0; round < 60; round += 1) {
+          const result = await startFreshFest(token, freshPhrase.trim());
+          done = { cleared: done.cleared + result.cleared, results: done.results + (result.results ?? 0), restarted: result.restarted?.length ? result.restarted : done.restarted, left: result.remaining ?? 0 };
+          setFresh(done);
+          if (!result.remaining || !result.cleared) break;
+        }
+        if (done.left) throw new Error(`${done.left} registrations are not deleted yet: press Start fresh again.`);
+        if (freshFinish) {
+          await stopTestSession(token);
+          await setTimeline(token, { mode: 'standard' });
+        }
+        setFreshPhrase('');
+      },
+      freshFinish ? 'Everything is deleted: the website starts fresh, on the real schedule.' : 'Everything is deleted: the website starts fresh.',
+    );
 
   const run = async (what: string, task: () => Promise<unknown>, done: string) => {
     setBusy(what);
@@ -423,6 +448,45 @@ export function TestingPanel({ token, onSignedOut, onSession }: PanelProps) {
             Fest: deleted {festCleared.cleared} test registration{festCleared.cleared === 1 ? '' : 's'}
             {festCleared.results > 0 && ` and ${festCleared.results} event results`}
             {(festCleared.restarted?.length ?? 0) > 0 && `; IDs start again at -0001 in ${festCleared.restarted.join(', ')}`}.
+          </p>
+        )}
+      </section>
+
+      <section className="adm-card adm-pad adm-danger-zone" aria-label="Start fresh">
+        <h3 className="adm-h3">Start fresh: delete every registration</h3>
+        <p className="adm-muted">
+          For the end of a rehearsal day (e.g. the internal symposium), before the real one: deletes <strong>every</strong> student registration in every department, test or not, with
+          their entry and event fees, attendance, teams, every event’s winners and results, and the desks’ cash hand-overs. Every department’s IDs start again (desk -0001, phone -2001,
+          online -5001). Each batch is saved to a private backup file first. Staff accounts, departments and events, switches, times and the payment details stay as they are. The Google
+          Sheet empties at its next copy (within 10 minutes).
+        </p>
+        <div className="adm-form">
+          <label className="adm-check">
+            <input type="checkbox" checked={freshFinish} onChange={(event) => setFreshFinish(event.target.checked)} />
+            <span>Then end the test session and go back to the real schedule</span>
+          </label>
+          <label className="adm-field">
+            <span>
+              Type <strong className="adm-mono">{START_FRESH_PHRASE}</strong> to confirm
+            </span>
+            <input value={freshPhrase} autoComplete="off" onChange={(event) => setFreshPhrase(event.target.value)} />
+          </label>
+        </div>
+        <button
+          className="adm-button adm-button--danger adm-button--big"
+          type="button"
+          disabled={busy !== '' || freshPhrase.trim() !== START_FRESH_PHRASE}
+          onClick={() => {
+            if (window.confirm('Delete EVERY registration, result and cash hand-over in every department?\n\nThis is for after a rehearsal, never on the event day.')) void startFresh();
+          }}
+        >
+          {busy === 'fresh' ? `Deleting… ${fresh ? `${fresh.cleared} so far` : ''}` : 'Start fresh'}
+        </button>
+        {fresh && busy !== 'fresh' && (
+          <p className="adm-note" role="status">
+            Deleted {fresh.cleared} registration{fresh.cleared === 1 ? '' : 's'}
+            {fresh.results > 0 && ` and ${fresh.results} event results`}
+            {fresh.restarted.length > 0 && `; IDs start again in ${fresh.restarted.join(', ')}`}.
           </p>
         )}
       </section>

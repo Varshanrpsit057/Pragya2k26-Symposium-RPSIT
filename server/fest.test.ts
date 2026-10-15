@@ -337,6 +337,37 @@ describe('test data', () => {
   });
 });
 
+describe('start fresh (after a rehearsal day)', () => {
+  it('deletes every registration, test or not, with the cash hand-overs; every department’s IDs start again; only with the phrase', async () => {
+    const h = setup({ at: TIMES.eventDay });
+    const cse = await department(h, 'CSE');
+    const aids = await department(h, 'AIDS');
+    // Some made outside a test session, some inside it: all go.
+    await register(h, cse.desk.token, 'CSE-2001', ['cse-hackathon']);
+    await register(h, aids.desk.token, 'AIDS-2001', []);
+    await h.asOwner('POST', '/api/admin/testing/session', { action: 'start', label: 'Internal symposium' });
+    await register(h, cse.desk.token, 'CSE-2002', []);
+    expect((await h.call('POST', '/api/admin/fest/handover', { counted: 200 }, { token: cse.desk.token })).status).toBe(200);
+
+    // Not without the phrase, and never for anyone but the web assist team.
+    expect((await h.asOwner('POST', '/api/admin/fest/test-data/clear', { everything: true })).body.code).toBe('INVALID');
+    expect((await h.asOwner('POST', '/api/admin/fest/test-data/clear', { everything: true, phrase: 'delete' })).body.code).toBe('INVALID');
+    expect((await h.call('POST', '/api/admin/fest/test-data/clear', { everything: true, phrase: 'DELETE EVERYTHING' }, { token: cse.admin.token })).status).toBe(403);
+
+    const first = await h.asOwner('POST', '/api/admin/fest/test-data/clear', { everything: true, phrase: 'DELETE EVERYTHING', limit: 2 });
+    expect(first.body).toMatchObject({ cleared: 2, remaining: 1 });
+    const last = await h.asOwner('POST', '/api/admin/fest/test-data/clear', { everything: true, phrase: 'DELETE EVERYTHING', limit: 2 });
+    expect(last.body).toMatchObject({ cleared: 1, remaining: 0 });
+    expect(last.body.restarted).toEqual(expect.arrayContaining(['CSE', 'AIDS']));
+    expect((await h.asOwner('POST', '/api/admin/fest/sync', {})).body.registrations).toEqual([]);
+    expect((await h.asOwner('GET', '/api/admin/fest/handovers')).body.handOvers).toEqual([]);
+    expect([...h.files.objects.keys()].filter((key) => key.startsWith('backups/fest-everything-'))).toHaveLength(2);
+    // Fresh: every department starts at its first ID again.
+    await register(h, cse.desk.token, 'CSE-2001', []);
+    await register(h, aids.desk.token, 'AIDS-2001', []);
+  });
+});
+
 describe('the backup', () => {
   it('writes every department’s registrations and results to one private file', async () => {
     const h = setup({ at: TIMES.eventDay });

@@ -8,11 +8,13 @@
  */
 import { useCallback, useState, type FormEvent } from 'react';
 import { events as allEvents } from '../content/events';
-import { DESKS, deptShort, eventLabel, type FestCatalog } from '../lib/fest';
+import { formatIst } from '../lib/countdown';
+import { DESKS, YEARS, deptShort, eventLabel, type FestCatalog } from '../lib/fest';
 import { CREATABLE_ROLES, DELETE_ALL_STAFF, DEPARTMENT_ROLES, ROLE_INFO, type SessionInfo, type SignInFailure, type StaffAccountView, type StaffRole } from '../lib/staff';
 import { SignedOut, checkStaffPassword, createStaff, deleteAllStaff, deleteStaff, listStaff, signOutStaff, signedInNow, staffSignInFailures, updateStaff, type PasswordCheck, type StaffChange } from './adminApi';
 import { useFestCatalog } from './fest/FestData';
 import { DepartmentLogins, type MadeLogin } from './DepartmentLogins';
+import { PORTAL, saveTable, today } from './fest/excel';
 import { RolesPanel } from './RolesPanel';
 import { Badge, ErrorNote, LiveStatus, useLiveData, when } from './ui';
 
@@ -28,6 +30,65 @@ export function generatePassword(): string {
   const bytes = crypto.getRandomValues(new Uint8Array(14));
   const body = Array.from(bytes, (byte) => alphabet[byte % alphabet.length]).join('');
   return `${body.slice(0, 7)}-${body.slice(7)}-9`;
+}
+
+/** How to reach the person given a login: their own department, year and mobile number. */
+function ContactFields({ value, onChange }: { value: { studyDept: string; year: string; phone: string }; onChange: (next: { studyDept: string; year: string; phone: string }) => void }) {
+  return (
+    <>
+      <label className="adm-field">
+        <span>Their department (optional)</span>
+        <input value={value.studyDept} maxLength={40} placeholder="e.g. CSE, AI&DS" autoComplete="off" onChange={(event) => onChange({ ...value, studyDept: event.target.value })} />
+      </label>
+      <label className="adm-field">
+        <span>Their year (optional)</span>
+        <select value={value.year} onChange={(event) => onChange({ ...value, year: event.target.value })}>
+          <option value="">Choose</option>
+          {[...new Set([...YEARS, 'Staff', ...(value.year ? [value.year] : [])])].map((year) => (
+            <option key={year}>{year}</option>
+          ))}
+        </select>
+      </label>
+      <label className="adm-field">
+        <span>Their mobile number (optional)</span>
+        <input value={value.phone} type="tel" inputMode="tel" maxLength={14} placeholder="10 digits" autoComplete="off" onChange={(event) => onChange({ ...value, phone: event.target.value })} />
+      </label>
+    </>
+  );
+}
+
+/** Their department, year and mobile number in one line (the number can be tapped to call). */
+function ContactLine({ account }: { account: StaffAccountView }) {
+  const text = [account.studyDept, account.year].filter(Boolean).join(' · ');
+  if (!text && !account.phone) return null;
+  return (
+    <div className="adm-muted">
+      {text}
+      {text && account.phone && ' · '}
+      {account.phone && <a href={`tel:${account.phone}`}>{account.phone}</a>}
+    </div>
+  );
+}
+
+/** Every account with how to reach its person, as an Excel file (no passwords: they are never stored). */
+function downloadContacts(accounts: StaffAccountView[], catalog: FestCatalog, by: string) {
+  const rows: (string | number)[][] = [['Username', 'Name', 'Role', 'Department (login)', 'Desk', 'Events', 'Their department', 'Their year', 'Mobile', 'Status', 'Last sign-in']];
+  for (const account of [...accounts].sort((a, b) => (a.department ?? '').localeCompare(b.department ?? '') || a.username.localeCompare(b.username))) {
+    rows.push([
+      account.username,
+      account.displayName,
+      ROLE_INFO[account.role]?.label ?? account.role,
+      account.department ? deptShort(account.department) : 'All',
+      account.deskNumber ?? '',
+      account.role === 'COORDINATOR' ? account.eventIds.map((id) => eventName(catalog, id)).join('; ') : '',
+      account.studyDept,
+      account.year,
+      account.phone,
+      account.active ? 'Active' : 'Deactivated',
+      account.lastSignInAt ? when(account.lastSignInAt) : 'Never',
+    ]);
+  }
+  saveTable(`techfest-staff-contacts-${today()}.xlsx`, 'Staff contacts', `${PORTAL} · staff accounts and how to reach them · downloaded by ${by} ${formatIst(Date.now())}`, rows);
 }
 
 const eventName = (catalog: FestCatalog, id: string) => catalog.events.find((event) => event.id === id)?.name ?? allEvents.find((event) => event.id === id)?.name ?? id;
@@ -154,7 +215,12 @@ export function StaffPanel({ token, session, onSignedOut }: PanelProps) {
         <section className="adm-card adm-pad">
           <div className="adm-toolbar">
             <h2 className="adm-h2">Staff accounts</h2>
-            <LiveStatus updatedAt={live.updatedAt} loading={live.loading} onRefresh={live.refresh} />
+            <span className="adm-inline">
+              <button className="adm-button adm-button--small" type="button" disabled={!live.data?.length} onClick={() => downloadContacts(live.data ?? [], catalog, session.displayName)}>
+                Download contacts (Excel)
+              </button>
+              <LiveStatus updatedAt={live.updatedAt} loading={live.loading} onRefresh={live.refresh} />
+            </span>
           </div>
           <p className="adm-muted">
             The owner account ({session.kind === 'owner' ? 'you' : 'ADMIN_USERNAME'}) is set in the Amplify secrets and is not listed here. Changes apply
@@ -189,7 +255,10 @@ export function StaffPanel({ token, session, onSignedOut }: PanelProps) {
                   ) : (
                     <tr key={account.username}>
                       <td className="adm-mono">{account.username}</td>
-                      <td>{account.displayName}</td>
+                      <td>
+                        {account.displayName}
+                        <ContactLine account={account} />
+                      </td>
                       <td>{ROLE_INFO[account.role]?.label ?? account.role}</td>
                       <td>
                         {account.department ?? (DEPARTMENT_ROLES.includes(account.role) ? '—' : 'All')}
@@ -268,7 +337,7 @@ function ScopeFields({ role, department, deskNumber, onChange }: { role: StaffRo
 }
 
 function NewAccount({ token, onCreated, onSignedOut }: { token: string; onCreated: (account: StaffAccountView) => void; onSignedOut: () => void }) {
-  const [form, setForm] = useState({ username: '', displayName: '', role: 'DESK' as StaffRole, eventIds: [] as string[], password: '', department: '', deskNumber: 1 });
+  const [form, setForm] = useState({ username: '', displayName: '', role: 'DESK' as StaffRole, eventIds: [] as string[], password: '', department: '', deskNumber: 1, studyDept: '', year: '', phone: '' });
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<unknown>(null);
   const [created, setCreated] = useState<{ username: string; password: string } | null>(null);
@@ -287,7 +356,7 @@ function NewAccount({ token, onCreated, onSignedOut }: { token: string; onCreate
       });
       onCreated(account);
       setCreated({ username: account.username, password: form.password });
-      setForm({ ...form, username: '', displayName: '', eventIds: [], password: '' });
+      setForm({ ...form, username: '', displayName: '', eventIds: [], password: '', studyDept: '', year: '', phone: '' });
     } catch (failure) {
       if (failure instanceof SignedOut) onSignedOut();
       else setError(failure);
@@ -305,9 +374,10 @@ function NewAccount({ token, onCreated, onSignedOut }: { token: string; onCreate
           <input value={form.username} onChange={(event) => setForm({ ...form, username: event.target.value.toLowerCase() })} placeholder="e.g. desk1, codeflex-kabil" required autoComplete="off" />
         </label>
         <label className="adm-field">
-          <span>Name</span>
+          <span>Name (who gets this login)</span>
           <input value={form.displayName} onChange={(event) => setForm({ ...form, displayName: event.target.value })} required autoComplete="off" />
         </label>
+        <ContactFields value={form} onChange={(next) => setForm({ ...form, ...next })} />
         <label className="adm-field">
           <span>Role</span>
           <select value={form.role} onChange={(event) => setForm({ ...form, role: event.target.value as StaffRole, eventIds: [] })}>
@@ -346,6 +416,9 @@ function EditAccount({ token, account, onDone, onSignedOut }: { token: string; a
     active: account.active,
     department: account.department,
     deskNumber: account.deskNumber,
+    studyDept: account.studyDept,
+    year: account.year,
+    phone: account.phone,
   });
   const [password, setPassword] = useState('');
   const [busy, setBusy] = useState(false);
@@ -378,9 +451,10 @@ function EditAccount({ token, account, onDone, onSignedOut }: { token: string; a
       <td colSpan={6}>
         <div className="adm-form">
           <label className="adm-field">
-            <span>Name</span>
+            <span>Name (who has this login)</span>
             <input value={change.displayName} onChange={(event) => setChange({ ...change, displayName: event.target.value })} />
           </label>
+          <ContactFields value={{ studyDept: change.studyDept ?? '', year: change.year ?? '', phone: change.phone ?? '' }} onChange={(next) => setChange({ ...change, ...next })} />
           <label className="adm-field">
             <span>Role</span>
             <select value={change.role} onChange={(event) => setChange({ ...change, role: event.target.value as StaffRole, eventIds: [] })}>

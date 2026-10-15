@@ -93,3 +93,31 @@ describe('staff sign-in', () => {
     expect(await names()).not.toContain('cse-desk1');
   });
 });
+
+describe('how to reach the person given a login', () => {
+  it('keeps their department, year and mobile number (all optional), checks them, and changes only what is sent', async () => {
+    const h = setup({ at: TIMES.eventDay });
+    const made = await h.asOwner('POST', '/api/admin/staff', {
+      username: 'cse-hack-kavin',
+      displayName: 'Kavin R',
+      role: 'COORDINATOR',
+      department: 'CSE',
+      eventIds: ['cse-hackathon'],
+      studyDept: ' B.E.  CSE ',
+      year: '3rd Year',
+      phone: '+91 98400 12345',
+      password: 'Abcdefg-Hijkmn-9',
+    });
+    expect(made.body.account).toMatchObject({ displayName: 'Kavin R', studyDept: 'B.E. CSE', year: '3rd Year', phone: '9840012345' });
+    expect((await h.asOwner('POST', '/api/admin/staff', { username: 'aids-desk1', displayName: 'Asha K', role: 'DESK', department: 'AIDS', deskNumber: 1, password: 'Abcdefg-Hijkmn-9' })).body.account).toMatchObject({ studyDept: '', year: '', phone: '' });
+
+    expect((await h.asOwner('POST', '/api/admin/staff/cse-hack-kavin', { phone: '12345' })).body.code).toBe('INVALID');
+    expect((await h.asOwner('POST', '/api/admin/staff/cse-hack-kavin', { studyDept: '<script>' })).body.code).toBe('INVALID');
+    // Only what is sent changes; an empty one clears it.
+    const changed = await h.asOwner('POST', '/api/admin/staff/cse-hack-kavin', { year: '4th Year', phone: '' });
+    expect(changed.body.account).toMatchObject({ studyDept: 'B.E. CSE', year: '4th Year', phone: '' });
+    const listed = (await h.asOwner('GET', '/api/admin/staff')).body.staff.find((account: { username: string }) => account.username === 'cse-hack-kavin');
+    expect(listed).toMatchObject({ studyDept: 'B.E. CSE', year: '4th Year' });
+    expect(listed).not.toHaveProperty('passwordHash');
+  });
+});

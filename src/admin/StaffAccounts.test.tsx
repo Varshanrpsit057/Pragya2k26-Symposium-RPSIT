@@ -53,7 +53,7 @@ describe('Accounts', () => {
 
     const form = card('New staff account');
     fireEvent.change(within(form).getByLabelText('Username'), { target: { value: 'CSE-DeskX' } });
-    fireEvent.change(within(form).getByLabelText('Name'), { target: { value: 'CSE Desk X' } });
+    fireEvent.change(within(form).getByLabelText('Name (who gets this login)'), { target: { value: 'CSE Desk X' } });
     fireEvent.change(within(form).getByLabelText('Role'), { target: { value: 'DESK' } });
     fireEvent.change(within(form).getByLabelText('Department'), { target: { value: 'CSE' } });
     const password = within(form).getByLabelText('Password (at least 14 characters)') as HTMLInputElement;

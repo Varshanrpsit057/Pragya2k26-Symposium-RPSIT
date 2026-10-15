@@ -7,6 +7,8 @@ import type { RegistrationSchedule } from './schedule';
 
 /** What an admin types to delete test data, so it is never done by a stray click. */
 export const CLEAR_PHRASE = 'DELETE TEST DATA';
+/** Typed to delete every fest registration, test or not (Start fresh, e.g. after a rehearsal day). */
+export const START_FRESH_PHRASE = 'DELETE EVERYTHING';
 
 /** The quick timelines, plus a custom one and the real schedule. */
 export type TimelineMode = 'standard' | 'onsite-now' | 'online-now' | 'closed' | 'custom';

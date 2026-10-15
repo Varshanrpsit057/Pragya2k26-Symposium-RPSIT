@@ -114,10 +114,17 @@ describe('a registration desk', () => {
     expect(button).toBeDisabled();
     fireEvent.click(within(fee).getByRole('checkbox', { name: 'I have received ₹100 in cash.' }));
     await act(async () => fireEvent.click(button));
-    expect(await within(fee).findByText(/Payment collected and verified: ₹100 in cash/)).toBeInTheDocument();
+    // Collected: the student closes by itself, the list is back and the search waits (empty) for the next ID.
+    expect(await screen.findByRole('status')).toHaveTextContent('✓ CSE-2001 Kavin R: ₹100 collected in cash. Next student: type their ID.');
+    expect(screen.queryByRole('region', { name: 'Entry fee' })).toBeNull();
+    expect(screen.getByLabelText('Find')).toHaveValue('');
+    expect(screen.getByLabelText('Find')).toHaveFocus();
     expect((await sync(h, desk.token)).find((item) => item.id === 'CSE-2001')).toMatchObject({ entry: { status: 'PAID', payment: { method: 'CASH', desk: 1, by: 'cse-desk1' } }, checkedIn: { desk: 1 } });
+    // Opened again, it shows how it was paid.
+    fireEvent.click(screen.getByRole('button', { name: 'Open CSE-2001' }));
+    expect(await within(screen.getByRole('region', { name: 'Entry fee' })).findByText(/Payment collected and verified: ₹100 in cash/)).toBeInTheDocument();
 
-    // With no signal nothing is pretended: the desk is told nothing was saved.
+    // With no signal nothing is pretended: the desk is told nothing was saved (and stays on the student).
     fireEvent.click(screen.getByRole('button', { name: '← All students' }));
     fireEvent.change(screen.getByLabelText('Find'), { target: { value: '' } });
     fireEvent.click(screen.getByRole('button', { name: 'Open CSE-2002' }));
@@ -156,9 +163,10 @@ describe('a registration desk', () => {
     expect(within(fee).getByText('✓ Matches the UTR CSE-2001 sent.')).toBeInTheDocument();
     await act(async () => fireEvent.click(within(fee).getByRole('button', { name: 'Verify CSE-2001' })));
     await waitFor(async () => expect((await sync(h, desk.token)).find((item) => item.id === 'CSE-2001')?.entry).toMatchObject({ status: 'PAID', payment: { txn: '612345678901' } }));
+    // Verified: back to the list for the next student.
+    expect(await screen.findByText(/✓ CSE-2001 Student A: UTR verified: payment collected/)).toBeInTheDocument();
 
     // The other student: the server refuses the same UTR and shows who has it.
-    fireEvent.click(screen.getByRole('button', { name: '← All students' }));
     fireEvent.click(screen.getByRole('button', { name: 'Open CSE-2002' }));
     fee = await screen.findByRole('region', { name: 'Entry fee' });
     fireEvent.change(within(fee).getByLabelText(/^UTR on the payment/), { target: { value: '612345678901' } });
@@ -246,12 +254,17 @@ describe('an event coordinator', () => {
     const kavin = screen.getByRole('group', { name: 'CSE-2001 details' });
     expect(within(kavin).getByText('Paid · verified at the desk')).toBeInTheDocument();
     fireEvent.click(within(kavin).getByRole('button', { name: 'Add to Hackathon' }));
-    fireEvent.click(await within(screen.getByRole('group', { name: 'CSE-2001 details' })).findByRole('button', { name: 'Take ₹50' }));
-    fireEvent.click(screen.getByRole('radio', { name: 'Cash' }));
+    // Added: the ₹50 fee comes up at once.
+    fireEvent.click(await screen.findByRole('radio', { name: 'Cash' }));
     fireEvent.click(screen.getByRole('checkbox', { name: 'I have received ₹50 in cash.' }));
     fireEvent.click(screen.getByRole('button', { name: 'Save the fee' }));
     fireEvent.click(await screen.findByRole('button', { name: 'Mark present' }));
     await waitFor(async () => expect((await sync(h, coordinator.token)).find((item) => item.id === 'CSE-2001')?.events[0].present).toBeTruthy());
+    // Present: the card closes and the search, emptied, waits for the next student's ID.
+    expect(screen.getByRole('status')).toHaveTextContent('✓ CSE-2001 Kavin R is marked present at Hackathon. Next student: type their ID.');
+    expect(screen.queryByRole('group', { name: 'CSE-2001 details' })).toBeNull();
+    expect(screen.getByLabelText('Find a student')).toHaveValue('');
+    expect(screen.getByLabelText('Find a student')).toHaveFocus();
 
     // One who has not paid is sent to the desk; another is added too.
     fireEvent.change(screen.getByLabelText('Find a student'), { target: { value: '' } });

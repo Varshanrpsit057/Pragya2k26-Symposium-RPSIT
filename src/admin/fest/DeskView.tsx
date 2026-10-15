@@ -13,7 +13,7 @@
  * Everything about money is sent at once and waits for the server's answer: the desk sees a UTR
  * used elsewhere, or a lost connection, before the student leaves.
  */
-import { useEffect, useMemo, useState, type FormEvent, type ReactNode } from 'react';
+import { useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from 'react';
 import { COLLEGES, OTHER_COLLEGE } from '../../content/colleges';
 import { COURSE_DEPARTMENTS, OTHER, STREAMS, courseText } from '../../content/courses';
 import { SearchSelect } from '../../components/ui/SearchSelect';
@@ -79,6 +79,13 @@ export function DeskView() {
   const canRegister = switches.deskRegistration || session.role === 'ADMIN';
   const [tab, setTab] = useState<'students' | 'register' | 'totals'>('students');
   const [open, setOpen] = useState<string | null>(null);
+  // The student just finished (fee collected or verified, or checked in): the list comes back
+  // at once with an empty search, ready for the next student's ID.
+  const [finished, setFinished] = useState('');
+  const openStudent = (id: string | null) => {
+    setFinished('');
+    setOpen(id);
+  };
   const waiting = useMemo(() => [...registrations.values()].filter((item) => item.dept === dept && isActive(item) && awaitingCheck(item)).length, [registrations, dept]);
   const tabs: [typeof tab, string][] = [
     ['students', waiting ? `Students (${waiting} to verify)` : 'Students'],
@@ -92,7 +99,7 @@ export function DeskView() {
           value={dept}
           onChange={(next) => {
             setDept(next);
-            setOpen(null);
+            openStudent(null);
           }}
         />
       )}
@@ -109,20 +116,33 @@ export function DeskView() {
                 aria-current={tab === id ? 'page' : undefined}
                 onClick={() => {
                   setTab(id);
-                  if (id === 'students') setOpen(null);
+                  if (id === 'students') openStudent(null);
                 }}
               >
                 {label}
               </button>
             ))}
           </nav>
-          {tab === 'students' && (open ? <StudentDetail key={open} id={open} onBack={() => setOpen(null)} /> : <DeskStudents dept={dept} onOpen={setOpen} />)}
+          {tab === 'students' &&
+            (open ? (
+              <StudentDetail
+                key={open}
+                id={open}
+                onBack={() => openStudent(null)}
+                onFinished={(text) => {
+                  setOpen(null);
+                  setFinished(text);
+                }}
+              />
+            ) : (
+              <DeskStudents dept={dept} onOpen={openStudent} finished={finished} onDismiss={() => setFinished('')} />
+            ))}
           {tab === 'register' && canRegister && (
             <RegisterForStudent
               key={dept}
               dept={dept}
               onOpen={(id) => {
-                setOpen(id);
+                openStudent(id);
                 setTab('students');
               }}
             />
@@ -144,11 +164,16 @@ const DESK_FILTERS: { id: DeskFilter; label: string; test: (item: FestRegistrati
   { id: 'paid', label: 'Paid', test: (item) => item.entry.status === 'PAID' },
 ];
 
-/** The department's students: filter, search, open one. */
-function DeskStudents({ dept, onOpen }: { dept: string; onOpen: (id: string) => void }) {
+/** The department's students: filter, search, open one. `finished`: the student just done (the search waits for the next). */
+function DeskStudents({ dept, onOpen, finished = '', onDismiss }: { dept: string; onOpen: (id: string) => void; finished?: string; onDismiss?: () => void }) {
   const { registrations, catalog, session, switches } = useFest();
   const [filter, setFilter] = useState<DeskFilter>('all');
   const [query, setQuery] = useState('');
+  const search = useRef<HTMLInputElement>(null);
+  // Back from a student just finished: the cursor waits in the search for the next ID.
+  useEffect(() => {
+    if (finished) search.current?.focus();
+  }, [finished]);
   const mine = useMemo(() => [...registrations.values()].filter((item) => item.dept === dept && isActive(item)).sort((a, b) => a.id.localeCompare(b.id)), [registrations, dept]);
   const counts = useMemo(() => Object.fromEntries(DESK_FILTERS.map((item) => [item.id, mine.filter(item.test).length])) as Record<DeskFilter, number>, [mine]);
   const test = DESK_FILTERS.find((item) => item.id === filter)!.test;
@@ -177,9 +202,19 @@ function DeskStudents({ dept, onOpen }: { dept: string; onOpen: (id: string) => 
           </button>
         )}
       </div>
+      {finished && (
+        <p className="fest-match is-good fest-finished" role="status">
+          <span>✓ {finished} Next student: type their ID.</span>
+          {onDismiss && (
+            <button className="adm-button adm-button--small" type="button" onClick={onDismiss}>
+              OK
+            </button>
+          )}
+        </p>
+      )}
       <label className="adm-field fest-find">
         <span>Find</span>
-        <input type="search" value={query} placeholder={`ID (${deptShort(dept)}-2001), name, phone, college or UTR`} onChange={(event) => setQuery(event.target.value)} />
+        <input ref={search} type="search" value={query} placeholder={`ID (${deptShort(dept)}-2001), name, phone, college or UTR`} onChange={(event) => setQuery(event.target.value)} />
       </label>
       <p className="adm-muted">Type the ID the student shows you, open it, check their details, then collect the {rupees(catalog?.entryFee ?? 0)} entry fee or verify the UTR they sent.</p>
       <div className="fest-chips" role="group" aria-label="Show">
@@ -216,7 +251,7 @@ function Fact({ label, children }: { label: string; children: ReactNode }) {
   );
 }
 
-function StudentDetail({ id, onBack }: { id: string; onBack: () => void }) {
+function StudentDetail({ id, onBack, onFinished }: { id: string; onBack: () => void; onFinished?: (text: string) => void }) {
   const { registrations, catalog } = useFest();
   const registration = registrations.get(id);
   const back = (
@@ -260,7 +295,7 @@ function StudentDetail({ id, onBack }: { id: string; onBack: () => void }) {
           <Fact label="At the desk">{registration.checkedIn ? `${when(registration.checkedIn.at)} by ${registration.checkedIn.by}${registration.checkedIn.desk ? ` (desk ${registration.checkedIn.desk})` : ''}` : 'Not yet'}</Fact>
         </dl>
       </section>
-      {isActive(registration) && <EntryFee registration={registration} />}
+      {isActive(registration) && <EntryFee registration={registration} onFinished={onFinished && ((text) => onFinished(`${showId(registration.id)} ${registration.name}: ${text}`))} />}
       <UtrLog registration={registration} />
       <StudentEvents registration={registration} />
     </>
@@ -269,8 +304,11 @@ function StudentDetail({ id, onBack }: { id: string; onBack: () => void }) {
 
 const sent = (registration: FestRegistration) => registration.entry.claim;
 
-/** The entry fee: paid (how), or collect it (cash or UPI), or verify the UTR the student sent. */
-function EntryFee({ registration }: { registration: FestRegistration }) {
+/**
+ * The entry fee: paid (how), or collect it (cash or UPI), or verify the UTR the student sent.
+ * `onFinished`: once collected, verified or checked in, the desk goes back to its list for the next student.
+ */
+function EntryFee({ registration, onFinished }: { registration: FestRegistration; onFinished?: (text: string) => void }) {
   const { catalog, registrations, send } = useFest();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
@@ -296,6 +334,10 @@ function EntryFee({ registration }: { registration: FestRegistration }) {
       setBusy(false);
     }
   };
+  // Collected, verified or checked in: this student is done.
+  const finish = async (body: Record<string, unknown>, success: string, utr?: string) => {
+    if ((await run(body, success, utr)) && onFinished) onFinished(success);
+  };
   const status = registration.entry;
   const payment = status.payment;
   const claim = sent(registration);
@@ -311,7 +353,7 @@ function EntryFee({ registration }: { registration: FestRegistration }) {
             {payment.desk ? ` (desk ${payment.desk})` : ''}
           </p>
           {!registration.checkedIn && (
-            <button className="adm-button adm-button--approve" type="button" disabled={busy} onClick={() => void run({ action: 'checkin' }, `${showId(registration.id)} checked in.`)}>
+            <button className="adm-button adm-button--approve" type="button" disabled={busy} onClick={() => void finish({ action: 'checkin' }, 'checked in.')}>
               Check in (already paid)
             </button>
           )}
@@ -334,7 +376,7 @@ function EntryFee({ registration }: { registration: FestRegistration }) {
                   This UTR is also on {localClash.map((item) => `${showId(item.id)} (${item.name})`).join(', ')}. A payment counts once: look at who has it below.
                 </p>
               )}
-              <VerifyForm registration={registration} busy={busy} onVerify={(body, utr) => void run(body, `${showId(registration.id)} verified: payment collected.`, utr)} />
+              <VerifyForm registration={registration} busy={busy} onVerify={(body, utr) => void finish(body, 'UTR verified: payment collected.', utr)} />
               <span className="adm-inline adm-inline--wrap">
                 <button className="adm-button adm-button--small" type="button" onClick={() => setClash(tidyUtr(claim.txn).toUpperCase())}>
                   Who else has this UTR?
@@ -349,7 +391,7 @@ function EntryFee({ registration }: { registration: FestRegistration }) {
               registration={registration}
               amount={fee}
               busy={busy}
-              onCollect={(draft) => void run({ action: 'collect', payment: paymentBody(draft) }, `${rupees(fee)} collected ${draft.method === 'CASH' ? 'in cash' : 'by UPI'}: ${showId(registration.id)} is verified.`, draft.method === 'UPI' ? tidyUtr(draft.txn).toUpperCase() : undefined)}
+              onCollect={(draft) => void finish({ action: 'collect', payment: paymentBody(draft) }, `${rupees(fee)} collected ${draft.method === 'CASH' ? 'in cash' : 'by UPI'}.`, draft.method === 'UPI' ? tidyUtr(draft.txn).toUpperCase() : undefined)}
             />
           ) : (
             <button className="adm-button adm-button--small" type="button" onClick={() => setCollecting(true)}>

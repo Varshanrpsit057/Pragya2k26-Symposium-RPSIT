@@ -63,6 +63,10 @@ export const seedFestTestData = (token: string, count?: number) =>
 export const clearFestTestData = (token: string, results: boolean) =>
   request<{ cleared: number; remaining?: number; results: number; restarted: string[] }>('/api/admin/fest/test-data/clear', { method: 'POST', body: { results }, token });
 
+/** Start fresh: every registration (test or not), result and cash hand-over, a batch per call. */
+export const startFreshFest = (token: string, phrase: string) =>
+  request<{ cleared: number; remaining?: number; results: number; restarted: string[] }>('/api/admin/fest/test-data/clear', { method: 'POST', body: { everything: true, phrase }, token });
+
 /** A change the outbox sends (path and body), answered with the registration or the results. */
 export const festWrite = (token: string, path: `/api/admin/fest/${string}`, body: unknown) =>
   request<{ registration?: FestRegistration; result?: FestResult; replayed?: boolean }>(path, { method: 'POST', body, token });
