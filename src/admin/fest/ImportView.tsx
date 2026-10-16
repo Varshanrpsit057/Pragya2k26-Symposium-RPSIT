@@ -5,7 +5,7 @@
  * fees are paid at each venue, online registrations too.
  */
 import { useState, type ChangeEvent, type FormEvent } from 'react';
-import { COLLEGES, OTHER_COLLEGE } from '../../content/colleges';
+import { COLLEGES, OTHER_COLLEGE, collegeCodeOf } from '../../content/colleges';
 import { SearchSelect } from '../../components/ui/SearchSelect';
 import { deptShort, eventLabel, eventsOf, guessColumns, IMPORT_FIELDS, parseCsv, participantProblems, readParticipant, rupees, showId, toCsv, YEARS, type ImportField } from '../../lib/fest';
 import { tidyUtr } from '../../lib/portal';
@@ -101,7 +101,12 @@ function TypeOneIn({ dept, token, onSignedOut }: { dept: string; token: string; 
           labelId="online-college-label"
           options={COLLEGES}
           value={college.choice}
-          onChange={(choice) => setCollege({ ...college, choice })}
+          onChange={(choice) => {
+            setCollege({ ...college, choice });
+            // A listed college fills in its code (it can still be changed).
+            const code = collegeCodeOf(choice);
+            if (code && choice !== college.choice) setForm({ ...form, collegeCode: code });
+          }}
           placeholder="Choose… (type to find it)"
           searchPlaceholder="College name or initials"
           searchLabel="Search colleges"

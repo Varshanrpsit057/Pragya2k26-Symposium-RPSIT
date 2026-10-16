@@ -1,6 +1,6 @@
 /** Pieces every fest screen uses: the live status, the filters, payments and registration cards. */
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
-import { awaitingCheck, collegeKey, collegeSummary, deptShort, entryOf, eventFeeText, eventLabel, eventOf, feePaid, isActive, rupees, showId, type FestCatalog, type FestEvent, type FestRegistration, type HandOver } from '../../lib/fest';
+import { awaitingCheck, collegeKey, collegeSummary, deptShort, entryOf, eventFeeText, eventLabel, eventOf, feePaid, isActive, onlineToCheck, rupees, showId, type FestCatalog, type FestEvent, type FestRegistration, type HandOver } from '../../lib/fest';
 import { SearchSelect } from '../../components/ui/SearchSelect';
 import { Badge, clockTime, when } from '../ui';
 
@@ -279,6 +279,8 @@ export function RegistrationCard({
         <strong className="fest-card__name">{registration.name}</strong>
         {pending.has(registration.id) && <Badge tone="warn">Waiting to send</Badge>}
         {registration.source === 'ONLINE' && <Badge tone={registration.checkedIn ? 'good' : 'plain'}>{registration.checkedIn ? 'Online · arrived' : 'Online · not arrived'}</Badge>}
+        {onlineToCheck(registration) && <Badge tone="warn">UTR to verify</Badge>}
+        {registration.entry.status === 'PAID' && registration.entry.payment?.checked && <Badge tone="good">UTR verified</Badge>}
         {registration.source === 'PAPER' && <Badge tone="plain">Paper slip</Badge>}
         {registration.source !== 'ONLINE' && registration.entry.status === 'PAID' && <Badge tone="good">Paid</Badge>}
         {awaitingCheck(registration) && <Badge tone="warn">Payment to check</Badge>}

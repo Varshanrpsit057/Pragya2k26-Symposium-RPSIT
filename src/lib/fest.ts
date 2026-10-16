@@ -6,7 +6,7 @@
  * edits it in the dashboard), registration IDs, field checks, CSV reading and the totals
  * every live view shows. Plain data and pure functions only.
  */
-import { RENAMED_COLLEGES } from '../content/colleges';
+import { RENAMED_COLLEGES, SAME_COLLEGES } from '../content/colleges';
 
 // ------------------------------------------------------------------------------------------
 // Departments and events (the catalog)
@@ -269,6 +269,8 @@ export interface FestPayment extends FestStamp {
   desk?: number;
   /** Cancelled by an admin (e.g. recorded by mistake). */
   voided?: FestStamp & { reason: string };
+  /** Paid with the online form: a desk saw this UTR's money in the receiving account. */
+  checked?: FestStamp & { desk?: number };
 }
 
 export interface FestEntry {
@@ -319,6 +321,8 @@ export interface FestRegistration {
   college: string;
   /** The college's code; missing on registrations made before it was asked. */
   collegeCode?: string;
+  /** Their university register number (optional; an online form's is kept as `ref`). */
+  regNo?: string;
   /** The student's own branch (e.g. 'B.E. CSE'). */
   branch: string;
   year: string;
@@ -485,6 +489,13 @@ export const TXN = /^[A-Za-z0-9]{6,35}$/;
 export const canJoin = (registration: Pick<FestRegistration, 'dept'>, event: Pick<FestEvent, 'dept'>) => registration.dept === event.dept;
 /** A self-registered student whose transaction ID waits for a desk. */
 export const awaitingCheck = (registration: FestRegistration) => registration.entry.status === 'DUE' && Boolean(registration.entry.claim) && !registration.entry.rejected;
+/** Paid with the online form, and no desk has seen its UTR's money in the receiving account yet. */
+export const onlineToCheck = (registration: FestRegistration) => {
+  const payment = registration.entry.payment;
+  return registration.entry.status === 'PAID' && payment?.method === 'ONLINE' && !payment.voided && !payment.checked;
+};
+/** Their register number: the one typed, or the online form's (kept as its reference). */
+export const regNoOf = (registration: FestRegistration) => registration.regNo || registration.ref || '';
 
 /**
  * A desk's cash hand-over: the cash it counted at closing, beside what the system says it took in
@@ -628,6 +639,8 @@ export interface FestParticipant {
   college: string;
   /** The college's code (e.g. its Anna University / TNEA code, 2639): letters and digits; '' when not given. */
   collegeCode: string;
+  /** Their university register number (optional): letters and digits. */
+  regNo?: string;
   branch: string;
   year: string;
   team: string;
@@ -642,6 +655,8 @@ const EMAIL = /^[^\s@]{1,64}@[^\s@]{1,190}\.[^\s@]{2,24}$/;
 export const COLLEGE_CODE = /^[A-Z0-9]{2,10}$/;
 /** ' tn 2639 ' → 'TN2639'. */
 export const tidyCollegeCode = (value: string) => value.replace(/[\s.-]+/g, '').toUpperCase();
+/** A university register number: 4 to 20 letters or digits (stored in capitals, without spaces). */
+export const REG_NO = /^[A-Z0-9]{4,20}$/;
 
 /** '+91 98765-43210' → '9876543210'. */
 export const tidyPhone = (value: string) => {
@@ -659,6 +674,7 @@ export function readParticipant(input: unknown): FestParticipant {
     email: tidy(value.email, 254).toLowerCase(),
     college: tidy(value.college, 160),
     collegeCode: tidyCollegeCode(tidy(value.collegeCode, 20)),
+    regNo: tidyCollegeCode(tidy(value.regNo, 30)),
     branch: tidy(value.branch, 120),
     year: tidy(value.year, 20),
     team: tidy(value.team, 60),
@@ -673,6 +689,7 @@ export function participantProblems(participant: FestParticipant): Partial<Recor
   if (participant.email && !EMAIL.test(participant.email)) problems.email = 'Check the email address.';
   if (participant.college.length < 2) problems.college = 'Enter the college.';
   if (participant.collegeCode && !COLLEGE_CODE.test(participant.collegeCode)) problems.collegeCode = 'Check the college code (2 to 10 letters or digits).';
+  if (participant.regNo && !REG_NO.test(participant.regNo)) problems.regNo = 'Check the register number (4 to 20 letters or digits).';
   if (participant.team && participant.team.length < 2) problems.team = 'Team names have at least 2 letters.';
   return problems;
 }
@@ -741,7 +758,8 @@ export function toCsv(rows: (string | number)[][]): string {
 const BOM = 0xfeff;
 
 /** The column each detail comes from, guessed from the header row. */
-export type ImportField = keyof FestParticipant | 'events' | 'utr' | 'ref';
+// (A register number in the online form is kept as its reference, 'ref'.)
+export type ImportField = Exclude<keyof FestParticipant, 'regNo'> | 'events' | 'utr' | 'ref';
 export const IMPORT_FIELDS: { field: ImportField; label: string; required: boolean; hints: RegExp }[] = [
   { field: 'name', label: 'Name', required: true, hints: /^(full ?)?name|participant|student/i },
   { field: 'phone', label: 'Phone', required: true, hints: /phone|mobile|contact|whats ?app/i },
@@ -794,7 +812,7 @@ export function matchEvents(catalog: FestCatalog, dept: string, text: string): {
 
 const plainKey = (name: string) => name.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
 /** A college's old name in the list → its name now (keys), so a renamed college stays one college. */
-const RENAMED_KEYS = new Map(Object.entries(RENAMED_COLLEGES).map(([from, to]) => [plainKey(from), plainKey(to)]));
+const RENAMED_KEYS = new Map(Object.entries({ ...RENAMED_COLLEGES, ...SAME_COLLEGES }).map(([from, to]) => [plainKey(from), plainKey(to)]));
 
 /** 'Sona College of Technology, Salem.' → 'sona college of technology salem': one college however it is typed, or under its old name. */
 export const collegeKey = (name: string) => {

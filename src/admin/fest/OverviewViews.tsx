@@ -9,34 +9,22 @@
  *   college ranking (medal table) filtered by participations and prizes
  */
 import { useMemo, useState } from 'react';
-import { DESKS, awaitingCheck, collegeSummary, deskMoney, deptShort, eventLabel, eventOf, feePaid, isActive, medalOrder, participantProblems, readParticipant, rupees, showId, teamsText, totalsOf, eventFeeText, type CollegeRow, type FestEvent, type FestParticipant, type FestRegistration } from '../../lib/fest';
+import { DESKS, awaitingCheck, collegeSummary, deskMoney, deptShort, eventLabel, eventOf, eventsOf, feePaid, isActive, medalOrder, regNoOf, rupees, showId, teamsText, totalsOf, eventFeeText, type CollegeRow, type FestEvent, type FestRegistration } from '../../lib/fest';
 import { hasPermission } from '../../lib/staff';
 import { Badge, messageOf, when } from '../ui';
 import { filterNote, saveTable, saveWorkbook, tableSheet, today } from './excel';
-import { certificateRows, exportRows, howRegistered, participationRows, rankingRows, winnerRows } from './exports';
+import { certificateRows, downloadMaster, exportRows, howRegistered, participationRows, rankingRows, winnerRows } from './exports';
+import { ParticipantEditor } from './ParticipantEditor';
 import { WinnerTable } from './EventWindow';
 import { NO_FILTERS, useFest, type FestFilters } from './FestData';
 import { FilterBar, NO_PAYMENT, PaymentChoice, ShortList, Stat, applyFilters, deptName, handOverGap, latestHandOvers, paymentBody, paymentReady, stampNow, useHandOvers, type PaymentDraft } from './festUi';
-
-
-/** The detail drawer's labels for each field a correction may change. */
-const FIELD_LABEL: Record<keyof FestParticipant, string> = {
-  name: 'Name',
-  phone: 'Phone',
-  email: 'Email',
-  college: 'College',
-  collegeCode: 'College code',
-  branch: 'Department / course',
-  year: 'Year',
-  team: 'Team (typed when registering)',
-};
 
 function useFiltered() {
   const { registrations, filters, catalog, session, switches } = useFest();
   const viewAll = hasPermission(session.role, 'fest.viewAll');
   const list = useMemo(() => applyFilters(registrations.values(), filters, catalog), [registrations, filters, catalog]);
-  // Website controls can hide the downloads (the web assist team keeps them).
-  const canDownload = switches.downloads || session.role === 'ADMIN';
+  // Website controls can hide the downloads (the web assist team and the overall coordinator keep them).
+  const canDownload = switches.downloads || session.role === 'ADMIN' || session.role === 'OVERALL';
   return { list, viewAll, canDownload };
 }
 
@@ -237,7 +225,7 @@ export function FestOverview() {
 // ------------------------------------------------------------------------------------------ Registrations
 
 export function FestRegistrations() {
-  const { catalog, filters, session } = useFest();
+  const { catalog, filters, session, registrations, results } = useFest();
   const { list, viewAll, canDownload } = useFiltered();
   const [open, setOpen] = useState<string | null>(null);
   const [page, setPage] = useState(0);
@@ -257,22 +245,32 @@ export function FestRegistrations() {
             {list.length} student{list.length === 1 ? '' : 's'}
           </strong>
           {canDownload && (
-            <button
-              className="adm-button adm-button--small"
-              type="button"
-              disabled={!list.length}
-              onClick={() => {
-                // The students (with the chosen event's columns only, when filtered by one), and every event participation.
-                const note = filterNote(filters, session.displayName);
-                const events = filters.eventId ? catalog.events.filter((event) => event.id === filters.eventId) : undefined;
-                saveWorkbook(`techfest-registrations-${filters.dept || 'all'}-${today()}.xlsx`, [
-                  tableSheet('Students', note, exportRows(list, catalog, events)),
-                  tableSheet('Event participation', note, participationRows(list, catalog)),
-                ]);
-              }}
-            >
-              Download these (Excel)
-            </button>
+            <span className="adm-inline adm-inline--wrap">
+              <button
+                className="adm-button adm-button--small"
+                type="button"
+                disabled={!list.length}
+                onClick={() => {
+                  // The students shown, with a group of columns for the chosen event, or for each event of
+                  // the department shown (every department: their events in one column), and the sheet of
+                  // every event participation.
+                  const note = filterNote(filters, session.displayName);
+                  const dept = filters.dept || session.department || '';
+                  const events = filters.eventId ? catalog.events.filter((event) => event.id === filters.eventId) : dept ? eventsOf(catalog, dept, { all: true }) : [];
+                  saveWorkbook(`techfest-registrations-${filters.dept || 'all'}-${today()}.xlsx`, [
+                    tableSheet('Students', note, exportRows(list, catalog, { events })),
+                    tableSheet('Event participation', note, participationRows(list, catalog)),
+                  ]);
+                }}
+              >
+                Download these (Excel)
+              </button>
+              {(session.role === 'ADMIN' || session.role === 'OVERALL') && (
+                <button className="adm-button adm-button--small adm-button--primary" type="button" onClick={() => downloadMaster(catalog, registrations, results, session.displayName)}>
+                  Master Excel (everything)
+                </button>
+              )}
+            </span>
           )}
         </div>
         <div className="adm-table-wrap">
@@ -351,6 +349,21 @@ function EntryStatus({ registration }: { registration: FestRegistration }) {
       <>
         <Badge tone="good">{payment.method === 'ONLINE' ? 'Paid online' : 'Paid and verified'}</Badge> {rupees(payment.amount)} · {how} · {payment.by}
         {payment.desk ? ` (desk ${payment.desk})` : ''} · {when(payment.at)}
+        {payment.method === 'ONLINE' &&
+          (payment.checked ? (
+            <>
+              {' '}
+              <Badge tone="good">
+                UTR verified · {payment.checked.by}
+                {payment.checked.desk ? ` (desk ${payment.checked.desk})` : ''} · {when(payment.checked.at)}
+              </Badge>
+            </>
+          ) : (
+            <>
+              {' '}
+              <Badge tone="warn">UTR not verified yet (Desk → Online registered)</Badge>
+            </>
+          ))}
       </>
     );
   }
@@ -373,7 +386,6 @@ function RegistrationDetail({ id, onClose }: { id: string; onClose: () => void }
   const { registrations, catalog, session, change, send } = useFest();
   const registration = registrations.get(id);
   const [editing, setEditing] = useState(false);
-  const [draft, setDraft] = useState<FestParticipant | null>(null);
   const [reason, setReason] = useState('');
   const [paying, setPaying] = useState(false);
   const [payment, setPayment] = useState<PaymentDraft>(NO_PAYMENT);
@@ -383,17 +395,6 @@ function RegistrationDetail({ id, onClose }: { id: string; onClose: () => void }
   const can = (permission: Parameters<typeof hasPermission>[1]) => hasPermission(session.role, permission);
   const path = `/api/admin/fest/registrations/${registration.id}` as const;
   const act = (action: string, extra: Record<string, unknown> = {}, label = action) => change(registration.id, path, { action, ...extra }, `${label} · ${registration.id}`);
-  const form: FestParticipant = draft ?? {
-    name: registration.name,
-    phone: registration.phone,
-    email: registration.email,
-    college: registration.college,
-    collegeCode: registration.collegeCode ?? '',
-    branch: registration.branch,
-    year: registration.year,
-    team: registration.team,
-  };
-  const problems = participantProblems(readParticipant(form));
 
   return (
     <div className="fest-drawer" role="dialog" aria-modal="true" aria-label={`Registration ${registration.id}`}>
@@ -418,6 +419,12 @@ function RegistrationDetail({ id, onClose }: { id: string; onClose: () => void }
           </dd>
           <dt>College</dt>
           <dd>{[registration.college, registration.collegeCode && `code ${registration.collegeCode}`, registration.branch, registration.year].filter(Boolean).join(' · ')}</dd>
+          {regNoOf(registration) && (
+            <>
+              <dt>Register number</dt>
+              <dd>{regNoOf(registration)}</dd>
+            </>
+          )}
           {registration.team && (
             <>
               <dt>Team typed when registering</dt>
@@ -434,10 +441,28 @@ function RegistrationDetail({ id, onClose }: { id: string; onClose: () => void }
           <dd>
             <EntryStatus registration={registration} />
           </dd>
-          {registration.source === 'ONLINE' && (
+          {(registration.source === 'ONLINE' || registration.checkedIn) && (
             <>
               <dt>Arrived</dt>
-              <dd>{registration.checkedIn ? `${registration.checkedIn.by} ${when(registration.checkedIn.at)}` : 'Not yet'}</dd>
+              <dd>
+                {registration.checkedIn ? `${registration.checkedIn.by} ${when(registration.checkedIn.at)}` : 'Not yet'}
+                {registration.checkedIn && can('fest.register') && isActive(registration) && (
+                  <>
+                    {' '}
+                    <button
+                      className="adm-button adm-button--small adm-button--danger-outline"
+                      type="button"
+                      onClick={() => {
+                        const why = window.prompt(`Undo ${showId(registration.id)}’s arrival? Say why (e.g. marked by mistake).`);
+                        if (why && why.trim().length >= 3)
+                          change(registration.id, path, { action: 'uncheckin', reason: why.trim() }, `Undo arrival · ${registration.id}`, (current) => ({ ...current, checkedIn: undefined }));
+                      }}
+                    >
+                      Undo arrival
+                    </button>
+                  </>
+                )}
+              </dd>
             </>
           )}
           {registration.cancelled && (
@@ -546,32 +571,14 @@ function RegistrationDetail({ id, onClose }: { id: string; onClose: () => void }
         {can('fest.edit') && isActive(registration) && (
           <section>
             {editing ? (
-              <div className="fest-form">
-                {(['name', 'phone', 'email', 'college', 'collegeCode', 'branch', 'year', 'team'] as const).map((field) => (
-                  <label key={field} className="adm-field">
-                    <span>{FIELD_LABEL[field]}</span>
-                    <input value={form[field]} onChange={(event) => setDraft({ ...form, [field]: event.target.value })} />
-                    {problems[field] && <span className="adm-field__error">{problems[field]}</span>}
-                  </label>
-                ))}
-                <div className="adm-inline">
-                  <button
-                    className="adm-button adm-button--primary"
-                    type="button"
-                    disabled={Object.keys(problems).length > 0}
-                    onClick={() => {
-                      act('edit', { participant: readParticipant(form) }, 'Correct details');
-                      setEditing(false);
-                      setDraft(null);
-                    }}
-                  >
-                    Save details
-                  </button>
-                  <button className="adm-button" type="button" onClick={() => setEditing(false)}>
-                    Cancel
-                  </button>
-                </div>
-              </div>
+              <ParticipantEditor
+                registration={registration}
+                onSave={(participant) => {
+                  act('edit', { participant }, 'Correct details');
+                  setEditing(false);
+                }}
+                onCancel={() => setEditing(false)}
+              />
             ) : (
               <button className="adm-button" type="button" onClick={() => setEditing(true)}>
                 Correct details

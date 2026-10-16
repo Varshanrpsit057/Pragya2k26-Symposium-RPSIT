@@ -146,7 +146,10 @@ describe('a registration desk', () => {
     expect(screen.getByLabelText('Find')).toHaveValue('');
     expect(screen.getByLabelText('Find')).toHaveFocus();
     expect((await sync(h, desk.token)).find((item) => item.id === 'CSE-2001')).toMatchObject({ entry: { status: 'PAID', payment: { method: 'CASH', desk: 1, by: 'cse-desk1' } }, checkedIn: { desk: 1 } });
+    // The list now shows Fee due, for the next student.
+    expect(screen.getByRole('button', { name: 'Fee due (0)' })).toHaveAttribute('aria-pressed', 'true');
     // Opened again, it shows how it was paid.
+    fireEvent.click(screen.getByRole('button', { name: 'All (2)' }));
     fireEvent.click(screen.getByRole('button', { name: 'Open CSE-2001' }));
     expect(await within(screen.getByRole('region', { name: 'Entry fee' })).findByText(/Payment collected and verified: ₹100 in cash/)).toBeInTheDocument();
 
@@ -163,6 +166,57 @@ describe('a registration desk', () => {
     await act(async () => fireEvent.click(within(second).getByRole('button', { name: 'Collect ₹100 (cash)' })));
     expect(await within(second).findByRole('alert')).toHaveTextContent(/Nothing was saved/);
     expect((await sync(h, desk.token)).find((item) => item.id === 'CSE-2002')?.entry.status).toBe('DUE');
+  });
+
+  it('has the online registrations in their own tab: verifies a UTR, undoes an arrival, corrects details from the lists (the college code filled in)', async () => {
+    const h = setup({ at: TIMES.online });
+    const admin = await h.staff('DEPT_ADMIN', [], 'cse-admin', { department: 'CSE' });
+    const row = { row: 2, name: 'Online One', phone: '9840000101', email: 'o1@example.com', college: 'Sona College of Technology, Salem', collegeCode: '', branch: 'B.E. CSE', year: '2nd Year', team: '', events: '', utr: '712345678901', ref: '611725243115' };
+    expect((await h.call('POST', '/api/admin/fest/import', { rows: [row] }, { token: admin.token })).status).toBe(200);
+    h.setTime(TIMES.eventDay);
+    const desk = await h.staff('DESK', [], 'cse-desk1', { department: 'CSE', deskNumber: 1 });
+    backend(h);
+    signIn(desk.token);
+    render(<AdminApp />);
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Online registered (1 UTR to verify)' }, { timeout: 5000 }));
+    expect(screen.getByRole('button', { name: 'UTR to verify (1)' })).toHaveAttribute('aria-pressed', 'true');
+    fireEvent.click(screen.getByRole('button', { name: 'Open CSE-5001' }));
+    // Their register number from the online form, and the UTR to find in the account.
+    expect(await screen.findByRole('region', { name: 'CSE-5001 details' })).toHaveTextContent('611725243115');
+    const fee = screen.getByRole('region', { name: 'Entry fee' });
+    expect(within(fee).getByText(/Not verified yet/)).toBeInTheDocument();
+    fireEvent.change(within(fee).getByLabelText(/^UTR on the payment/), { target: { value: '712345678901' } });
+    expect(within(fee).getByText('✓ Matches the UTR on their online form.')).toBeInTheDocument();
+    fireEvent.click(within(fee).getByRole('checkbox', { name: 'I have seen ₹100 received with this UTR.' }));
+    await act(async () => fireEvent.click(within(fee).getByRole('button', { name: 'Verify CSE-5001’s UTR' })));
+    // Verified: back to the online list, for the next one.
+    expect(await screen.findByText(/✓ CSE-5001 Online One: online UTR verified/)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'UTR to verify (0)' })).toHaveAttribute('aria-pressed', 'true');
+    expect((await sync(h, desk.token))[0]!.entry.payment).toMatchObject({ method: 'ONLINE', txn: '712345678901', checked: { by: 'cse-desk1', desk: 1 } });
+
+    // Marked arrived by mistake: undone.
+    fireEvent.click(screen.getByRole('button', { name: 'All online (1)' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Open CSE-5001' }));
+    await act(async () => fireEvent.click(await screen.findByRole('button', { name: 'Check in (already paid)' })));
+    expect(await screen.findByText(/✓ CSE-5001 Online One: checked in/)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Open CSE-5001' }));
+    expect(await screen.findByRole('region', { name: 'CSE-5001 details' })).toHaveTextContent('by cse-desk1 (desk 1)');
+    vi.spyOn(window, 'prompt').mockReturnValue('Marked by mistake');
+    await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Undo arrival…' })));
+    expect(await screen.findByText('Arrival undone: they show as not arrived.')).toBeInTheDocument();
+    expect((await sync(h, desk.token))[0]!.checkedIn).toBeUndefined();
+
+    // Their details from the same lists as the forms: a listed college fills in its code.
+    fireEvent.click(screen.getByRole('button', { name: 'Correct details…' }));
+    fireEvent.click(screen.getByRole('button', { name: /^College/ }));
+    fireEvent.change(screen.getByRole('combobox', { name: 'Search colleges' }), { target: { value: 'mahendra salem' } });
+    fireEvent.click(within(screen.getByRole('listbox')).getByRole('option', { name: 'Mahendra College of Engineering (formerly Maha College of Engineering), Minnampalli, Salem' }));
+    expect(screen.getByLabelText('College code')).toHaveValue('6215');
+    fireEvent.change(screen.getByLabelText('Year'), { target: { value: '3rd Year' } });
+    await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Save details' })));
+    expect(await screen.findByText('Details saved.')).toBeInTheDocument();
+    expect((await sync(h, desk.token))[0]).toMatchObject({ college: 'Mahendra College of Engineering (formerly Maha College of Engineering), Minnampalli, Salem', collegeCode: '6215', year: '3rd Year', branch: 'B.E. CSE' });
   });
 
   it('verifies a UTR; a clash shows both students, and the desk corrects the wrong one', async () => {
@@ -193,6 +247,7 @@ describe('a registration desk', () => {
     expect(await screen.findByText(/✓ CSE-2001 Student A: UTR verified: payment collected/)).toBeInTheDocument();
 
     // The other student: the server refuses the same UTR and shows who has it.
+    fireEvent.click(screen.getByRole('button', { name: /^UTR sent · to verify/ }));
     fireEvent.click(screen.getByRole('button', { name: 'Open CSE-2002' }));
     fee = await screen.findByRole('region', { name: 'Entry fee' });
     fireEvent.change(within(fee).getByLabelText(/^UTR on the payment/), { target: { value: '612345678901' } });
@@ -288,10 +343,15 @@ describe('an event coordinator', () => {
     expect(within(card).getByText('UPI ₹50 · UTR 612345678955')).toBeInTheDocument();
     expect(within(card).getAllByText(/^by cse-hack1/)).toHaveLength(2);
 
-    // The event's Excel: its fee (cash or UPI), the UTR typed at the venue, present or absent.
+    // The event's Excel, as on the event registration form: its fee (cash or UPI), the UTR typed at the venue, present or absent, a column to sign.
     fireEvent.click(screen.getByRole('button', { name: 'Download this event (Excel)' }));
     const sheet = await xlsxText(files[0]!);
-    for (const text of ['Hackathon: fee', 'Hackathon: UTR', 'Hackathon: present / absent', 'UPI ₹50', '612345678955', 'Cash ₹50', 'Present', 'Absent', 'Gate pass paid by (cash / UPI)']) expect(sheet).toContain(text);
+    for (const text of ['event registration form', 'S.No', 'Student ID', 'Register number', 'College code', 'Team name', 'Paid by (cash / UPI)', 'UTR (UPI, typed at the event)', 'UPI', '612345678955', 'Cash', 'Present', 'Absent', 'Signature', 'Department of Computer Science'])
+      expect(sheet, text).toContain(text);
+    // Every student of the department: a group of columns for each event.
+    fireEvent.click(screen.getByRole('button', { name: 'Download all CSE students (Excel)' }));
+    const students = await xlsxText(files[1]!);
+    for (const text of ['Hackathon: fee', 'Hackathon: UTR', 'Hackathon: present / absent', 'UPI ₹50', 'Cash ₹50', 'Gate pass', 'UTR']) expect(students, text).toContain(text);
   });
 
   it('has every department student: opens one by ID, checks them, adds them, takes ₹50, marks attendance and submits the winners', async () => {
@@ -724,9 +784,10 @@ describe('the web assist console', () => {
     const controls = screen.getByRole('region', { name: 'Emergency controls' });
     fireEvent.click(within(controls).getByRole('button', { name: 'Back up now' }));
     expect(await within(controls).findByText('Backed up just now.')).toBeInTheDocument();
-    fireEvent.click(within(controls).getByRole('button', { name: 'Download a full copy (Excel)' }));
+    fireEvent.click(within(controls).getByRole('button', { name: 'Master Excel (everything)' }));
     const sheet = await xlsxText(files.at(-1)!);
-    for (const text of ['Students', 'Event participation', 'Winners', 'College ranking', 'Money', 'Kavin R', 'Asha K', 'TO CHECK', 'Gate pass paid by (cash / UPI)', 'Gate pass UTR sent by the student', 'Hackathon: UTR']) expect(sheet).toContain(text);
+    for (const text of ['All students', 'CSE students', 'Online registrations', 'Event participation', 'Winners', 'Certificates', 'College results', 'Money', 'Kavin R', 'Asha K', 'UTR sent · to verify', 'Paid by (cash / UPI / online)', 'UTR the student sent', 'Hackathon: UTR', 'Total participants (students)', 'First places'])
+      expect(sheet, text).toContain(text);
   });
 });
 

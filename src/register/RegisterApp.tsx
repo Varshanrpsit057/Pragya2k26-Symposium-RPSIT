@@ -51,6 +51,8 @@ interface Draft {
   collegeOther: string;
   /** The college's code (e.g. its Anna University code). */
   collegeCode?: string;
+  /** Their university register number (optional). */
+  regNo?: string;
   /** B.E., B.Sc… */
   stream: string;
   /** One of COURSE_DEPARTMENTS, or Other (then `courseOther`). */
@@ -347,6 +349,9 @@ function RegisterForm({
             spellCheck={false}
             onChange={(event) => set({ collegeCode: event.target.value })}
           />
+        </Field>
+        <Field label="Register number (optional)" error={fieldError('regNo')} hint="Your university register number, if you know it.">
+          <input value={draft.regNo ?? ''} maxLength={24} inputMode="numeric" autoComplete="off" autoCapitalize="characters" spellCheck={false} onChange={(event) => set({ regNo: event.target.value })} />
         </Field>
         <PickField id="reg-stream" label="Stream" error={fieldError('stream')}>
           {(labelId, invalid) => (

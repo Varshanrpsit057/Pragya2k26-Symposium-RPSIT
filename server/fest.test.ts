@@ -219,6 +219,56 @@ describe('online registrations', () => {
     const checked = await h.call('POST', '/api/admin/fest/registrations/CSE-5001', { action: 'checkin' }, { token: deskToday });
     expect(checked.body.registration.checkedIn).toMatchObject({ by: 'cse-desk1', desk: 1 });
   });
+
+  it('a desk verifies an online UTR against the account (once across the fest), marks one not found (the fee is then due), and undoes an arrival', async () => {
+    const h = setup({ at: TIMES.online });
+    const { admin, desk } = await department(h);
+    const online = [
+      { row: 2, ...student(11), events: '', utr: '712345678901' },
+      { row: 3, ...student(12), events: '', utr: '712345678902' },
+      { row: 4, ...student(13), events: '', utr: '712345678903' },
+    ];
+    await h.call('POST', '/api/admin/fest/import', { rows: online }, { token: admin.token });
+    h.setTime(TIMES.eventDay);
+    const token = await h.loginAs(desk.username, STAFF_PASSWORD);
+    const act = (id: string, body: Record<string, unknown>) => h.call('POST', `/api/admin/fest/registrations/${id}`, body, { token });
+
+    // The UTR typed must be the form's, and the money seen.
+    expect((await act('CSE-5001', { action: 'online-check', txn: '712345678999', confirmed: true })).body.code).toBe('TXN_MISMATCH');
+    expect((await act('CSE-5001', { action: 'online-check', txn: '712345678901' })).status).toBe(400);
+    const verified = await act('CSE-5001', { action: 'online-check', txn: '7123 4567 8901', confirmed: true });
+    expect(verified.body.registration.entry).toMatchObject({ status: 'PAID', payment: { method: 'ONLINE', txn: '712345678901', checked: { by: 'cse-desk1', desk: 1 } } });
+    // Not checked in by it: the student may not be there yet.
+    expect(verified.body.registration.checkedIn).toBeUndefined();
+    // The form's UTR typed wrong: the one on the payment, ticked, is kept (in the UTR log)…
+    const corrected = await act('CSE-5002', { action: 'online-check', txn: '712345678912', confirmed: true, correct: true });
+    expect(corrected.body.registration.entry.payment).toMatchObject({ txn: '712345678912', checked: { by: 'cse-desk1' } });
+    expect(corrected.body.registration.utrLog).toEqual([expect.objectContaining({ from: '712345678902', to: '712345678912' })]);
+    // …and a UTR counts once: another student's verified UTR is refused, as is a desk payment with it.
+    expect((await act('CSE-5003', { action: 'online-check', txn: '712345678901', confirmed: true, correct: true })).body).toMatchObject({ code: 'TXN_USED', details: { existingId: 'CSE-5001' } });
+    const reused = await h.call(
+      'POST',
+      '/api/admin/fest/registrations',
+      { submissionId: 'sub-online-reuse-1', participant: student(14), events: [] },
+      { token },
+    );
+    expect((await act(reused.body.registration.id, { action: 'collect', payment: { method: 'UPI', txn: '712345678912', confirmed: true } })).body.code).toBe('TXN_USED');
+
+    // Not in the account: the fee is due again (their UTR kept as the one they sent), and collected at the desk.
+    expect((await act('CSE-5001', { action: 'online-not-found', reason: 'Not received' })).body.code).toBe('CHECKED');
+    const missing = await act('CSE-5003', { action: 'online-not-found', reason: 'Not received' });
+    expect(missing.body.registration.entry).toMatchObject({ status: 'DUE', claim: { txn: '712345678903', amount: 100 }, rejected: { reason: 'Not received', by: 'cse-desk1' } });
+    expect((await act('CSE-5003', { action: 'collect', payment: { method: 'CASH', confirmed: true } })).body.registration.entry).toMatchObject({ status: 'PAID', payment: { method: 'CASH' } });
+
+    // Marked arrived by mistake: undone (with a reason), the payment untouched.
+    await act('CSE-5001', { action: 'checkin' });
+    expect((await act('CSE-5001', { action: 'uncheckin' })).status).toBe(400);
+    const undone = await act('CSE-5001', { action: 'uncheckin', reason: 'Marked by mistake' });
+    expect(undone.body.registration.checkedIn).toBeUndefined();
+    expect(undone.body.registration.entry).toMatchObject({ status: 'PAID', payment: { checked: { by: 'cse-desk1' } } });
+    // A coordinator may not.
+    expect((await h.call('POST', '/api/admin/fest/registrations/CSE-5003', { action: 'uncheckin', reason: 'Marked by mistake' }, { token: (await department(h, 'AIDS')).coordinator.token })).status).toBe(403);
+  });
 });
 
 describe('the event window', () => {
