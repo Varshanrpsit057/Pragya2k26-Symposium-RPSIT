@@ -5,7 +5,10 @@
  *   Students     the department's IDs (to verify, fee due, paid; search) → open one → their details
  *                → collect the entry fee (cash or UPI with its UTR), or verify the UTR they sent;
  *                a UTR that clashes shows everyone who has it, and either student's UTR can be
- *                corrected (kept in their UTR log)
+ *                corrected (kept in their UTR log); once done, the list shows Fee due for the next
+ *   Online       the students registered with the online form: check each one's UTR against the
+ *                receiving account (or mark it not found: the fee is then due at the desk), mark
+ *                them arrived (or undo it), correct their details
  *   Register     only for a student who cannot register on a phone (online; Website controls can
  *                switch it off): the same IDs as the phones, then the fee as for anyone
  *   My totals    what this desk collected, for handing over the cash
@@ -14,13 +17,15 @@
  * used elsewhere, or a lost connection, before the student leaves.
  */
 import { useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from 'react';
-import { COLLEGES, OTHER_COLLEGE } from '../../content/colleges';
+import { COLLEGES, OTHER_COLLEGE, collegeCodeOf } from '../../content/colleges';
 import { COURSE_DEPARTMENTS, OTHER, STREAMS, courseText } from '../../content/courses';
 import { SearchSelect } from '../../components/ui/SearchSelect';
 import { formatIst } from '../../lib/countdown';
 import {
   awaitingCheck,
   DESKS,
+  onlineToCheck,
+  regNoOf,
   deskMoney,
   deptShort,
   eventLabel,
@@ -39,14 +44,16 @@ import {
 } from '../../lib/fest';
 import { tidyUtr } from '../../lib/portal';
 import { ApiFailure } from '../adminApi';
+import { hasPermission } from '../../lib/staff';
 import { Badge, messageOf, when } from '../ui';
 import { PORTAL, today } from './excel';
 import { downloadStudents, howRegistered } from './exports';
 import { useFest } from './FestData';
 import { handOverCash, lookupUtr } from './festApi';
+import { ParticipantEditor } from './ParticipantEditor';
 import { NO_PAYMENT, PaymentChoice, RegistrationCard, ShortList, Stat, handOverGap, matches, paymentBody, paymentReady, txnHolders, useHandOvers, type PaymentDraft } from './festUi';
 
-const EMPTY: FestParticipant = { name: '', phone: '', email: '', college: '', collegeCode: '', branch: '', year: '', team: '' };
+const EMPTY: FestParticipant = { name: '', phone: '', email: '', college: '', collegeCode: '', regNo: '', branch: '', year: '', team: '' };
 
 /** The department this screen works on: the account's own, or (web assist) the one chosen. */
 export function useWorkDept(): [string, (dept: string) => void, boolean] {
@@ -77,20 +84,26 @@ export function DeskView() {
   const [dept, setDept, canPick] = useWorkDept();
   // Website controls can switch registering for a student off (the web assist team keeps it).
   const canRegister = switches.deskRegistration || session.role === 'ADMIN';
-  const [tab, setTab] = useState<'students' | 'register' | 'totals'>('students');
+  const [tab, setTab] = useState<'students' | 'online' | 'register' | 'totals'>('students');
   const [open, setOpen] = useState<string | null>(null);
   // The student just finished (fee collected or verified, or checked in): the list comes back
   // at once with an empty search, ready for the next student's ID.
   const [finished, setFinished] = useState('');
   // The list the desk works through (e.g. Fee due): kept while a student is open, so the next one is a tap away.
   const [filter, setFilter] = useState<DeskFilter>('all');
+  const [onlineFilter, setOnlineFilter] = useState<DeskFilter>('check');
   const openStudent = (id: string | null) => {
     setFinished('');
     setOpen(id);
   };
   const waiting = useMemo(() => [...registrations.values()].filter((item) => item.dept === dept && isActive(item) && awaitingCheck(item)).length, [registrations, dept]);
+  const online = useMemo(() => {
+    const mine = [...registrations.values()].filter((item) => item.dept === dept && isActive(item) && item.source === 'ONLINE');
+    return { count: mine.length, toCheck: mine.filter(onlineToCheck).length };
+  }, [registrations, dept]);
   const tabs: [typeof tab, string][] = [
     ['students', waiting ? `Students (${waiting} to verify)` : 'Students'],
+    ['online', online.toCheck ? `Online registered (${online.toCheck} UTR to verify)` : `Online registered (${online.count})`],
     ...(canRegister ? [['register', 'Register for them'] as [typeof tab, string]] : []),
     ['totals', session.deskNumber ? `Desk ${session.deskNumber} totals` : 'My totals'],
   ];
@@ -118,14 +131,14 @@ export function DeskView() {
                 aria-current={tab === id ? 'page' : undefined}
                 onClick={() => {
                   setTab(id);
-                  if (id === 'students') openStudent(null);
+                  if (id === 'students' || id === 'online') openStudent(null);
                 }}
               >
                 {label}
               </button>
             ))}
           </nav>
-          {tab === 'students' &&
+          {(tab === 'students' || tab === 'online') &&
             (open ? (
               <StudentDetail
                 key={open}
@@ -134,10 +147,14 @@ export function DeskView() {
                 onFinished={(text) => {
                   setOpen(null);
                   setFinished(text);
+                  // Done: the Students list goes to Fee due for the next student (the online list keeps its own).
+                  if (tab === 'students') setFilter('due');
                 }}
               />
+            ) : tab === 'students' ? (
+              <DeskStudents key="students" dept={dept} scope="all" onOpen={openStudent} filter={filter} onFilter={setFilter} finished={finished} onDismiss={() => setFinished('')} />
             ) : (
-              <DeskStudents dept={dept} onOpen={openStudent} filter={filter} onFilter={setFilter} finished={finished} onDismiss={() => setFinished('')} />
+              <DeskStudents key="online" dept={dept} scope="online" onOpen={openStudent} filter={onlineFilter} onFilter={setOnlineFilter} finished={finished} onDismiss={() => setFinished('')} />
             ))}
           {tab === 'register' && canRegister && (
             <RegisterForStudent
@@ -158,17 +175,33 @@ export function DeskView() {
 
 // ------------------------------------------------------------------------------------------ the list
 
-type DeskFilter = 'verify' | 'due' | 'paid' | 'all';
-const DESK_FILTERS: { id: DeskFilter; label: string; test: (item: FestRegistration) => boolean }[] = [
-  { id: 'all', label: 'All', test: () => true },
-  { id: 'verify', label: 'UTR sent · to verify', test: awaitingCheck },
-  { id: 'due', label: 'Fee due', test: (item) => item.entry.status === 'DUE' && !awaitingCheck(item) },
-  { id: 'paid', label: 'Paid', test: (item) => item.entry.status === 'PAID' },
-];
+type DeskFilter = 'verify' | 'due' | 'paid' | 'all' | 'check' | 'checked' | 'notFound' | 'notArrived' | 'arrived';
+type DeskScope = 'all' | 'online';
+const DESK_FILTERS: Record<DeskScope, { id: DeskFilter; label: string; test: (item: FestRegistration) => boolean }[]> = {
+  all: [
+    { id: 'all', label: 'All', test: () => true },
+    { id: 'verify', label: 'UTR sent · to verify', test: awaitingCheck },
+    { id: 'due', label: 'Fee due', test: (item) => item.entry.status === 'DUE' && !awaitingCheck(item) },
+    { id: 'paid', label: 'Paid', test: (item) => item.entry.status === 'PAID' },
+  ],
+  // The online form's students: their UTRs to check against the receiving account, and who has come.
+  online: [
+    { id: 'all', label: 'All online', test: () => true },
+    { id: 'check', label: 'UTR to verify', test: onlineToCheck },
+    { id: 'checked', label: 'UTR verified', test: (item) => item.entry.status === 'PAID' && Boolean(item.entry.payment?.checked) },
+    { id: 'notFound', label: 'Payment not found', test: (item) => item.entry.status === 'DUE' },
+    { id: 'notArrived', label: 'Not arrived', test: (item) => !item.checkedIn },
+    { id: 'arrived', label: 'Arrived', test: (item) => Boolean(item.checkedIn) },
+  ],
+};
 
-/** The department's students: filter, search, open one. `finished`: the student just done (the search waits for the next). */
+/**
+ * The department's students (`scope` online: only those registered with the online form): filter,
+ * search, open one. `finished`: the student just done (the search waits for the next).
+ */
 function DeskStudents({
   dept,
+  scope,
   onOpen,
   filter,
   onFilter,
@@ -176,6 +209,7 @@ function DeskStudents({
   onDismiss,
 }: {
   dept: string;
+  scope: DeskScope;
   onOpen: (id: string) => void;
   filter: DeskFilter;
   onFilter: (next: DeskFilter) => void;
@@ -189,27 +223,32 @@ function DeskStudents({
   useEffect(() => {
     if (finished) search.current?.focus();
   }, [finished]);
-  const mine = useMemo(() => [...registrations.values()].filter((item) => item.dept === dept && isActive(item)).sort((a, b) => a.id.localeCompare(b.id)), [registrations, dept]);
-  const counts = useMemo(() => Object.fromEntries(DESK_FILTERS.map((item) => [item.id, mine.filter(item.test).length])) as Record<DeskFilter, number>, [mine]);
-  const test = DESK_FILTERS.find((item) => item.id === filter)!.test;
-  const shown = mine.filter((item) => test(item) && matches(item, query));
-  const canDownload = switches.downloads || session.role === 'ADMIN';
+  const filters = DESK_FILTERS[scope];
+  const mine = useMemo(
+    () => [...registrations.values()].filter((item) => item.dept === dept && isActive(item) && (scope === 'all' || item.source === 'ONLINE')).sort((a, b) => a.id.localeCompare(b.id)),
+    [registrations, dept, scope],
+  );
+  const counts = useMemo(() => Object.fromEntries(filters.map((item) => [item.id, mine.filter(item.test).length])) as Record<DeskFilter, number>, [mine, filters]);
+  const chosen = filters.find((item) => item.id === filter) ?? filters[0];
+  const shown = mine.filter((item) => chosen.test(item) && matches(item, query));
+  const canDownload = switches.downloads || session.role === 'ADMIN' || session.role === 'OVERALL';
+  const title = scope === 'online' ? `${deptShort(dept)} online registrations` : `${deptShort(dept)} students`;
   const download = () => {
     if (!catalog) return;
-    const label = DESK_FILTERS.find((item) => item.id === filter)!.label;
     downloadStudents(
-      `techfest-${dept.toLowerCase()}-students-${today()}.xlsx`,
-      `${deptShort(dept)} students`,
-      `${PORTAL} · ${deptShort(dept)} · ${label}${query.trim() ? ` · search: ${query.trim()}` : ''} · downloaded by ${session.displayName} ${formatIst(Date.now())}`,
+      `techfest-${dept.toLowerCase()}-${scope === 'online' ? 'online' : 'students'}-${today()}.xlsx`,
+      title,
+      `${PORTAL} · ${deptShort(dept)} · ${chosen.label}${query.trim() ? ` · search: ${query.trim()}` : ''} · downloaded by ${session.displayName} ${formatIst(Date.now())}`,
       shown,
       catalog,
+      { detail: 'desk' },
     );
   };
   return (
     <section className="adm-card adm-pad">
       <div className="adm-toolbar">
         <h2 className="adm-h2">
-          {deptShort(dept)} students ({mine.length})
+          {title} ({mine.length})
         </h2>
         {canDownload && (
           <button className="adm-button adm-button--small" type="button" disabled={!shown.length} onClick={download}>
@@ -231,9 +270,13 @@ function DeskStudents({
         <span>Find</span>
         <input ref={search} type="search" value={query} placeholder={`ID (${deptShort(dept)}-2001), name, phone, college or UTR`} onChange={(event) => setQuery(event.target.value)} />
       </label>
-      <p className="adm-muted">Type the ID the student shows you, open it, check their details, then collect the {rupees(catalog?.entryFee ?? 0)} entry fee or verify the UTR they sent.</p>
+      <p className="adm-muted">
+        {scope === 'online'
+          ? 'They paid with the online form. Open each one, check its UTR against the receiving account (Verify, or Payment not found: the fee is then due at the desk), and mark them arrived when they come.'
+          : `Type the ID the student shows you, open it, check their details, then collect the ${rupees(catalog?.entryFee ?? 0)} entry fee or verify the UTR they sent.`}
+      </p>
       <div className="fest-chips" role="group" aria-label="Show">
-        {DESK_FILTERS.map((item) => (
+        {filters.map((item) => (
           <button key={item.id} type="button" className={`fest-chip-button${filter === item.id ? ' is-on' : ''}`} aria-pressed={filter === item.id} onClick={() => onFilter(item.id)}>
             {item.label} ({counts[item.id]})
           </button>
@@ -242,7 +285,7 @@ function DeskStudents({
       <UtrLookup />
       <ShortList
         items={shown}
-        empty={mine.length ? 'Nobody matches.' : `Nobody has registered under ${deptShort(dept)} yet. New students appear here by themselves.`}
+        empty={mine.length ? 'Nobody matches.' : scope === 'online' ? `No ${deptShort(dept)} online registrations.` : `Nobody has registered under ${deptShort(dept)} yet. New students appear here by themselves.`}
         render={(registration) => (
           <RegistrationCard key={registration.id} registration={registration} compact>
             <button className="adm-button adm-button--primary" type="button" aria-label={`Open ${showId(registration.id)}`} onClick={() => onOpen(registration.id)}>
@@ -267,8 +310,27 @@ function Fact({ label, children }: { label: string; children: ReactNode }) {
 }
 
 function StudentDetail({ id, onBack, onFinished }: { id: string; onBack: () => void; onFinished?: (text: string) => void }) {
-  const { registrations, catalog } = useFest();
+  const { registrations, catalog, session, send } = useFest();
   const registration = registrations.get(id);
+  const [editing, setEditing] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+  const [done, setDone] = useState('');
+  const run = async (body: Record<string, unknown>, success: string) => {
+    setBusy(true);
+    setError('');
+    setDone('');
+    try {
+      await send(`/api/admin/fest/registrations/${id}`, body);
+      setDone(success);
+      return true;
+    } catch (failure) {
+      setError(failure instanceof ApiFailure ? failure.message : `${messageOf(failure)} Nothing was saved: try again when the connection is back.`);
+      return false;
+    } finally {
+      setBusy(false);
+    }
+  };
   const back = (
     <button className="adm-button adm-button--small" type="button" onClick={onBack}>
       ← Back to the list
@@ -295,11 +357,22 @@ function StudentDetail({ id, onBack, onFinished }: { id: string; onBack: () => v
           </p>
         )}
         <p className="adm-muted">Check these with the student (their phone shows the same ID) before taking any money.</p>
+        {editing ? (
+          <ParticipantEditor
+            registration={registration}
+            busy={busy}
+            onSave={(participant) => {
+              void run({ action: 'edit', participant }, 'Details saved.').then((saved) => saved && setEditing(false));
+            }}
+            onCancel={() => setEditing(false)}
+          />
+        ) : (
         <dl className="fest-factgrid">
           <Fact label="Mobile">{registration.phone}</Fact>
           <Fact label="Email">{registration.email}</Fact>
           <Fact label="College">{registration.college}</Fact>
           <Fact label="College code">{registration.collegeCode ?? ''}</Fact>
+          <Fact label="Register number">{regNoOf(registration)}</Fact>
           <Fact label="Department / course">{registration.branch}</Fact>
           <Fact label="Year">{registration.year}</Fact>
           {registration.team && <Fact label="Team typed when registering">{registration.team}</Fact>}
@@ -309,6 +382,39 @@ function StudentDetail({ id, onBack, onFinished }: { id: string; onBack: () => v
           </Fact>
           <Fact label="At the desk">{registration.checkedIn ? `${when(registration.checkedIn.at)} by ${registration.checkedIn.by}${registration.checkedIn.desk ? ` (desk ${registration.checkedIn.desk})` : ''}` : 'Not yet'}</Fact>
         </dl>
+        )}
+        {!editing && isActive(registration) && (
+          <span className="adm-inline adm-inline--wrap">
+            {hasPermission(session.role, 'fest.edit') && (
+              <button className="adm-button adm-button--small" type="button" onClick={() => setEditing(true)}>
+                Correct details…
+              </button>
+            )}
+            {registration.checkedIn && (
+              <button
+                className="adm-button adm-button--small adm-button--danger-outline"
+                type="button"
+                disabled={busy}
+                onClick={() => {
+                  const why = window.prompt(`Undo ${showId(registration.id)}’s arrival? Say why (e.g. marked by mistake).`);
+                  if (why && why.trim().length >= 3) void run({ action: 'uncheckin', reason: why.trim() }, 'Arrival undone: they show as not arrived.');
+                }}
+              >
+                Undo arrival…
+              </button>
+            )}
+          </span>
+        )}
+        {error && (
+          <p className="adm-error" role="alert">
+            {error}
+          </p>
+        )}
+        {done && (
+          <p className="adm-note" role="status">
+            {done}
+          </p>
+        )}
       </section>
       {isActive(registration) && <EntryFee registration={registration} onFinished={onFinished && ((text) => onFinished(`${showId(registration.id)} ${registration.name}: ${text}`))} />}
       <UtrLog registration={registration} />
@@ -363,10 +469,14 @@ function EntryFee({ registration, onFinished }: { registration: FestRegistration
       <h3 className="adm-h3">Entry fee {rupees(fee)}</h3>
       {status.status === 'PAID' && payment ? (
         <>
-          <p className="fest-match is-good" role="status">
-            ✓ Payment collected and verified: {rupees(payment.amount)} {payment.method === 'CASH' ? 'in cash' : payment.method === 'UPI' ? `by UPI · UTR ${payment.txn ?? ''}` : 'online'} · {when(payment.at)} by {payment.by}
-            {payment.desk ? ` (desk ${payment.desk})` : ''}
-          </p>
+          {payment.method === 'ONLINE' ? (
+            <OnlinePayment registration={registration} busy={busy} onRun={run} onFinished={onFinished} />
+          ) : (
+            <p className="fest-match is-good" role="status">
+              ✓ Payment collected and verified: {rupees(payment.amount)} {payment.method === 'CASH' ? 'in cash' : `by UPI · UTR ${payment.txn ?? ''}`} · {when(payment.at)} by {payment.by}
+              {payment.desk ? ` (desk ${payment.desk})` : ''}
+            </p>
+          )}
           {!registration.checkedIn && (
             <button className="adm-button adm-button--approve" type="button" disabled={busy} onClick={() => void finish({ action: 'checkin' }, 'checked in.')}>
               Check in (already paid)
@@ -427,6 +537,96 @@ function EntryFee({ registration, onFinished }: { registration: FestRegistration
       )}
       {clash && <UtrHolders key={clash} utr={clash} onClose={() => setClash(null)} />}
     </section>
+  );
+}
+
+/**
+ * Paid with the online form: the desk checks its UTR against the receiving account. The UTR it
+ * types must be the form's (or, ticked, the form's was typed wrong); "Payment not found" makes the
+ * fee due again, to collect at the desk.
+ */
+function OnlinePayment({
+  registration,
+  busy,
+  onRun,
+  onFinished,
+}: {
+  registration: FestRegistration;
+  busy: boolean;
+  onRun: (body: Record<string, unknown>, success: string) => Promise<boolean>;
+  onFinished?: (text: string) => void;
+}) {
+  const payment = registration.entry.payment!;
+  const [typed, setTyped] = useState('');
+  const [seen, setSeen] = useState(false);
+  const [correct, setCorrect] = useState(false);
+  const wanted = tidyUtr(payment.txn ?? '').toUpperCase();
+  const utr = tidyUtr(typed).toUpperCase();
+  const valid = /^[A-Z0-9]{6,35}$/.test(utr);
+  const match = valid && (!wanted || utr === wanted);
+  const mismatch = valid && Boolean(wanted) && utr !== wanted && utr.length >= Math.min(wanted.length, 12);
+  if (payment.checked) {
+    return (
+      <p className="fest-match is-good" role="status">
+        ✓ Paid with the online form: {rupees(payment.amount)} · UTR {payment.txn ?? ''} · verified by {payment.checked.by}
+        {payment.checked.desk ? ` (desk ${payment.checked.desk})` : ''} · {when(payment.checked.at)}
+      </p>
+    );
+  }
+  return (
+    <div className="fest-verify">
+      <p className="fest-verify__claim">
+        Paid with the online form: {rupees(payment.amount)}
+        {wanted ? (
+          <>
+            {' '}
+            · UTR <strong className="fest-verify__txn">{wanted}</strong>
+          </>
+        ) : (
+          ' · the form gave no UTR'
+        )}
+        . Not verified yet: find it in the receiving account.
+      </p>
+      <div className="fest-inline-form">
+        <label className="adm-field">
+          <span>UTR on the payment (in the receiving account, or the student’s payment screen)</span>
+          <input value={typed} inputMode="numeric" autoComplete="off" autoCapitalize="none" spellCheck={false} placeholder="12 digits" onChange={(event) => setTyped(event.target.value)} />
+        </label>
+        {match && wanted && (
+          <p className="fest-match is-good" role="status">
+            ✓ Matches the UTR on their online form.
+          </p>
+        )}
+        {mismatch && (
+          <>
+            <p className="fest-match is-bad" role="status">
+              ✗ Not the UTR on their form (it ends {wanted.slice(-4)}). Check the digits again.
+            </p>
+            <label className="adm-check">
+              <input type="checkbox" checked={correct} onChange={(event) => setCorrect(event.target.checked)} />
+              <span>The form’s UTR was typed wrong: the UTR I typed is the one on the payment (kept in their UTR log).</span>
+            </label>
+          </>
+        )}
+        <label className="adm-check">
+          <input type="checkbox" checked={seen} onChange={(event) => setSeen(event.target.checked)} />
+          <span>I have seen {rupees(payment.amount)} received with this UTR.</span>
+        </label>
+        <button
+          className="adm-button adm-button--approve"
+          type="button"
+          disabled={busy || !seen || !(match || (mismatch && correct))}
+          onClick={() =>
+            void onRun({ action: 'online-check', txn: utr, confirmed: true, ...(mismatch && correct && { correct: true }) }, 'Online UTR verified.').then(
+              (saved) => saved && onFinished?.('online UTR verified.'),
+            )
+          }
+        >
+          {busy ? 'Saving…' : `Verify ${showId(registration.id)}’s UTR`}
+        </button>
+      </div>
+      <RejectButton busy={busy} onReject={(reason) => void onRun({ action: 'online-not-found', reason }, 'Marked not found: the entry fee is now due. Collect it below.')} />
+    </div>
   );
 }
 
@@ -761,7 +961,9 @@ function RegisterForStudent({ dept, onOpen }: { dept: string; onOpen: (id: strin
   const [college, setCollege] = useState({ choice: '', other: '' });
   const setCollegeTo = (next: typeof college) => {
     setCollege(next);
-    setForm((current) => ({ ...current, college: next.choice === OTHER_COLLEGE ? next.other.replace(/\s+/g, ' ').trim() : next.choice }));
+    // A listed college fills in its code (the desk can still change it).
+    const code = next.choice !== college.choice ? collegeCodeOf(next.choice) : '';
+    setForm((current) => ({ ...current, college: next.choice === OTHER_COLLEGE ? next.other.replace(/\s+/g, ' ').trim() : next.choice, ...(code && { collegeCode: code }) }));
   };
   const [course, setCourse] = useState({ stream: '', dept: '', other: '' });
   const setCourseTo = (next: typeof course) => {
@@ -859,6 +1061,11 @@ function RegisterForStudent({ dept, onOpen }: { dept: string; onOpen: (id: strin
         <span>College code</span>
         <input value={form.collegeCode} maxLength={12} autoComplete="off" autoCapitalize="characters" spellCheck={false} placeholder="e.g. 2639" onChange={(event) => setForm({ ...form, collegeCode: event.target.value })} />
         {field('collegeCode')}
+      </label>
+      <label className="adm-field">
+        <span>Register number (optional)</span>
+        <input value={form.regNo ?? ''} maxLength={24} inputMode="numeric" autoComplete="off" autoCapitalize="characters" spellCheck={false} onChange={(event) => setForm({ ...form, regNo: event.target.value })} />
+        {field('regNo')}
       </label>
       <div className="fest-form__row">
         <div className="adm-field">

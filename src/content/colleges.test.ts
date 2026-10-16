@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { filterOptions } from '../components/ui/SearchSelect';
 import { EMPTY_REGISTRATION, validateField } from '../lib/registration';
-import { COLLEGES, NEARBY_COLLEGES, OTHER_COLLEGE, OTHER_COLLEGES, RENAMED_COLLEGES } from './colleges';
+import { COLLEGE_CODES, COLLEGES, NEARBY_COLLEGES, OTHER_COLLEGE, OTHER_COLLEGES, RENAMED_COLLEGES, collegeCodeOf } from './colleges';
 
 describe('Tamil Nadu colleges', () => {
   it('lists every college once, the host college first and the colleges near Salem before the rest', () => {
@@ -42,6 +42,24 @@ describe('Tamil Nadu colleges', () => {
     }
     expect(filterOptions(COLLEGES, 'mahendra mallasamudram', true)).toHaveLength(3);
     expect(filterOptions(COLLEGES, 'irtt', true)[0]).toBe('Government College of Engineering, Erode (formerly Institute of Road and Transport Technology, IRTT)');
+  });
+
+  it('knows the Anna University examination code of each district list’s college; the Muthayammal colleges once each', () => {
+    for (const name of Object.keys(COLLEGE_CODES)) expect(COLLEGES, name).toContain(name);
+    expect(collegeCodeOf('R P Sarathy Institute of Technology, Salem')).toBe('6117');
+    expect(collegeCodeOf('Hindusthan College of Technology (DGCT), Salem')).toBe('6105');
+    // An old name still finds its code; a college not in the lists has none.
+    expect(collegeCodeOf('Maha College of Engineering, Salem')).toBe('6215');
+    expect(collegeCodeOf('Some Other College')).toBe('');
+    // Muthayammal Technical Campus is Muthayammal College of Engineering (one college, 6217).
+    expect(filterOptions(COLLEGES, 'muthayammal', true)).toEqual([
+      'Muthayammal College of Arts and Science, Rasipuram',
+      'Muthayammal College of Engineering (formerly Muthayammal Technical Campus), Rasipuram',
+      'Muthayammal Engineering College, Rasipuram',
+    ]);
+    expect(filterOptions(COLLEGES, 'muthayammal technical', true)[0]).toBe('Muthayammal College of Engineering (formerly Muthayammal Technical Campus), Rasipuram');
+    expect(collegeCodeOf('Muthayammal Technical Campus, Rasipuram')).toBe('6217');
+    expect(collegeCodeOf('Muthayammal Engineering College, Rasipuram')).toBe('6216');
   });
 
   it('keeps every renamed college’s new name in the list, and none of the old names', () => {

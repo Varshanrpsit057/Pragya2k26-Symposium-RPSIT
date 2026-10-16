@@ -1,5 +1,3 @@
-import { site } from './site';
-
 export interface HelpContact {
   name: string;
   role: string;
@@ -7,10 +5,11 @@ export interface HelpContact {
 }
 
 /**
- * Who a student coordinator calls when the dashboard itself cannot help (the website is down,
- * or Contact admin cannot send). Shown under Contact admin, on the sign-in page too.
- * Add the web assistant team and the admins here, with their phone numbers.
+ * Who a student coordinator calls (or messages on WhatsApp) when the dashboard itself cannot help
+ * (the website is down, or Contact admin cannot send): the web assist team. Shown under Contact
+ * admin, on the sign-in page too.
  */
 export const HELP_CONTACTS: HelpContact[] = [
-  ...site.contacts.flatMap((contact) => (contact.phone ? [{ name: contact.name, role: contact.role ?? 'Student coordinator', phone: contact.phone }] : [])),
+  { name: 'Varshan.C', role: 'Web assist team', phone: '+91 63748 21177' },
+  { name: 'Barath.S', role: 'Web assist team', phone: '+91 88077 67754' },
 ];

@@ -33,7 +33,7 @@ import {
 import { Badge, when } from '../ui';
 import { DeptPicker, useWorkDept } from './DeskView';
 import { PORTAL, saveTable, today } from './excel';
-import { certificateRows, downloadStudents } from './exports';
+import { certificateRows, downloadStudents, eventRows } from './exports';
 import { useFest } from './FestData';
 import { NO_PAYMENT, PaymentChoice, RegistrationCard, ShortList, Stat, matches, paymentBody, paymentReady, stampNow, type PaymentDraft } from './festUi';
 
@@ -93,7 +93,7 @@ function EventPanel({ event }: { event: FestEvent }) {
   // Website controls can switch event entry off (the web assist team can still fix things).
   const entryOff = !switches.eventEntry && session.role !== 'ADMIN';
   const locked = Boolean(result?.submitted) || entryOff;
-  const canDownload = switches.downloads || session.role === 'ADMIN';
+  const canDownload = switches.downloads || session.role === 'ADMIN' || session.role === 'OVERALL';
   // The event's department's students: only they take part in its events.
   const inDept = useMemo(() => [...registrations.values()].filter((item) => canJoin(item, event) && isActive(item)).sort((a, b) => a.id.localeCompare(b.id)), [registrations, event]);
   const registered = useMemo(() => inDept.filter((item) => entryOf(item, event.id)), [inDept, event.id]);
@@ -161,14 +161,24 @@ function EventPanel({ event }: { event: FestEvent }) {
         </div>
         {canDownload && catalog && (
           <span className="adm-inline adm-inline--wrap">
-            <button className="adm-button adm-button--small" type="button" disabled={!registered.length} onClick={() => downloadStudents(`techfest-${event.id}-${today()}.xlsx`, event.name, note('its participants'), registered, catalog, [event])}>
+            <button
+              className="adm-button adm-button--small"
+              type="button"
+              disabled={!registered.length}
+              onClick={() => {
+                // As on the event registration form: the department, the venue and the staff coordinator above the list.
+                const dept = catalog.departments.find((item) => item.code === event.dept);
+                const about = [`Department of ${dept?.name ?? deptShort(event.dept)}`, event.venue && `Venue: ${event.venue}`, event.time, event.fee ? `Fee ${rupees(event.fee)}` : 'No fee', dept?.staffCoordinator?.name && `Staff coordinator: ${dept.staffCoordinator.name}`];
+                saveTable(`techfest-${event.id}-registration-form-${today()}.xlsx`, `${eventLabel(event)} · event registration form`, note(about.filter(Boolean).join(' · ')), eventRows(registered, event));
+              }}
+            >
               Download this event (Excel)
             </button>
             <button
               className="adm-button adm-button--small"
               type="button"
               disabled={!inDept.length}
-              onClick={() => downloadStudents(`techfest-${event.dept.toLowerCase()}-students-${today()}.xlsx`, `${deptShort(event.dept)} students`, note(`every ${deptShort(event.dept)} student`), inDept, catalog)}
+              onClick={() => downloadStudents(`techfest-${event.dept.toLowerCase()}-students-${today()}.xlsx`, `${deptShort(event.dept)} students`, note(`every ${deptShort(event.dept)} student`), inDept, catalog, { events: eventsOf(catalog, event.dept, { all: true }) })}
             >
               Download all {deptShort(event.dept)} students (Excel)
             </button>

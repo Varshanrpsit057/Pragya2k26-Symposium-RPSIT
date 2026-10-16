@@ -84,6 +84,13 @@ const text = (value: unknown, max = 200) => (typeof value === 'string' ? value.r
 const handOverKey = (dept: string, desk: number) => `fest-handover-${dept}-${desk}`;
 const int = (value: unknown, fallback: number) => (typeof value === 'number' && Number.isInteger(value) ? value : typeof value === 'string' && /^\d{1,6}$/.test(value) ? Number(value) : fallback);
 
+/**
+ * A payment whose UTR is accepted once across the fest: UPI at a desk, or an online payment once a
+ * desk has verified its UTR.
+ */
+const holdsTxn = (payment: FestPayment | undefined): payment is FestPayment & { txn: string } =>
+  Boolean(payment?.txn) && (payment?.method === 'UPI' || (payment?.method === 'ONLINE' && Boolean(payment.checked)));
+
 export class FestService {
   private cached: { at: number; catalog: FestCatalog } | null = null;
   private resetCached: { at: number; value: string | null } | null = null;
@@ -473,13 +480,13 @@ export class FestService {
 
   /** Claims a UPI payment's transaction ID for this registration (refused when another one has it). */
   private async claimPayment(payment: FestPayment | undefined, id: string) {
-    if (payment?.method !== 'UPI' || !payment.txn) return;
+    if (!holdsTxn(payment)) return;
     const holder = await this.deps.store.claimTxn(TXN_SCOPE, payment.txn, id);
     if (holder && holder !== id) throw new ApiError(409, 'TXN_USED', `This UPI transaction ID was already accepted for ${showId(holder)}.`, undefined, undefined, { existingId: holder });
   }
 
   private async releasePayment(payment: FestPayment | undefined, id: string) {
-    if (payment?.method === 'UPI' && payment.txn) await this.deps.store.releaseTxn(TXN_SCOPE, payment.txn, id);
+    if (holdsTxn(payment)) await this.deps.store.releaseTxn(TXN_SCOPE, payment.txn, id);
   }
 
   /**
@@ -555,6 +562,9 @@ export class FestService {
       verify: 'fest.register',
       reject: 'fest.register',
       utr: 'fest.register',
+      uncheckin: 'fest.register',
+      'online-check': 'fest.register',
+      'online-not-found': 'fest.register',
       edit: 'fest.edit',
       events: 'fest.edit',
       cancel: 'fest.cancel',
@@ -657,6 +667,20 @@ export class FestService {
 
     if (action === 'utr') return this.changeUtr(dept, id, input, stamp, live);
 
+    if (action === 'uncheckin') {
+      // Marked arrived by mistake: the desk (or the web assist team) undoes it, with the reason. The
+      // entry fee stays as it is.
+      if (reason.length < 3) throw new ApiError(400, 'INVALID', 'Say why the arrival is undone (e.g. marked by mistake).');
+      const result = await this.mutate(dept, id, (registration) => {
+        live(registration);
+        return registration.checkedIn ? { next: { checkedIn: undefined } } : null;
+      });
+      if (result.changed) this.deps.log('Fest arrival undone', { id, reason, by: actor.username });
+      return result;
+    }
+
+    if (action === 'online-check' || action === 'online-not-found') return this.checkOnline(action, dept, id, input, stamp, desk, live);
+
     if (action === 'uncancel' || action === 'restore') {
       // Brought back: its UPI payment is claimed again (refused if another student has the UTR now).
       const current = await this.required(dept, id);
@@ -749,6 +773,84 @@ export class FestService {
     });
     this.deps.log('Fest UTR changed', { id, from: from.slice(-4), to: to.slice(-4), by: stamp.by });
     return result;
+  }
+
+  /**
+   * The entry fee paid with the online form: a desk checks its UTR against the receiving account.
+   * 'online-check': the desk types the UTR it sees (it must be the form's, or, ticked, the form's was
+   * typed wrong) and that it saw the money; the UTR is then accepted once across the fest like any
+   * other. 'online-not-found': the money is not there, so the fee is due again (the desk collects
+   * it; the form's UTR stays as the one they sent, and can still be verified if the money turns up).
+   */
+  private async checkOnline(
+    action: 'online-check' | 'online-not-found',
+    dept: string,
+    id: string,
+    input: Record<string, unknown>,
+    stamp: FestStamp,
+    desk: number | undefined,
+    live: (registration: FestRegistration) => void,
+  ) {
+    const online = (registration: FestRegistration) => {
+      const payment = registration.entry.payment;
+      return registration.entry.status === 'PAID' && payment?.method === 'ONLINE' && !payment.voided ? payment : null;
+    };
+    const current = await this.required(dept, id);
+    live(current);
+    const paid = online(current);
+    if (!paid) throw new ApiError(409, 'NOT_ONLINE', `${showId(id)} has no online payment to check.`);
+
+    if (action === 'online-not-found') {
+      if (paid.checked) throw new ApiError(409, 'CHECKED', `${showId(id)}’s online payment was verified already (by ${paid.checked.by}).`);
+      const reason = text(input.reason, 200);
+      if (reason.length < 3) throw new ApiError(400, 'INVALID', 'Say what is wrong (e.g. not received, wrong amount).');
+      const result = await this.mutate(dept, id, (registration) => {
+        const payment = online(registration);
+        if (!payment || payment.checked) return null;
+        const claim = payment.txn ? { txn: payment.txn, amount: payment.amount, at: payment.at } : undefined;
+        return { next: { entry: { status: 'DUE' as const, ...(claim && { claim }), rejected: { ...stamp, reason } } } };
+      });
+      if (result.changed) this.deps.log('Fest online payment not found', { id, reason, by: stamp.by });
+      return result;
+    }
+
+    const txn = tidyUtr(text(input.txn, 40)).toUpperCase();
+    if (!TXN.test(txn)) throw new ApiError(400, 'INVALID', 'Type the UTR from the payment (12 digits).');
+    const typo = Boolean(paid.txn) && !sameUtr(txn, paid.txn);
+    if (typo && input.correct !== true) {
+      throw new ApiError(
+        409,
+        'TXN_MISMATCH',
+        `That UTR does not match the one on ${showId(id)}’s online form (it ends ${paid.txn!.slice(-4)}). Check the digits; if the form’s was typed wrong, tick that the UTR you typed is the right one.`,
+      );
+    }
+    if (input.confirmed !== true) throw new ApiError(400, 'INVALID', `Tick that you have seen ₹${paid.amount} received with this UTR.`);
+    if (paid.checked && sameUtr(paid.txn, txn)) return { success: true as const, registration: current, changed: false };
+    const holder = await this.deps.store.claimTxn(TXN_SCOPE, txn, id);
+    if (holder && holder !== id) throw new ApiError(409, 'TXN_USED', `This UTR is already accepted for ${showId(holder)}.`, undefined, undefined, { existingId: holder });
+    const checked = { ...stamp, ...(desk && { desk }) };
+    let before: FestPayment | null = null;
+    try {
+      const result = await this.mutate(dept, id, (registration) => {
+        const payment = online(registration);
+        if (!payment) throw new ApiError(409, 'BUSY', 'This payment was changed meanwhile. Look at it again.');
+        if (payment.checked && sameUtr(payment.txn, txn)) return null;
+        before = payment;
+        const changed = Boolean(payment.txn) && !sameUtr(payment.txn, txn);
+        const utrLog = changed ? [...(registration.utrLog ?? []), { ...stamp, from: payment.txn!, to: txn, reason: 'The online form’s UTR was typed wrong; corrected at the desk when verifying' }] : registration.utrLog;
+        return { next: { entry: { ...registration.entry, payment: { ...payment, txn, checked } }, ...(utrLog && { utrLog }) } };
+      });
+      // A UTR verified before and now corrected: the old one is free again.
+      const old = before as FestPayment | null;
+      if (result.changed && old?.checked && old.txn && !sameUtr(old.txn, txn)) await this.deps.store.releaseTxn(TXN_SCOPE, old.txn, id);
+      if (result.changed) this.deps.log('Fest online UTR verified', { id, utr: txn.slice(-4), corrected: typo, by: stamp.by });
+      else if (!sameUtr(result.registration.entry.payment?.txn, txn)) await this.deps.store.releaseTxn(TXN_SCOPE, txn, id);
+      return result;
+    } catch (error) {
+      const now = await this.deps.store.getRegistration(dept, id).catch(() => null);
+      if (!now || !(holdsTxn(now.entry.payment) && sameUtr(now.entry.payment.txn, txn))) await this.deps.store.releaseTxn(TXN_SCOPE, txn, id);
+      throw error;
+    }
   }
 
   /**
@@ -1471,6 +1573,7 @@ const pick = (registration: FestRegistration): FestParticipant => ({
   email: registration.email,
   college: registration.college,
   collegeCode: registration.collegeCode ?? '',
+  regNo: registration.regNo ?? '',
   branch: registration.branch,
   year: registration.year,
   team: registration.team,

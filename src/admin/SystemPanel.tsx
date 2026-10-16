@@ -10,7 +10,7 @@ import type { SessionInfo } from '../lib/staff';
 import { SignedOut } from './adminApi';
 import { useFest } from './fest/FestData';
 import { backupNow, fetchPortal } from './fest/festApi';
-import { downloadFullCopy } from './fest/exports';
+import { downloadMaster } from './fest/exports';
 import { Badge, ErrorNote, messageOf, useLiveData, when } from './ui';
 
 interface PanelProps {
@@ -109,8 +109,8 @@ export function BackupButtons({ token, onSignedOut, onBackup }: { token: string;
         <button className="adm-button adm-button--primary" type="button" disabled={busy} onClick={() => void run()}>
           {busy ? 'Backing up…' : 'Back up now'}
         </button>
-        <button className="adm-button" type="button" disabled={!catalog} onClick={() => catalog && downloadFullCopy(catalog, registrations, results, session.displayName)}>
-          Download a full copy (Excel)
+        <button className="adm-button" type="button" disabled={!catalog} onClick={() => catalog && downloadMaster(catalog, registrations, results, session.displayName)}>
+          Master Excel (everything)
         </button>
       </span>
       {note && (
