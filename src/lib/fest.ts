@@ -6,6 +6,7 @@
  * edits it in the dashboard), registration IDs, field checks, CSV reading and the totals
  * every live view shows. Plain data and pure functions only.
  */
+import { RENAMED_COLLEGES } from '../content/colleges';
 
 // ------------------------------------------------------------------------------------------
 // Departments and events (the catalog)
@@ -791,8 +792,15 @@ export function matchEvents(catalog: FestCatalog, dept: string, text: string): {
 // ------------------------------------------------------------------------------------------
 // Colleges (the overall coordinator's college-wise view)
 
-/** 'Sona College of Technology, Salem.' → 'sona college of technology salem': one college however it is typed. */
-export const collegeKey = (name: string) => name.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+const plainKey = (name: string) => name.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+/** A college's old name in the list → its name now (keys), so a renamed college stays one college. */
+const RENAMED_KEYS = new Map(Object.entries(RENAMED_COLLEGES).map(([from, to]) => [plainKey(from), plainKey(to)]));
+
+/** 'Sona College of Technology, Salem.' → 'sona college of technology salem': one college however it is typed, or under its old name. */
+export const collegeKey = (name: string) => {
+  const key = plainKey(name);
+  return RENAMED_KEYS.get(key) ?? key;
+};
 
 export interface CollegeRow {
   key: string;
@@ -835,7 +843,8 @@ export function collegeSummary(registrations: Iterable<FestRegistration>, result
     row.students += 1;
     row.registrations += registration.events.length;
     row.participations += registration.events.filter((entry) => entry.present).length;
-    row.spellings.set(registration.college, (row.spellings.get(registration.college) ?? 0) + 1);
+    const spelling = RENAMED_COLLEGES[registration.college] ?? registration.college;
+    row.spellings.set(spelling, (row.spellings.get(spelling) ?? 0) + 1);
     if (registration.collegeCode) row.codes.set(registration.collegeCode, (row.codes.get(registration.collegeCode) ?? 0) + 1);
   }
   for (const result of results) {

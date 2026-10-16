@@ -52,6 +52,23 @@ describe('the college-wise view', () => {
     ]);
   });
 
+  it('counts a renamed college once, under its name now, whichever name its students registered under', () => {
+    const rows = collegeSummary(
+      [
+        person('CSE-0001', 'Mahendra Engineering College, Namakkal'),
+        person('CSE-0002', 'Mahendra Engineering College, Namakkal'),
+        person('CSE-0003', 'Mahendra Engineering College, Mallasamudram, Namakkal'),
+        person('CSE-0004', 'Maha College of Engineering, Salem'),
+      ],
+      [result('cse-hackathon', [{ place: 1, ids: ['CSE-0001'] }, { place: 2, ids: ['CSE-0004'] }])],
+    );
+    expect(rows).toEqual([
+      expect.objectContaining({ key: collegeKey('Mahendra Engineering College, Namakkal'), name: 'Mahendra Engineering College, Mallasamudram, Namakkal', students: 3, first: 1 }),
+      expect.objectContaining({ name: 'Mahendra College of Engineering (formerly Maha College of Engineering), Minnampalli, Salem', students: 1, second: 1 }),
+    ]);
+    expect(collegeKey('Maha College of Engineering, Salem')).toBe(collegeKey('Mahendra College of Engineering (formerly Maha College of Engineering), Minnampalli, Salem'));
+  });
+
   it('counts each college’s event participations (attended) and registrations', () => {
     const stamp = { at: '2026-10-17T05:00:00.000Z', by: 'c' };
     const rows = collegeSummary(

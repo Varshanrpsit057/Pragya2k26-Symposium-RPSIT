@@ -6,7 +6,7 @@
  * "My registration ID" finds it on another phone with the mobile number (or the admin is asked to help).
  */
 import { useCallback, useEffect, useState, type FormEvent, type ReactNode } from 'react';
-import { COLLEGES, OTHER_COLLEGE } from '../content/colleges';
+import { COLLEGES, OTHER_COLLEGE, RENAMED_COLLEGES } from '../content/colleges';
 import { COURSE_DEPARTMENTS, OTHER, STREAMS, courseText } from '../content/courses';
 import { SearchSelect } from '../components/ui/SearchSelect';
 import { formatIst } from '../lib/countdown';
@@ -84,9 +84,10 @@ const newId = () => {
   return `s-${Array.from(bytes, (byte: number) => byte.toString(16).padStart(2, '0')).join('')}`;
 };
 const emptyDraft = (): Draft => ({ submissionId: newId(), name: '', phone: '', email: '', college: '', collegeOther: '', collegeCode: '', stream: '', course: '', courseOther: '', year: '', team: '' });
-/** A draft kept from before the college list (a typed college not in the list becomes Other). */
+/** A draft kept from before the college list (a renamed college gets its new name, a typed college not in the list becomes Other). */
 const loadDraft = (): Draft => {
-  const draft = { ...emptyDraft(), ...read<Draft>(DRAFT) };
+  const saved = { ...emptyDraft(), ...read<Draft>(DRAFT) };
+  const draft = { ...saved, college: RENAMED_COLLEGES[saved.college] ?? saved.college };
   if (draft.college && !COLLEGES.includes(draft.college)) return { ...draft, college: OTHER_COLLEGE, collegeOther: draft.collegeOther || draft.college };
   return draft;
 };

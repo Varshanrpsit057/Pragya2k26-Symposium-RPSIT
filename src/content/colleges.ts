@@ -1,10 +1,14 @@
 /**
- * Colleges for the registration forms' College field, generated (do not edit by hand) from
- * the TNEA participating engineering colleges, plus universities, institutes of national
- * importance, deemed universities, and arts & science colleges in the districts PRAGYA draws
- * from. The host college comes first, then the colleges around Salem, Dharmapuri, Erode,
- * Namakkal, Krishnagiri, Hosur, Tiruchengode and Bhavani, then the rest of Tamil Nadu.
- * A college that is not listed can still be typed in (Other).
+ * Colleges for the registration forms' College field: the TNEA participating engineering
+ * colleges, plus universities, institutes of national importance, deemed universities, and arts
+ * & science colleges in the districts PRAGYA draws from. The host college comes first, then the
+ * colleges around Salem, Dharmapuri, Erode, Namakkal, Krishnagiri, Hosur, Tiruchengode and
+ * Bhavani (checked against Anna University's district lists and Periyar University's colleges),
+ * then the rest of Tamil Nadu. A college that is not listed can still be typed in (Other).
+ *
+ * Colleges that share a name (the Mahendra colleges) carry their campus town, so a student picks
+ * the right one. A college renamed here keeps its old name in RENAMED_COLLEGES, so the students
+ * who registered under it still count for the same college.
  */
 
 /** The host college, then the colleges near Salem, alphabetically. */
@@ -12,17 +16,20 @@ export const NEARBY_COLLEGES: readonly string[] = [
   'R P Sarathy Institute of Technology, Salem',
   'A V S Engineering College, Salem',
   'A.V.S. College of Arts and Science, Salem',
+  'AVS College of Technology, Salem',
   'Adhiyamaan College of Engineering, Hosur',
   'Aishwarya College Of Engineering And Technology, Erode',
   'Al-Ameen Engineering College, Erode',
   'Annai Mathammal Sheela Engineering College, Namakkal',
   'Annapoorna Engineering College, Salem',
   'Archana Institute of Technology, Krishnagiri',
+  'Arignar Anna Government Arts College, Attur',
   'Arignar Anna Government Arts College, Namakkal',
   'Bannari Amman Institute of Technology, Sathyamangalam',
   'Bharathiyar Institute of Engineering for Women, Salem',
   'CMS College of Engineering, Namakkal',
   'Dhirajlal Gandhi College Of Technology, Salem',
+  'Don Bosco College, Dharmapuri',
   "Dr. Nagarathinam's College of Engineering, Namakkal",
   'Er. Perumal Manimekalai College of Engineering, Hosur',
   'Erode Arts and Science College',
@@ -35,47 +42,67 @@ export const NEARBY_COLLEGES: readonly string[] = [
   'Gnanamani College of Engineering, Namakkal',
   'Gnanamani College of Technology, Namakkal',
   'Gobi Arts and Science College, Gobichettipalayam',
+  'Government Arts and Science College for Women, Bargur',
+  'Government Arts and Science College for Women, Karimangalam',
+  'Government Arts and Science College, Harur',
+  'Government Arts and Science College, Hosur',
+  'Government Arts and Science College, Idappadi',
+  'Government Arts and Science College, Komarapalayam',
+  'Government Arts and Science College, Mettur',
+  'Government Arts and Science College, Pappireddipatti',
+  'Government Arts and Science College, Pennagaram',
   'Government Arts College for Men, Krishnagiri',
+  'Government Arts College for Women, Krishnagiri',
   'Government Arts College for Women, Salem',
   'Government Arts College, Dharmapuri',
   'Government Arts College, Salem',
   'Government College of Engineering, Bargur, Krishnagiri',
   'Government College of Engineering, Dharmapuri',
+  'Government College of Engineering, Erode (formerly Institute of Road and Transport Technology, IRTT)',
   'Government College of Engineering, Salem',
   'Greentech College of Engineering for Women, Salem',
   // Also known as DGCT (asked for beside Dhirajlal Gandhi College Of Technology, which stays as it is).
   'Hindusthan College of Technology (DGCT), Salem',
   'Hosur Institute Of Technology And Science',
-  'Institute of Road and Transport Technology, Erode',
+  'Indian Institute of Handloom Technology, Salem',
   'J K K Munirajah College of Technology, Gobichettipalayam',
   'J.K.K. Munirajah School Of Architecture, Gobichettipalayam',
+  'J.K.K. Nataraja College of Arts and Science, Komarapalayam',
   'J.K.K. Nataraja College of Engineering and Technology, Komarapalayam',
   'Jairam Arts and Science College, Salem',
   'Jayalakshmi Institute of Technology, Dharmapuri',
   'Jayam College of Engineering and Technology, Dharmapuri',
   'K S R Institute For Engineering And Technology, Tiruchengode',
   'K.S. Rangasamy College of Technology, Tiruchengode',
+  'K.S.R. College of Arts and Science for Women, Tiruchengode',
   'K.S.R. College of Arts and Science, Tiruchengode',
   'K.S.R. College of Engineering, Tiruchengode',
+  "Kandaswami Kandar's College, Paramathi Velur",
   'King College of Technology, Namakkal',
   'Knowledge Institute of Technology, Salem',
   'Kongu Arts and Science College, Erode',
   'Kongu Engineering College, Perundurai',
+  'Kongu School of Architecture, Erode',
   'M.G.R. College, Hosur',
   'M.P. Nachimuthu M. Jaganathan Engineering College, Erode',
-  'Maha College of Engineering, Salem',
   'Maharaja Engineering College for Women, Erode',
-  'Mahendra Arts and Science College, Namakkal',
-  'Mahendra Engineering College for Women, Namakkal',
-  'Mahendra Engineering College, Namakkal',
-  'Mahendra Institute of Engineering and Technology, Namakkal',
-  'Mahendra Institute of Technology, Namakkal',
+  // The Mahendra colleges, by campus: Minnampalli (Salem, on the Attur road), Mallasamudram and
+  // Kalippatti (between Salem and Tiruchengode), Kumaramangalam (Tiruchengode).
+  'Mahendra Arts and Science College, Kalippatti, Namakkal',
+  'Mahendra College of Engineering (formerly Maha College of Engineering), Minnampalli, Salem',
+  'Mahendra Engineering College for Women, Kumaramangalam, Tiruchengode',
+  'Mahendra Engineering College, Mallasamudram, Namakkal',
+  'Mahendra Institute of Engineering and Technology, Mallasamudram, Namakkal',
+  'Mahendra Institute of Technology, Mallasamudram, Namakkal',
   'Muthayammal College of Arts and Science, Rasipuram',
+  'Muthayammal College of Engineering, Rasipuram',
   'Muthayammal Engineering College, Rasipuram',
   'Muthayammal Technical Campus, Rasipuram',
+  'Namakkal Kavignar Ramalingam Government Arts College for Women, Namakkal',
   'Nandha Arts and Science College, Erode',
   'Nandha College of Technology, Erode',
   'Nandha Engineering College, Erode',
+  'Navarasam Arts and Science College for Women, Erode',
   'P G P College of Engineering and Technology, Namakkal',
   'P.G.P. College of Arts and Science, Namakkal',
   'P.S.V. College of Engineering and Technology, Krishnagiri',
@@ -89,8 +116,11 @@ export const NEARBY_COLLEGES: readonly string[] = [
   'S R S College of Engineering and Technology, Salem',
   'S.S.M. College of Engineering, Komarapalayam',
   'Salem College of Engineering and Technology',
+  'Salem Sowdeswari College',
   'Sapthagiri College of Engineering, Dharmapuri',
   'Selvam College of Technology, Namakkal',
+  'Selvamm Arts and Science College, Namakkal',
+  'Sengunthar Arts and Science College, Tiruchengode',
   'Sengunthar College of Engineering, Tiruchengode',
   'Sengunthar Engineering College, Tiruchengode',
   'Shree Sathyam College Of Engineering And Technology, Sankari',
@@ -105,13 +135,17 @@ export const NEARBY_COLLEGES: readonly string[] = [
   'Sri Shanmugha College Of Engineering And Technology, Sankari',
   'Sri Vasavi College, Erode',
   'Sri Venkateshwara Institute Of Engineering, Krishnagiri',
+  'Sri Vidya Mandir Arts and Science College, Uthangarai',
+  'SSM School of Management and Computer Applications, Komarapalayam',
   'Surya Engineering College, Erode',
   'Tagore Institute of Engineering and Technology, Attur',
   'The Kavery College of Engineering, Mecheri',
   'The Kavery Engineering College, Mecheri',
+  'Thiruvalluvar Government Arts College, Rasipuram',
   'Trinity College for Women, Namakkal',
   "V S A Educational and Charitable Trust's Group of Institutions, Salem",
   'Varuvan Vadivelan Institute of Technology, Dharmapuri',
+  'Vasavi Vidya Trust Group of Institutions, Salem',
   'Velalar College of Engineering and Technology, Erode',
   'Vellalar College for Women, Erode',
   'Vidhya Mandhir Institute Of Technology, Erode',
@@ -122,6 +156,7 @@ export const NEARBY_COLLEGES: readonly string[] = [
   'Vivekanandha College of Engineering for Women, Tiruchengode',
   'Vivekanandha College of Technology for Women, Tiruchengode',
   'Vivekanandha Institute of Engineering and Technology for Women, Tiruchengode',
+  'Vivekanandha Institute of Information and Management Studies, Tiruchengode',
   'Vysya College, Salem',
 ];
 
@@ -636,6 +671,20 @@ export const OTHER_COLLEGES: readonly string[] = [
   "Vins Christian Women's College of Engineering, Kanyakumari",
   'VPV College Of Engineering, Theni',
 ];
+
+/**
+ * Names the list used before (as students registered under them) → the name in the list now. The
+ * college ranking counts both as one college, and a form saved with an old name gets the new one.
+ */
+export const RENAMED_COLLEGES: Readonly<Record<string, string>> = {
+  'Maha College of Engineering, Salem': 'Mahendra College of Engineering (formerly Maha College of Engineering), Minnampalli, Salem',
+  'Mahendra Arts and Science College, Namakkal': 'Mahendra Arts and Science College, Kalippatti, Namakkal',
+  'Mahendra Engineering College for Women, Namakkal': 'Mahendra Engineering College for Women, Kumaramangalam, Tiruchengode',
+  'Mahendra Engineering College, Namakkal': 'Mahendra Engineering College, Mallasamudram, Namakkal',
+  'Mahendra Institute of Engineering and Technology, Namakkal': 'Mahendra Institute of Engineering and Technology, Mallasamudram, Namakkal',
+  'Mahendra Institute of Technology, Namakkal': 'Mahendra Institute of Technology, Mallasamudram, Namakkal',
+  'Institute of Road and Transport Technology, Erode': 'Government College of Engineering, Erode (formerly Institute of Road and Transport Technology, IRTT)',
+};
 
 /** Choosing this opens a field to type the college instead. */
 export const OTHER_COLLEGE = 'Other (type your college)';
