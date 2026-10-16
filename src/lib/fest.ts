@@ -542,6 +542,14 @@ export const deptLabel = (catalog: FestCatalog | null, code: string) => (catalog
 export const isActive = (registration: Pick<FestRegistration, 'cancelled' | 'deleted'>) => !registration.cancelled && !registration.deleted;
 export const entryOf = (registration: FestRegistration, eventId: string) => registration.events.find((item) => item.eventId === eventId) ?? null;
 export const feePaid = (entry: FestEntry | null) => Boolean(entry?.fee && !entry.fee.voided);
+/** How a fee was paid, as people say it: 'Cash', 'UPI', 'Online'. */
+export const methodLabel = (method: FestMethod) => (method === 'UPI' ? 'UPI' : method === 'ONLINE' ? 'Online' : 'Cash');
+/**
+ * An event fee as the event's coordinator recorded it: 'UPI ₹50 · UTR 612345678901', 'Cash ₹50';
+ * '' when not paid. (The event's own UTR, typed at the venue: not the gate pass UTR a student sent.)
+ */
+export const eventFeeText = (entry: FestEntry | null) =>
+  entry?.fee && !entry.fee.voided ? `${methodLabel(entry.fee.method)} ₹${entry.fee.amount}${entry.fee.txn ? ` · UTR ${entry.fee.txn}` : ''}` : '';
 
 // ------------------------------------------------------------------------------------------
 // Teams (team events): each member's entry carries the team's name

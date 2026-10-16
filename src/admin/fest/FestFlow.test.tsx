@@ -82,6 +82,32 @@ const collect = (h: Harness, token: string, id: string, payment: Record<string, 
   h.call('POST', `/api/admin/fest/registrations/${id}`, { action: 'collect', payment }, { token });
 
 describe('a registration desk', () => {
+  it('stays on the list it chose (Fee due): after each student it comes back there, for the next one', async () => {
+    const h = setup({ at: TIMES.eventDay });
+    await onPhone(h, 'CSE', 1, { name: 'Kavin R' });
+    await onPhone(h, 'CSE', 2, { name: 'Asha K' });
+    const desk = await h.staff('DESK', [], 'cse-desk1', { department: 'CSE', deskNumber: 1 });
+    await collect(h, desk.token, await onPhone(h, 'CSE', 3, { name: 'Paid Already' }));
+    backend(h);
+    signIn(desk.token);
+    render(<AdminApp />);
+    fireEvent.click(await screen.findByRole('button', { name: 'Fee due (2)' }, { timeout: 5000 }));
+    fireEvent.click(screen.getByRole('button', { name: 'Open CSE-2001' }));
+    // Back without doing anything: still on Fee due.
+    fireEvent.click(await screen.findByRole('button', { name: '← Back to the list' }));
+    expect(screen.getByRole('button', { name: 'Fee due (2)' })).toHaveAttribute('aria-pressed', 'true');
+    fireEvent.click(screen.getByRole('button', { name: 'Open CSE-2001' }));
+    const fee = await screen.findByRole('region', { name: 'Entry fee' });
+    fireEvent.click(within(fee).getByRole('radio', { name: 'Cash' }));
+    fireEvent.click(within(fee).getByRole('checkbox', { name: 'I have received ₹100 in cash.' }));
+    await act(async () => fireEvent.click(within(fee).getByRole('button', { name: 'Collect ₹100 (cash)' })));
+    // Collected: back on Fee due, the next student waiting there.
+    expect(await screen.findByRole('button', { name: 'Fee due (1)' })).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.queryByRole('button', { name: 'Open CSE-2001' })).toBeNull();
+    expect(screen.getByRole('button', { name: 'Open CSE-2002' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Open CSE-2003' })).toBeNull();
+  });
+
   it('lists the department’s IDs; opening one shows the student; collecting cash marks them paid', async () => {
     const h = setup({ at: TIMES.eventDay });
     await onPhone(h, 'CSE', 1, { name: 'Kavin R' });
@@ -125,7 +151,7 @@ describe('a registration desk', () => {
     expect(await within(screen.getByRole('region', { name: 'Entry fee' })).findByText(/Payment collected and verified: ₹100 in cash/)).toBeInTheDocument();
 
     // With no signal nothing is pretended: the desk is told nothing was saved (and stays on the student).
-    fireEvent.click(screen.getByRole('button', { name: '← All students' }));
+    fireEvent.click(screen.getByRole('button', { name: '← Back to the list' }));
     fireEvent.change(screen.getByLabelText('Find'), { target: { value: '' } });
     fireEvent.click(screen.getByRole('button', { name: 'Open CSE-2002' }));
     const network = backend(h);
@@ -233,6 +259,41 @@ describe('a registration desk', () => {
 });
 
 describe('an event coordinator', () => {
+  it('shows the UPI transaction ID it typed for an event fee, with who took it, on screen and in the event’s Excel columns', async () => {
+    const h = setup({ at: TIMES.eventDay });
+    const desk = await h.staff('DESK', [], 'cse-desk1', { department: 'CSE', deskNumber: 1 });
+    const coordinator = await h.staff('COORDINATOR', ['cse-hackathon'], 'cse-hack1', { department: 'CSE' });
+    const path = (id: string) => `/api/admin/fest/registrations/${id}/events/cse-hackathon`;
+    for (const [n, name] of [
+      [1, 'Kavin R'],
+      [2, 'Asha K'],
+    ] as const) {
+      const id = await onPhone(h, 'CSE', n, { name });
+      await collect(h, desk.token, id);
+      await h.call('POST', path(id), { action: 'add' }, { token: coordinator.token });
+    }
+    await h.call('POST', path('CSE-2001'), { action: 'fee', payment: { method: 'UPI', txn: '612345678955', confirmed: true } }, { token: coordinator.token });
+    await h.call('POST', path('CSE-2001'), { action: 'present' }, { token: coordinator.token });
+    await h.call('POST', path('CSE-2002'), { action: 'fee', payment: { method: 'CASH', confirmed: true } }, { token: coordinator.token });
+    const files = downloads();
+    backend(h);
+    signIn(coordinator.token);
+    render(<AdminApp />);
+
+    fireEvent.click(await screen.findByRole('button', { name: 'In this event (2)' }, { timeout: 5000 }));
+    expect(screen.getByText('Fee paid · UPI ₹50 · UTR 612345678955')).toBeInTheDocument();
+    expect(screen.getByText('Fee paid · Cash ₹50')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Open CSE-2001' }));
+    const card = screen.getByRole('group', { name: 'CSE-2001 details' });
+    expect(within(card).getByText('UPI ₹50 · UTR 612345678955')).toBeInTheDocument();
+    expect(within(card).getAllByText(/^by cse-hack1/)).toHaveLength(2);
+
+    // The event's Excel: its fee (cash or UPI), the UTR typed at the venue, present or absent.
+    fireEvent.click(screen.getByRole('button', { name: 'Download this event (Excel)' }));
+    const sheet = await xlsxText(files[0]!);
+    for (const text of ['Hackathon: fee', 'Hackathon: UTR', 'Hackathon: present / absent', 'UPI ₹50', '612345678955', 'Cash ₹50', 'Present', 'Absent', 'Gate pass paid by (cash / UPI)']) expect(sheet).toContain(text);
+  });
+
   it('has every department student: opens one by ID, checks them, adds them, takes ₹50, marks attendance and submits the winners', async () => {
     const h = setup({ at: TIMES.eventDay });
     const desk = await h.staff('DESK', [], 'cse-desk1', { department: 'CSE', deskNumber: 1 });
