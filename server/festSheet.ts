@@ -64,7 +64,7 @@ export const REGISTRATION_HEADER = [
   'Desk',
   'Checked in at (IST)',
   'Events',
-  'Event fees paid',
+  'Event fees paid (cash / UPI, UTR typed at the event)',
   'Present at',
   'Status',
   'Test data',
@@ -117,7 +117,10 @@ export function registrationRows(catalog: FestCatalog, registrations: readonly F
         payment?.desk ?? item.checkedIn?.desk ?? item.desk ?? '',
         ist(item.checkedIn?.at),
         names(item.events.map((event) => event.eventId)),
-        names(item.events.filter((event) => feePaid(event)).map((event) => event.eventId)),
+        item.events
+          .filter((event) => feePaid(event))
+          .map((event) => `${eventName(event.eventId)} (${METHOD_LABEL[event.fee!.method]} ₹${event.fee!.amount}${event.fee!.txn ? ` · UTR ${event.fee!.txn}` : ''})`)
+          .join('; '),
         names(item.events.filter((event) => event.present).map((event) => event.eventId)),
         status,
         item.test ? 'Yes' : '',

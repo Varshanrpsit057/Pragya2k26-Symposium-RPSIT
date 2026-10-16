@@ -4,7 +4,28 @@
  * and the full copy (every sheet at once) the web assist team keeps as a backup.
  */
 import { formatIst } from '../../lib/countdown';
-import { DESKS, collegeSummary, deptShort, eventLabel, eventOf, feePaid, isActive, medalOrder, placeTeam, showId, teamOf, teamsText, totalsOf, type CollegeRow, type FestCatalog, type FestRegistration, type FestResult } from '../../lib/fest';
+import {
+  DESKS,
+  collegeSummary,
+  deptShort,
+  entryOf,
+  eventLabel,
+  eventOf,
+  feePaid,
+  isActive,
+  medalOrder,
+  methodLabel,
+  placeTeam,
+  showId,
+  teamOf,
+  teamsText,
+  totalsOf,
+  type CollegeRow,
+  type FestCatalog,
+  type FestEvent,
+  type FestRegistration,
+  type FestResult,
+} from '../../lib/fest';
 import { when } from '../ui';
 import { PORTAL, saveTable, saveWorkbook, tableSheet, today } from './excel';
 
@@ -16,8 +37,37 @@ export const howRegistered = (item: FestRegistration) => (item.source === 'SELF'
 /** Whether they reached a desk: online and own-phone students check in there; desk ones were there. */
 const arrived = (item: FestRegistration) => (item.source === 'ONLINE' || item.source === 'SELF' ? (item.checkedIn ? when(item.checkedIn.at) : 'No') : 'Yes');
 
-export function exportRows(list: FestRegistration[], catalog: FestCatalog) {
+/** The events whose columns a list gets: its departments' events, in the catalog's order. */
+const eventsFor = (list: FestRegistration[], catalog: FestCatalog) => {
+  const depts = new Set(list.map((item) => item.dept));
+  return catalog.events.filter((event) => depts.has(event.dept));
+};
+
+/**
+ * One event's columns, as its coordinator recorded them: the fee (cash or UPI, or due), the UTR
+ * typed at the venue for a UPI fee (the event's own, not the gate pass UTR), present or absent,
+ * and the team (team events). Blank when the student did not join it.
+ */
+const eventHeader = (event: FestEvent, withDept: boolean) => {
+  const name = withDept ? `${deptShort(event.dept)} ${event.name}` : event.name;
+  return [`${name}: fee`, `${name}: UTR`, `${name}: present / absent`, ...(event.teamMax > 1 ? [`${name}: team`] : [])];
+};
+function eventCells(item: FestRegistration, event: FestEvent): string[] {
+  const entry = entryOf(item, event.id);
+  const team = event.teamMax > 1 ? [entry?.team ?? ''] : [];
+  if (!entry) return ['', '', '', ...team];
+  const fee = feePaid(entry) ? `${methodLabel(entry.fee!.method)} ₹${entry.fee!.amount}` : entry.fee?.voided ? 'Cancelled' : event.fee ? 'Due' : 'No fee';
+  return [fee, feePaid(entry) ? (entry.fee!.txn ?? '') : '', entry.present ? 'Present' : 'Absent', ...team];
+}
+
+/**
+ * The students' Excel rows: their details, the gate pass (entry fee: cash or UPI, the UTR accepted
+ * at the desk and the one the student sent), then a group of columns for each event (`events`,
+ * by default every event of the listed departments).
+ */
+export function exportRows(list: FestRegistration[], catalog: FestCatalog, events: FestEvent[] = eventsFor(list, catalog)) {
   const name = (id: string) => eventOf(catalog, id)?.name ?? id;
+  const withDept = new Set(events.map((event) => event.dept)).size > 1;
   const rows: (string | number)[][] = [
     [
       'Registration ID',
@@ -32,17 +82,16 @@ export function exportRows(list: FestRegistration[], catalog: FestCatalog) {
       'Team',
       'Registered',
       'Desk',
-      'Entry fee',
-      'Paid by',
-      'Paid at',
-      'UTR accepted',
-      'UTR sent by student',
-      'UTR changes',
-      'Verified by',
+      'Gate pass (entry fee)',
+      'Gate pass paid by (cash / UPI)',
+      'Gate pass paid at',
+      'Gate pass UTR (accepted at the desk)',
+      'Gate pass UTR sent by the student',
+      'Gate pass UTR changes',
+      'Gate pass verified by',
       'Arrived',
       'Events',
-      'Event fees paid',
-      'Present at',
+      ...events.flatMap((event) => eventHeader(event, withDept)),
       'Registered at',
       'Registered by',
       'Status',
@@ -64,7 +113,7 @@ export function exportRows(list: FestRegistration[], catalog: FestCatalog) {
       howRegistered(item),
       payment?.desk ?? item.checkedIn?.desk ?? item.desk ?? '',
       item.entry.status === 'PAID' ? (payment?.amount ?? '') : item.entry.rejected ? 'NOT FOUND' : item.entry.claim ? 'TO CHECK' : 'DUE',
-      payment?.method ?? '',
+      payment ? methodLabel(payment.method) : '',
       payment ? when(payment.at) : '',
       payment?.txn ?? '',
       item.entry.claim?.txn ?? '',
@@ -72,8 +121,7 @@ export function exportRows(list: FestRegistration[], catalog: FestCatalog) {
       payment ? `${payment.by}${payment.desk ? ` (desk ${payment.desk})` : ''}` : '',
       arrived(item),
       item.events.map((entry) => name(entry.eventId)).join('; '),
-      item.events.filter((entry) => feePaid(entry)).map((entry) => `${name(entry.eventId)} (${entry.fee!.method} ₹${entry.fee!.amount})`).join('; '),
-      item.events.filter((entry) => entry.present).map((entry) => name(entry.eventId)).join('; '),
+      ...events.flatMap((event) => eventCells(item, event)),
       when(item.created.at),
       item.created.by,
       item.deleted ? 'Deleted' : item.cancelled ? 'Cancelled' : item.test ? 'TEST' : 'Active',
@@ -82,9 +130,46 @@ export function exportRows(list: FestRegistration[], catalog: FestCatalog) {
   return rows;
 }
 
-/** Saves the students as an Excel file (one row each, the columns above). */
-export function downloadStudents(fileName: string, heading: string, note: string, list: FestRegistration[], catalog: FestCatalog) {
-  saveTable(fileName, heading, note, exportRows([...list].sort((a, b) => a.id.localeCompare(b.id)), catalog));
+/** Saves the students as an Excel file (one row each, the columns above; `events`: only these events' columns). */
+export function downloadStudents(fileName: string, heading: string, note: string, list: FestRegistration[], catalog: FestCatalog, events?: FestEvent[]) {
+  saveTable(fileName, heading, note, exportRows([...list].sort((a, b) => a.id.localeCompare(b.id)), catalog, events));
+}
+
+/**
+ * Every student in every event they joined, one row each: the fee as the event's coordinator
+ * recorded it (cash or UPI, the UTR typed at the venue, by whom and when), present or absent, the team.
+ */
+export function participationRows(list: FestRegistration[], catalog: FestCatalog) {
+  const rows: (string | number)[][] = [
+    ['Department', 'Event', 'Registration ID', 'Name', 'Phone', 'College', 'College code', 'Fee', 'Paid by (cash / UPI)', 'Amount', 'UTR (typed at the event)', 'Fee taken by', 'Fee taken at', 'Present / absent', 'Marked present by', 'Marked present at', 'Team', 'Status'],
+  ];
+  for (const event of catalog.events) {
+    for (const item of list.filter((registration) => entryOf(registration, event.id)).sort((a, b) => a.id.localeCompare(b.id))) {
+      const entry = entryOf(item, event.id)!;
+      const fee = feePaid(entry) ? entry.fee! : null;
+      rows.push([
+        deptShort(event.dept),
+        eventLabel(event),
+        showId(item.id),
+        item.name,
+        item.phone,
+        item.college,
+        item.collegeCode ?? '',
+        fee ? 'Paid' : entry.fee?.voided ? `Cancelled: ${entry.fee.voided.reason}` : event.fee ? 'Due' : 'No fee',
+        fee ? methodLabel(fee.method) : '',
+        fee ? fee.amount : '',
+        fee?.txn ?? '',
+        fee?.by ?? '',
+        fee ? when(fee.at) : '',
+        entry.present ? 'Present' : 'Absent',
+        entry.present?.by ?? '',
+        entry.present ? when(entry.present.at) : '',
+        entry.team ?? '',
+        item.deleted ? 'Deleted' : item.cancelled ? 'Cancelled' : item.test ? 'TEST' : 'Active',
+      ]);
+    }
+  }
+  return rows;
 }
 
 const ordinalOf = (place: number) => (place === 1 ? '1st' : place === 2 ? '2nd' : place === 3 ? '3rd' : `${place}th`);
@@ -169,6 +254,7 @@ export function downloadFullCopy(catalog: FestCatalog, registrations: ReadonlyMa
   const ranking = collegeSummary(active, [...results.values()]).sort(medalOrder);
   saveWorkbook(`techfest-full-copy-${today()}.xlsx`, [
     tableSheet('Students', note, exportRows(list, catalog)),
+    tableSheet('Event participation', note, participationRows(list, catalog)),
     tableSheet('Winners', note, winnerRows(catalog, catalog.events, results, registrations)),
     tableSheet('College ranking', note, rankingRows(ranking)),
     tableSheet('Money', note, moneyRows(catalog, active)),

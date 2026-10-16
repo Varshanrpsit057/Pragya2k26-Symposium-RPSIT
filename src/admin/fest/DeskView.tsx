@@ -82,6 +82,8 @@ export function DeskView() {
   // The student just finished (fee collected or verified, or checked in): the list comes back
   // at once with an empty search, ready for the next student's ID.
   const [finished, setFinished] = useState('');
+  // The list the desk works through (e.g. Fee due): kept while a student is open, so the next one is a tap away.
+  const [filter, setFilter] = useState<DeskFilter>('all');
   const openStudent = (id: string | null) => {
     setFinished('');
     setOpen(id);
@@ -135,7 +137,7 @@ export function DeskView() {
                 }}
               />
             ) : (
-              <DeskStudents dept={dept} onOpen={openStudent} finished={finished} onDismiss={() => setFinished('')} />
+              <DeskStudents dept={dept} onOpen={openStudent} filter={filter} onFilter={setFilter} finished={finished} onDismiss={() => setFinished('')} />
             ))}
           {tab === 'register' && canRegister && (
             <RegisterForStudent
@@ -165,9 +167,22 @@ const DESK_FILTERS: { id: DeskFilter; label: string; test: (item: FestRegistrati
 ];
 
 /** The department's students: filter, search, open one. `finished`: the student just done (the search waits for the next). */
-function DeskStudents({ dept, onOpen, finished = '', onDismiss }: { dept: string; onOpen: (id: string) => void; finished?: string; onDismiss?: () => void }) {
+function DeskStudents({
+  dept,
+  onOpen,
+  filter,
+  onFilter,
+  finished = '',
+  onDismiss,
+}: {
+  dept: string;
+  onOpen: (id: string) => void;
+  filter: DeskFilter;
+  onFilter: (next: DeskFilter) => void;
+  finished?: string;
+  onDismiss?: () => void;
+}) {
   const { registrations, catalog, session, switches } = useFest();
-  const [filter, setFilter] = useState<DeskFilter>('all');
   const [query, setQuery] = useState('');
   const search = useRef<HTMLInputElement>(null);
   // Back from a student just finished: the cursor waits in the search for the next ID.
@@ -219,7 +234,7 @@ function DeskStudents({ dept, onOpen, finished = '', onDismiss }: { dept: string
       <p className="adm-muted">Type the ID the student shows you, open it, check their details, then collect the {rupees(catalog?.entryFee ?? 0)} entry fee or verify the UTR they sent.</p>
       <div className="fest-chips" role="group" aria-label="Show">
         {DESK_FILTERS.map((item) => (
-          <button key={item.id} type="button" className={`fest-chip-button${filter === item.id ? ' is-on' : ''}`} aria-pressed={filter === item.id} onClick={() => setFilter(item.id)}>
+          <button key={item.id} type="button" className={`fest-chip-button${filter === item.id ? ' is-on' : ''}`} aria-pressed={filter === item.id} onClick={() => onFilter(item.id)}>
             {item.label} ({counts[item.id]})
           </button>
         ))}
@@ -256,7 +271,7 @@ function StudentDetail({ id, onBack, onFinished }: { id: string; onBack: () => v
   const registration = registrations.get(id);
   const back = (
     <button className="adm-button adm-button--small" type="button" onClick={onBack}>
-      ← All students
+      ← Back to the list
     </button>
   );
   if (!registration || !catalog) {

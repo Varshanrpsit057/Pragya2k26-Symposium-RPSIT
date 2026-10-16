@@ -1,6 +1,6 @@
 /** Pieces every fest screen uses: the live status, the filters, payments and registration cards. */
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
-import { awaitingCheck, collegeKey, collegeSummary, deptShort, entryOf, eventLabel, eventOf, feePaid, isActive, rupees, showId, type FestCatalog, type FestEvent, type FestRegistration, type HandOver } from '../../lib/fest';
+import { awaitingCheck, collegeKey, collegeSummary, deptShort, entryOf, eventFeeText, eventLabel, eventOf, feePaid, isActive, rupees, showId, type FestCatalog, type FestEvent, type FestRegistration, type HandOver } from '../../lib/fest';
 import { SearchSelect } from '../../components/ui/SearchSelect';
 import { Badge, clockTime, when } from '../ui';
 
@@ -299,7 +299,7 @@ export function RegistrationCard({
         <p className="fest-card__events">
           {entry ? (
             <>
-              <Badge tone={feePaid(entry) ? 'good' : eventFocus.fee ? 'warn' : 'plain'}>{feePaid(entry) ? `Fee paid · ${entry.fee!.method === 'UPI' ? 'UPI' : entry.fee!.method === 'ONLINE' ? 'online' : 'cash'}` : eventFocus.fee ? `Fee due ${rupees(eventFocus.fee)}` : 'No fee'}</Badge>{' '}
+              <Badge tone={feePaid(entry) ? 'good' : eventFocus.fee ? 'warn' : 'plain'}>{feePaid(entry) ? `Fee paid · ${eventFeeText(entry)}` : eventFocus.fee ? `Fee due ${rupees(eventFocus.fee)}` : 'No fee'}</Badge>{' '}
               <Badge tone={entry.present ? 'good' : 'plain'}>{entry.present ? `Present · ${when(entry.present.at)}` : 'Not marked present'}</Badge>
             </>
           ) : (

@@ -9,11 +9,11 @@
  *   college ranking (medal table) filtered by participations and prizes
  */
 import { useMemo, useState } from 'react';
-import { DESKS, awaitingCheck, collegeSummary, deskMoney, deptShort, eventLabel, eventOf, feePaid, isActive, medalOrder, participantProblems, readParticipant, rupees, showId, teamsText, totalsOf, type CollegeRow, type FestEvent, type FestParticipant, type FestRegistration } from '../../lib/fest';
+import { DESKS, awaitingCheck, collegeSummary, deskMoney, deptShort, eventLabel, eventOf, feePaid, isActive, medalOrder, participantProblems, readParticipant, rupees, showId, teamsText, totalsOf, eventFeeText, type CollegeRow, type FestEvent, type FestParticipant, type FestRegistration } from '../../lib/fest';
 import { hasPermission } from '../../lib/staff';
 import { Badge, messageOf, when } from '../ui';
-import { filterNote, saveTable, today } from './excel';
-import { certificateRows, exportRows, howRegistered, rankingRows, winnerRows } from './exports';
+import { filterNote, saveTable, saveWorkbook, tableSheet, today } from './excel';
+import { certificateRows, exportRows, howRegistered, participationRows, rankingRows, winnerRows } from './exports';
 import { WinnerTable } from './EventWindow';
 import { NO_FILTERS, useFest, type FestFilters } from './FestData';
 import { FilterBar, NO_PAYMENT, PaymentChoice, ShortList, Stat, applyFilters, deptName, handOverGap, latestHandOvers, paymentBody, paymentReady, stampNow, useHandOvers, type PaymentDraft } from './festUi';
@@ -51,7 +51,7 @@ function EventProgress({ dept }: { dept: string }) {
     <section className="adm-card adm-pad">
       <h3 className="adm-h3">{deptName(catalog, dept)}: events</h3>
       <div className="adm-table-wrap">
-        <table className="adm-table adm-table--static fest-table">
+        <table className="adm-table adm-table--static fest-table fest-table--stack">
           <thead>
             <tr>
               <th scope="col">Event</th>
@@ -73,12 +73,12 @@ function EventProgress({ dept }: { dept: string }) {
                       {eventLabel(event)}
                       {!event.active && <Badge tone="plain">Closed</Badge>}
                     </th>
-                    <td>{part.registered}</td>
-                    <td>
-                      {part.feesPaid} <span className="adm-muted">({rupees(part.feeCash + part.feeUpi)})</span>
+                    <td data-label="Registered">{part.registered}</td>
+                    <td data-label="Fee paid">
+                      {part.feesPaid} <span className="adm-muted">({rupees(part.feeCash)} cash · {rupees(part.feeUpi)} UPI)</span>
                     </td>
-                    <td>{part.present}</td>
-                    <td>{result?.submitted ? <Badge tone="good">Submitted</Badge> : result?.places.length ? <Badge tone="warn">Saved</Badge> : <span className="adm-muted">—</span>}</td>
+                    <td data-label="Present">{part.present}</td>
+                    <td data-label="Results">{result?.submitted ? <Badge tone="good">Submitted</Badge> : result?.places.length ? <Badge tone="warn">Saved</Badge> : <span className="adm-muted">—</span>}</td>
                   </tr>
                 );
               })}
@@ -261,7 +261,15 @@ export function FestRegistrations() {
               className="adm-button adm-button--small"
               type="button"
               disabled={!list.length}
-              onClick={() => saveTable(`techfest-registrations-${filters.dept || 'all'}-${today()}.xlsx`, 'Registrations', filterNote(filters, session.displayName), exportRows(list, catalog))}
+              onClick={() => {
+                // The students (with the chosen event's columns only, when filtered by one), and every event participation.
+                const note = filterNote(filters, session.displayName);
+                const events = filters.eventId ? catalog.events.filter((event) => event.id === filters.eventId) : undefined;
+                saveWorkbook(`techfest-registrations-${filters.dept || 'all'}-${today()}.xlsx`, [
+                  tableSheet('Students', note, exportRows(list, catalog, events)),
+                  tableSheet('Event participation', note, participationRows(list, catalog)),
+                ]);
+              }}
             >
               Download these (Excel)
             </button>
@@ -458,7 +466,7 @@ function RegistrationDetail({ id, onClose }: { id: string; onClose: () => void }
             return (
               <li key={entry.eventId}>
                 <strong>{event ? eventLabel(event) : entry.eventId}</strong>{' '}
-                <Badge tone={feePaid(entry) ? 'good' : 'warn'}>{feePaid(entry) ? `Fee ${entry.fee!.method} · ${entry.fee!.by}` : entry.fee?.voided ? `Fee cancelled: ${entry.fee.voided.reason}` : 'Fee due'}</Badge>{' '}
+                <Badge tone={feePaid(entry) ? 'good' : 'warn'}>{feePaid(entry) ? `Fee ${eventFeeText(entry)} · ${entry.fee!.by}` : entry.fee?.voided ? `Fee cancelled: ${entry.fee.voided.reason}` : 'Fee due'}</Badge>{' '}
                 <Badge tone={entry.present ? 'good' : 'plain'}>{entry.present ? 'Present' : 'Not present'}</Badge>
                 {entry.team && (
                   <>

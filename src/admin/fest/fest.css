@@ -831,3 +831,63 @@
   justify-content: space-between;
   gap: 0.5rem;
 }
+
+/* A table that becomes one small card per row on a phone: the name on top, each number with its label */
+@media (max-width: 640px) {
+  .fest-table--stack thead {
+    display: none;
+  }
+
+  .fest-table--stack,
+  .fest-table--stack tbody,
+  .fest-table--stack tr {
+    display: block;
+    width: 100%;
+  }
+
+  .fest-table--stack tr {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.25rem 1rem;
+    padding: 0.6rem 0;
+    border-bottom: 1px solid var(--adm-line);
+  }
+
+  .fest-table--stack th[scope='row'] {
+    flex-basis: 100%;
+    padding: 0;
+    border: 0;
+    white-space: normal;
+  }
+
+  .fest-table--stack td {
+    padding: 0;
+    border: 0;
+    white-space: normal;
+  }
+
+  .fest-table--stack td[data-label]::before {
+    content: attr(data-label) ': ';
+    color: var(--adm-muted);
+  }
+}
+
+/* An event's student, opened: compact facts, then big buttons that fill a phone's width */
+.fest-factgrid--tight {
+  grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr));
+  margin-top: 0.25rem;
+}
+
+.fest-event-card__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin: 0.75rem 0;
+}
+
+@media (max-width: 640px) {
+  .fest-event-card__actions > .adm-button,
+  .fest-event-card__actions .adm-inline > .adm-button {
+    flex: 1 1 100%;
+  }
+}

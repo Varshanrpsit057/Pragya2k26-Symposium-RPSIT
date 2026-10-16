@@ -10,6 +10,7 @@ import {
   canJoin,
   deptShort,
   entryOf,
+  eventFeeText,
   eventLabel,
   eventsOf,
   feePaid,
@@ -108,7 +109,9 @@ function EventPanel({ event }: { event: FestEvent }) {
   const takeFee = (registration: FestRegistration) => {
     const stamp = stampNow(session.username);
     change(registration.id, path(registration.id), { action: 'fee', payment: paymentBody(payment) }, `${event.name} fee · ${registration.id}`, (current) =>
-      patchEntry(current, { fee: { method: payment.method === 'UPI' ? 'UPI' : 'CASH', amount: event.fee, ...stamp } }),
+      patchEntry(current, {
+        fee: { method: payment.method === 'UPI' ? 'UPI' : 'CASH', amount: event.fee, ...(payment.method === 'UPI' && { txn: payment.txn.replace(/\s/g, '') }), ...stamp },
+      }),
     );
     setPaying(null);
     setPayment(NO_PAYMENT);
@@ -158,7 +161,7 @@ function EventPanel({ event }: { event: FestEvent }) {
         </div>
         {canDownload && catalog && (
           <span className="adm-inline adm-inline--wrap">
-            <button className="adm-button adm-button--small" type="button" disabled={!registered.length} onClick={() => downloadStudents(`techfest-${event.id}-${today()}.xlsx`, event.name, note('its participants'), registered, catalog)}>
+            <button className="adm-button adm-button--small" type="button" disabled={!registered.length} onClick={() => downloadStudents(`techfest-${event.id}-${today()}.xlsx`, event.name, note('its participants'), registered, catalog, [event])}>
               Download this event (Excel)
             </button>
             <button
@@ -229,12 +232,94 @@ function EventPanel({ event }: { event: FestEvent }) {
                     Open
                   </button>
                 ) : (
-                  <div className="fest-inline-form" role="group" aria-label={`${showId(registration.id)} details`}>
-                    <dl className="fest-factgrid">
+                  <div className="fest-inline-form fest-event-card" role="group" aria-label={`${showId(registration.id)} details`}>
+                    {/* First what decides the next step (seen without scrolling on a phone), then the buttons. */}
+                    <dl className="fest-factgrid fest-factgrid--tight">
                       <div className="fest-fact">
-                        <dt>Name</dt>
-                        <dd>{registration.name}</dd>
+                        <dt>Gate pass (entry fee)</dt>
+                        <dd>{entryPaid ? <Badge tone="good">Paid · verified at the desk</Badge> : <Badge tone="bad">Not paid: send them to the {deptShort(registration.dept)} desk</Badge>}</dd>
                       </div>
+                      <div className="fest-fact">
+                        <dt>{event.name} fee</dt>
+                        <dd>
+                          {!entry ? (
+                            <span className="adm-muted">Not added to {event.name} yet</span>
+                          ) : feePaid(entry) ? (
+                            <>
+                              {eventFeeText(entry)}
+                              <div className="adm-muted">
+                                by {entry.fee!.by} · {when(entry.fee!.at)}
+                              </div>
+                            </>
+                          ) : event.fee ? (
+                            <Badge tone="warn">Due {rupees(event.fee)}</Badge>
+                          ) : (
+                            'No fee'
+                          )}
+                        </dd>
+                      </div>
+                      {entry && (
+                        <div className="fest-fact">
+                          <dt>Attendance</dt>
+                          <dd>
+                            {entry.present ? (
+                              <>
+                                Present
+                                <div className="adm-muted">
+                                  by {entry.present.by} · {when(entry.present.at)}
+                                </div>
+                              </>
+                            ) : (
+                              <span className="adm-muted">Not marked present</span>
+                            )}
+                          </dd>
+                        </div>
+                      )}
+                    </dl>
+                    <div className="fest-event-card__actions">
+                      {!locked && !entry && (
+                        <button className="adm-button adm-button--primary adm-button--big" type="button" disabled={!event.active} onClick={() => addToEvent(registration)}>
+                          Add to {event.name}
+                        </button>
+                      )}
+                      {!locked && entry && !paid && paying !== registration.id && (
+                        <button className="adm-button adm-button--primary adm-button--big" type="button" onClick={() => setPaying(registration.id)}>
+                          Take {rupees(event.fee)}
+                        </button>
+                      )}
+                      {paying === registration.id && (
+                        <div className="fest-inline-form">
+                          <PaymentChoice amount={event.fee} value={payment} onChange={setPayment} name={`fee-${registration.id}`} />
+                          <span className="adm-inline adm-inline--wrap">
+                            <button className="adm-button adm-button--primary adm-button--big" type="button" disabled={!paymentReady(payment)} onClick={() => takeFee(registration)}>
+                              Save the fee
+                            </button>
+                            <button className="adm-button" type="button" onClick={() => setPaying(null)}>
+                              Cancel
+                            </button>
+                          </span>
+                        </div>
+                      )}
+                      {!locked && entry && paid && !entry.present && (
+                        <button className="adm-button adm-button--approve adm-button--big" type="button" disabled={!entryPaid} onClick={() => markPresent(registration, true)}>
+                          {entryPaid ? 'Mark present' : 'Entry fee due: send to the desk'}
+                        </button>
+                      )}
+                      {!locked && entry?.present && (
+                        <button className="adm-button" type="button" onClick={() => markPresent(registration, false)}>
+                          Undo present
+                        </button>
+                      )}
+                      {!locked && entry && !entry.present && !feePaid(entry) && (
+                        <button className="adm-button adm-button--danger-outline" type="button" onClick={() => removeFromEvent(registration)}>
+                          Remove from {event.name}
+                        </button>
+                      )}
+                      <button className="adm-button" type="button" onClick={() => openCard(null)}>
+                        Close
+                      </button>
+                    </div>
+                    <dl className="fest-factgrid fest-factgrid--tight">
                       <div className="fest-fact">
                         <dt>College</dt>
                         <dd>{registration.college}</dd>
@@ -249,60 +334,17 @@ function EventPanel({ event }: { event: FestEvent }) {
                       </div>
                       <div className="fest-fact">
                         <dt>Mobile</dt>
-                        <dd>{registration.phone}</dd>
-                      </div>
-                      <div className="fest-fact">
-                        <dt>Entry fee</dt>
-                        <dd>{entryPaid ? <Badge tone="good">Paid · verified at the desk</Badge> : <Badge tone="bad">Not paid: send them to the {deptShort(registration.dept)} desk</Badge>}</dd>
+                        <dd>
+                          <a href={`tel:${registration.phone}`}>{registration.phone}</a>
+                        </dd>
                       </div>
                       {event.teamMax > 1 && entry && (
                         <div className="fest-fact">
                           <dt>Team</dt>
-                          <dd>{entry.team || <span className="adm-muted">Not in a team yet (Teams, below)</span>}</dd>
+                          <dd>{entry.team || <span className="adm-muted">Not in a team (Teams, below)</span>}</dd>
                         </div>
                       )}
                     </dl>
-                    {!locked && !entry && (
-                      <button className="adm-button adm-button--primary" type="button" disabled={!event.active} onClick={() => addToEvent(registration)}>
-                        Add to {event.name}
-                      </button>
-                    )}
-                    {!locked && entry && !paid && paying !== registration.id && (
-                      <button className="adm-button adm-button--primary" type="button" onClick={() => setPaying(registration.id)}>
-                        Take {rupees(event.fee)}
-                      </button>
-                    )}
-                    {paying === registration.id && (
-                      <div className="fest-inline-form">
-                        <PaymentChoice amount={event.fee} value={payment} onChange={setPayment} name={`fee-${registration.id}`} />
-                        <span className="adm-inline">
-                          <button className="adm-button adm-button--primary" type="button" disabled={!paymentReady(payment)} onClick={() => takeFee(registration)}>
-                            Save the fee
-                          </button>
-                          <button className="adm-button" type="button" onClick={() => setPaying(null)}>
-                            Cancel
-                          </button>
-                        </span>
-                      </div>
-                    )}
-                    {!locked && entry && paid && !entry.present && (
-                      <button className="adm-button adm-button--approve" type="button" disabled={!entryPaid} onClick={() => markPresent(registration, true)}>
-                        {entryPaid ? 'Mark present' : 'Entry fee due: send to the desk'}
-                      </button>
-                    )}
-                    {!locked && entry?.present && (
-                      <button className="adm-button adm-button--small" type="button" onClick={() => markPresent(registration, false)}>
-                        Undo present
-                      </button>
-                    )}
-                    {!locked && entry && !entry.present && !feePaid(entry) && (
-                      <button className="adm-button adm-button--small adm-button--danger-outline" type="button" onClick={() => removeFromEvent(registration)}>
-                        Remove from {event.name}
-                      </button>
-                    )}
-                    <button className="adm-button adm-button--small" type="button" onClick={() => openCard(null)}>
-                      Close
-                    </button>
                   </div>
                 )}
               </RegistrationCard>
