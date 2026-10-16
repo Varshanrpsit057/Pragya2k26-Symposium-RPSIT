@@ -726,7 +726,7 @@ describe('the web assist console', () => {
     expect(await within(controls).findByText('Backed up just now.')).toBeInTheDocument();
     fireEvent.click(within(controls).getByRole('button', { name: 'Download a full copy (Excel)' }));
     const sheet = await xlsxText(files.at(-1)!);
-    for (const text of ['Students', 'Winners', 'College ranking', 'Money', 'Kavin R', 'Asha K', 'TO CHECK']) expect(sheet).toContain(text);
+    for (const text of ['Students', 'Event participation', 'Winners', 'College ranking', 'Money', 'Kavin R', 'Asha K', 'TO CHECK', 'Gate pass paid by (cash / UPI)', 'Gate pass UTR sent by the student', 'Hackathon: UTR']) expect(sheet).toContain(text);
   });
 });
 
