@@ -9,6 +9,8 @@ import {
   collegeSummary,
   deptShort,
   entryOf,
+  eventColumnCells,
+  eventColumnHeads,
   eventLabel,
   eventOf,
   feePaid,
@@ -43,22 +45,6 @@ const eventsFor = (list: FestRegistration[], catalog: FestCatalog) => {
   return catalog.events.filter((event) => depts.has(event.dept));
 };
 
-/**
- * One event's columns, as its coordinator recorded them: the fee (cash or UPI, or due), the UTR
- * typed at the venue for a UPI fee (the event's own, not the gate pass UTR), present or absent,
- * and the team (team events). Blank when the student did not join it.
- */
-const eventHeader = (event: FestEvent, withDept: boolean) => {
-  const name = withDept ? `${deptShort(event.dept)} ${event.name}` : event.name;
-  return [`${name}: fee`, `${name}: UTR`, `${name}: present / absent`, ...(event.teamMax > 1 ? [`${name}: team`] : [])];
-};
-function eventCells(item: FestRegistration, event: FestEvent): string[] {
-  const entry = entryOf(item, event.id);
-  const team = event.teamMax > 1 ? [entry?.team ?? ''] : [];
-  if (!entry) return ['', '', '', ...team];
-  const fee = feePaid(entry) ? `${methodLabel(entry.fee!.method)} ₹${entry.fee!.amount}` : entry.fee?.voided ? 'Cancelled' : event.fee ? 'Due' : 'No fee';
-  return [fee, feePaid(entry) ? (entry.fee!.txn ?? '') : '', entry.present ? 'Present' : 'Absent', ...team];
-}
 
 /**
  * The students' Excel rows: their details, the gate pass (entry fee: cash or UPI, the UTR accepted
@@ -91,7 +77,7 @@ export function exportRows(list: FestRegistration[], catalog: FestCatalog, event
       'Gate pass verified by',
       'Arrived',
       'Events',
-      ...events.flatMap((event) => eventHeader(event, withDept)),
+      ...events.flatMap((event) => eventColumnHeads(event, withDept)),
       'Registered at',
       'Registered by',
       'Status',
@@ -121,7 +107,7 @@ export function exportRows(list: FestRegistration[], catalog: FestCatalog, event
       payment ? `${payment.by}${payment.desk ? ` (desk ${payment.desk})` : ''}` : '',
       arrived(item),
       item.events.map((entry) => name(entry.eventId)).join('; '),
-      ...events.flatMap((event) => eventCells(item, event)),
+      ...events.flatMap((event) => eventColumnCells(item, event)),
       when(item.created.at),
       item.created.by,
       item.deleted ? 'Deleted' : item.cancelled ? 'Cancelled' : item.test ? 'TEST' : 'Active',
