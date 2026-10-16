@@ -551,6 +551,26 @@ export const methodLabel = (method: FestMethod) => (method === 'UPI' ? 'UPI' : m
 export const eventFeeText = (entry: FestEntry | null) =>
   entry?.fee && !entry.fee.voided ? `${methodLabel(entry.fee.method)} ₹${entry.fee.amount}${entry.fee.txn ? ` · UTR ${entry.fee.txn}` : ''}` : '';
 
+/**
+ * One event's columns in the Excel files and the Google Sheet, as its coordinator recorded them:
+ * the fee (Cash ₹50 / UPI ₹50 / Due), the UTR typed at the venue for a UPI fee (the event's own,
+ * not the gate pass UTR), Present or Absent, and the team (team events). `withDept`: the
+ * department's code before the name, when the columns span departments.
+ */
+export const eventColumnHeads = (event: FestEvent, withDept: boolean) => {
+  const name = withDept ? `${deptShort(event.dept)} ${event.name}` : event.name;
+  return [`${name}: fee`, `${name}: UTR`, `${name}: present / absent`, ...(event.teamMax > 1 ? [`${name}: team`] : [])];
+};
+/** A student's cells under eventColumnHeads (blank when they did not join the event). */
+export function eventColumnCells(registration: FestRegistration, event: FestEvent): string[] {
+  const entry = entryOf(registration, event.id);
+  const team = event.teamMax > 1 ? [entry?.team ?? ''] : [];
+  if (!entry) return ['', '', '', ...team];
+  const paid = feePaid(entry) ? entry.fee! : null;
+  const fee = paid ? `${methodLabel(paid.method)} ₹${paid.amount}` : entry.fee?.voided ? 'Cancelled' : event.fee ? 'Due' : 'No fee';
+  return [fee, paid?.txn ?? '', entry.present ? 'Present' : 'Absent', ...team];
+}
+
 // ------------------------------------------------------------------------------------------
 // Teams (team events): each member's entry carries the team's name
 
